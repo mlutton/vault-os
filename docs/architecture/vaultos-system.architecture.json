@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "VaultOS System Architecture",
+    "output": "vaultos-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1390,
+      720
+    ],
+    "views": [
+      {
+        "id": "brain-and-door",
+        "label": "The brain and its door",
+        "focus": [
+          "operator",
+          "brain",
+          "plugin",
+          "api"
+        ],
+        "note": "Knowledge lives in plain markdown; the plugin is the vault's only connection to the outside world."
+      },
+      {
+        "id": "the-spine",
+        "label": "The spine",
+        "focus": [
+          "api",
+          "sqlite",
+          "state",
+          "brain"
+        ],
+        "note": "Jobs leave an auditable record; SQLite is a rebuildable index, never the system of record."
+      },
+      {
+        "id": "execution",
+        "label": "Multi-engine execution",
+        "focus": [
+          "api",
+          "runner",
+          "engines",
+          "vendors"
+        ],
+        "note": "Per-skill engine routing with exit-0 verification \u2014 the model behind a skill is a one-line change."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Operator",
+      "sublabel": "human + agents",
+      "pos": [
+        30,
+        330
+      ],
+      "size": [
+        120,
+        60
+      ]
+    },
+    {
+      "id": "brain",
+      "type": "database",
+      "label": "The Brain",
+      "sublabel": "Obsidian \u00b7 markdown",
+      "pos": [
+        190,
+        330
+      ],
+      "size": [
+        160,
+        68
+      ]
+    },
+    {
+      "id": "plugin",
+      "type": "frontend",
+      "label": "Obsidian Plugin",
+      "sublabel": "the brain's door \u2014 planned",
+      "pos": [
+        460,
+        330
+      ],
+      "size": [
+        160,
+        68
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Web Surface",
+      "sublabel": "read-models \u2014 planned",
+      "pos": [
+        460,
+        150
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Spine API",
+      "sublabel": "FastAPI + modules \u2014 built",
+      "pos": [
+        740,
+        330
+      ],
+      "size": [
+        160,
+        68
+      ]
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite",
+      "sublabel": "rebuildable index",
+      "pos": [
+        740,
+        150
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "State Root",
+      "sublabel": "registry \u00b7 runs \u00b7 metrics",
+      "pos": [
+        740,
+        520
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "runner",
+      "type": "backend",
+      "label": "vaultos.runner",
+      "sublabel": "planned \u2014 check + retry",
+      "pos": [
+        1030,
+        330
+      ],
+      "size": [
+        160,
+        68
+      ]
+    },
+    {
+      "id": "engines",
+      "type": "messagebus",
+      "label": "Engine Registry",
+      "sublabel": "claude-cli \u00b7 script \u00b7 cursor-cli",
+      "pos": [
+        1000,
+        520
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "vendors",
+      "type": "cloud",
+      "label": "Model Vendors",
+      "sublabel": "API-key endpoints",
+      "pos": [
+        1220,
+        150
+      ],
+      "size": [
+        160,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "One box, local-first \u2014 all state on local disk",
+      "wraps": [
+        "brain",
+        "plugin",
+        "web",
+        "api",
+        "sqlite",
+        "state",
+        "runner",
+        "engines"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "operator-brain",
+      "from": "operator",
+      "to": "brain",
+      "variant": "emphasis"
+    },
+    {
+      "id": "plugin-brain",
+      "from": "plugin",
+      "to": "brain",
+      "label": "persists results"
+    },
+    {
+      "id": "plugin-api",
+      "from": "plugin",
+      "to": "api",
+      "label": "asks for work (HTTP)",
+      "variant": "emphasis",
+      "labelDy": 20
+    },
+    {
+      "id": "web-api",
+      "from": "web",
+      "to": "api",
+      "label": "read-models (HTTP)"
+    },
+    {
+      "id": "api-sqlite",
+      "from": "api",
+      "to": "sqlite",
+      "label": "SQL",
+      "labelDx": -20
+    },
+    {
+      "id": "api-state",
+      "from": "api",
+      "to": "state",
+      "label": "registry - metrics (files)",
+      "labelDy": 52,
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "api-runner",
+      "from": "api",
+      "to": "runner",
+      "label": "jobs \u2014 service-canonical",
+      "variant": "emphasis"
+    },
+    {
+      "id": "runner-engines",
+      "from": "runner",
+      "to": "engines",
+      "label": "route by Skill.engine",
+      "variant": "emphasis",
+      "labelDy": 24,
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "runner-state",
+      "from": "runner",
+      "to": "state",
+      "label": "runs - heartbeat"
+    },
+    {
+      "id": "api-brain-seam",
+      "from": "api",
+      "to": "brain",
+      "label": "vault seam \u2014 briefs in, workflows read",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "api-vendors",
+      "from": "api",
+      "to": "vendors",
+      "label": "ctx.llm \u2014 structured output",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "engines-vendors",
+      "from": "engines",
+      "to": "vendors",
+      "label": "vendor CLIs \u2014 subscription auth",
+      "fromSide": "right",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "The thesis",
+      "items": [
+        "The infrastructure is the portable asset \u2014 the data stays where it lives",
+        "Plain markdown is the system of record; SQLite can be thrown away and rebuilt",
+        "No personal-login credential paths: API keys via env, CLIs the operator installs"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Built vs planned",
+      "items": [
+        "Built: the spine \u2014 jobs, module contract (ADR-0022), finance module, 791 tests",
+        "Building: the LLM provider seam (ctx.llm)",
+        "Planned: runner + engine registry, Obsidian plugin, web surface"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Execution model",
+      "items": [
+        "Per-skill engine routing \u2014 the model behind a skill is a one-line change",
+        "Workers' success claims are ignored: a check command's exit 0 decides, one retry with failure context",
+        "Every attempt emits eval events: engine, duration, outcome"
+      ]
+    }
+  ]
+}

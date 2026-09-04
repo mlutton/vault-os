@@ -28,6 +28,7 @@ worked example of the architecture, not something to depend on yet.
 - [`api/README.md`](api/README.md) — what's actually built, quickstart, the ADR index.
 - [`api/docs/adr/`](api/docs/adr/) — every non-obvious decision.
 - [`api/docs/specs/`](api/docs/specs/) — the design specs the code was built from.
+- [`docs/architecture/vaultos-architecture.html`](docs/architecture/vaultos-architecture.html) — the interactive system diagram (open it raw in a browser; source spec sits beside it).
 
 ## License
 

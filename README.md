@@ -24,11 +24,9 @@ what either of those own.
 Click either image for the interactive version — pan/zoom, guided story
 views, theme toggle, and exports (open the HTML raw in a browser).
 
-[![VaultOS system architecture](docs/architecture/img/architecture-dark.png#gh-dark-mode-only)](https://mlutton.github.io/vault-os/architecture/vaultos-architecture.html)
-[![VaultOS system architecture](docs/architecture/img/architecture-light.png#gh-light-mode-only)](https://mlutton.github.io/vault-os/architecture/vaultos-architecture.html)
+[![VaultOS system architecture](docs/architecture/img/architecture-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-architecture.html)
 
-[![VaultOS job execution](docs/architecture/img/job-execution-dark.png#gh-dark-mode-only)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
-[![VaultOS job execution](docs/architecture/img/job-execution-light.png#gh-light-mode-only)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
+[![VaultOS job execution](docs/architecture/img/job-execution-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
 
 **Status: pre-1.0, single-operator.** The api runs daily against a live vault
 and has 791 tests; interfaces change without deprecation cycles. Read it as a

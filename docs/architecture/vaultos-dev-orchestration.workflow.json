@@ -1,0 +1,224 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "VaultOS Dev Orchestration",
+    "output": "vaultos-dev-orchestration.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "full-cycle",
+        "label": "One build cycle",
+        "focus": ["ticket", "claim", "build", "triage", "pr", "val", "merge", "close"],
+        "note": "A ticket from the frontier to a merged PR and a mirrored decision record."
+      },
+      {
+        "id": "ladder",
+        "label": "The verification ladder",
+        "focus": ["triage", "pr", "val"],
+        "note": "Cheapest layer first: deterministic CI, then a cheap-model smoke pass, then the full independent audit."
+      },
+      {
+        "id": "two-trackers",
+        "label": "Two trackers, two jobs",
+        "focus": ["ticket", "claim", "pr", "merge", "close"],
+        "note": "Candid orchestration stays private; the public repo carries only curated evidence. Links run private to public, never back."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "private", "label": "Private orchestration" },
+    { "id": "exec", "label": "Executor lane" },
+    { "id": "verify", "label": "Verification agents", "variant": "exception" },
+    { "id": "public", "label": "Public repo" }
+  ],
+  "phases": [
+    { "id": "dispatch", "label": "Dispatch", "fromCol": 0, "toCol": 1 },
+    { "id": "buildphase", "label": "Build", "fromCol": 2, "toCol": 2 },
+    { "id": "verifyphase", "label": "Verify", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "land", "label": "Land", "fromCol": 5, "toCol": 5 }
+  ],
+  "groups": [
+    {
+      "id": "curated",
+      "label": "Outsider-safe surface",
+      "lane": "public",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "security"
+    }
+  ],
+  "mainPath": ["ticket", "claim", "build", "triage", "pr", "val", "merge", "close"],
+  "semanticChecks": {
+    "allowedRoots": ["ticket"],
+    "allowedTerminals": ["close"],
+    "requiredPaths": [
+      { "from": "ticket", "to": "close" },
+      { "from": "val", "to": "build" }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "ticket",
+      "lane": "private",
+      "col": 0,
+      "type": "external",
+      "label": "Frontier Ticket",
+      "sublabel": "unblocked · ready",
+      "width": 135
+    },
+    {
+      "id": "claim",
+      "lane": "private",
+      "col": 1,
+      "type": "backend",
+      "label": "Handoff Packet",
+      "sublabel": "resources · done-means",
+      "width": 150
+    },
+    {
+      "id": "build",
+      "lane": "exec",
+      "col": 2,
+      "type": "backend",
+      "label": "Executor Build",
+      "sublabel": "branch · handback",
+      "width": 145
+    },
+    {
+      "id": "triage",
+      "lane": "verify",
+      "col": 3,
+      "type": "security",
+      "label": "Smoke Triage",
+      "sublabel": "cheap model · optional",
+      "width": 145
+    },
+    {
+      "id": "pr",
+      "lane": "public",
+      "col": 4,
+      "type": "frontend",
+      "label": "Pull Request",
+      "sublabel": "evidence · CI gates",
+      "width": 145
+    },
+    {
+      "id": "val",
+      "lane": "verify",
+      "col": 4,
+      "type": "security",
+      "label": "VAL Audit",
+      "sublabel": "comments on the PR",
+      "width": 140
+    },
+    {
+      "id": "merge",
+      "lane": "public",
+      "col": 5,
+      "type": "external",
+      "label": "Operator Merge",
+      "sublabel": "human authority",
+      "width": 140
+    },
+    {
+      "id": "close",
+      "lane": "private",
+      "col": 5,
+      "type": "database",
+      "label": "Close + Mirror",
+      "sublabel": "receipts · decision note",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "id": "ticket-claim",
+      "from": "ticket",
+      "to": "claim",
+      "label": "assign · in-flight",
+      "variant": "emphasis"
+    },
+    {
+      "id": "claim-build",
+      "from": "claim",
+      "to": "build",
+      "label": "closed discovery",
+      "variant": "emphasis"
+    },
+    {
+      "id": "build-triage",
+      "from": "build",
+      "to": "triage",
+      "label": "handback packet"
+    },
+    {
+      "id": "triage-build",
+      "from": "triage",
+      "to": "build",
+      "label": "implausible — bounce",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "triage-pr",
+      "from": "triage",
+      "to": "pr",
+      "label": "open PR",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pr-val",
+      "from": "pr",
+      "to": "val",
+      "label": "CI green"
+    },
+    {
+      "id": "val-build",
+      "from": "val",
+      "to": "build",
+      "label": "changes — new commits",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "val-merge",
+      "from": "val",
+      "to": "merge",
+      "label": "validated",
+      "variant": "emphasis"
+    },
+    {
+      "id": "merge-close",
+      "from": "merge",
+      "to": "close",
+      "label": "PR link · ledger comment"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Two trackers, two jobs",
+      "items": [
+        "Orchestration stays on a private tracker — candid by construction",
+        "The public repo gets curated evidence; links run private → public only"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "The verification ladder",
+      "items": [
+        "Deterministic CI first: tests · scrub · PR shape — never LLM-checked",
+        "Cheap-model triage bounces bad handbacks; VAL audits what CI can't"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Human holds the merge",
+      "items": [
+        "The operator reviews the criteria→proof table and merges — agents never",
+        "Every receipt names the exact model that did the work"
+      ]
+    }
+  ]
+}

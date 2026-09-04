@@ -19,17 +19,23 @@ document store and system of record), a **spine** (`api/` — infrastructure
 execution: jobs, modules, model providers), and thin surfaces that never own
 what either of those own.
 
-## The system in two pictures
+## The system in three pictures
 
-Click either image for the interactive version — pan/zoom, guided story
+Click any image for the interactive version — pan/zoom, guided story
 views, theme toggle, and exports (open the HTML raw in a browser).
 
 [![VaultOS system architecture](docs/architecture/img/architecture-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-architecture.html)
 
 [![VaultOS job execution](docs/architecture/img/job-execution-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
 
+The project also builds itself through a multi-runtime agent process —
+dispatch packets, executor lanes, a verification ladder, and a
+human-held merge:
+
+[![VaultOS dev orchestration](docs/architecture/img/dev-orchestration-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-dev-orchestration.html)
+
 **Status: pre-1.0, single-operator.** The api runs daily against a live vault
-and has 791 tests; interfaces change without deprecation cycles. Read it as a
+and has 827 tests; interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not something to depend on yet.
 
 ## Start here

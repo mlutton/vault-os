@@ -22,6 +22,29 @@ jobs:
       - name: Tests
         run: pytest -q
 
+  pr-shape:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      PR_BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - name: PR body follows the template
+        run: |
+          fail=0
+          for h in "## Summary" "## Evidence" "## Acceptance criteria → proof" "## Design notes"; do
+            if ! grep -qF "$h" <<<"$PR_BODY"; then
+              echo "::error::PR body missing required section: $h"
+              fail=1
+            fi
+          done
+          # At least one filled criteria row (a table line with content beyond bars/spaces,
+          # not the header or divider).
+          if ! grep -E '^\|[^|-]*[A-Za-z0-9][^|]*\|' <<<"$PR_BODY" | grep -vqE 'Criterion|^[| :-]+$'; then
+            echo "::error::Acceptance criteria table has no filled rows."
+            fail=1
+          fi
+          exit $fail
+
   scrub-gate:
     runs-on: ubuntu-latest
     steps:

@@ -19,6 +19,17 @@ document store and system of record), a **spine** (`api/` — infrastructure
 execution: jobs, modules, model providers), and thin surfaces that never own
 what either of those own.
 
+## The system in two pictures
+
+Click either image for the interactive version — pan/zoom, guided story
+views, theme toggle, and exports (open the HTML raw in a browser).
+
+[![VaultOS system architecture](docs/architecture/img/architecture-dark.png#gh-dark-mode-only)](docs/architecture/vaultos-architecture.html)
+[![VaultOS system architecture](docs/architecture/img/architecture-light.png#gh-light-mode-only)](docs/architecture/vaultos-architecture.html)
+
+[![VaultOS job execution](docs/architecture/img/job-execution-dark.png#gh-dark-mode-only)](docs/architecture/vaultos-job-execution.html)
+[![VaultOS job execution](docs/architecture/img/job-execution-light.png#gh-light-mode-only)](docs/architecture/vaultos-job-execution.html)
+
 **Status: pre-1.0, single-operator.** The api runs daily against a live vault
 and has 791 tests; interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not something to depend on yet.

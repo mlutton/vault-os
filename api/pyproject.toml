@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vaultos"
+version = "0.1.0"
+description = "Local-first personal automation platform: a FastAPI spine and SQLite index over a markdown vault"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0",
+    "icalendar>=7.2.0",
+    "recurring-ical-events>=3.8.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+# `vaultos reindex` / `vaultos calendar-pull`; `python -m vaultos.cli` keeps working.
+# This is also where `vaultos db backup` lands when #29 ships.
+vaultos = "vaultos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vaultos*"]
+
+[tool.setuptools.package-data]
+# migrate() globs these at runtime from the installed package, so a non-editable
+# install without them would start against an empty database. Keep in sync with
+# vaultos/db/ when adding non-.py files there.
+vaultos = ["db/migrations/*.sql", "db/schema.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Puts the repo root on sys.path so bare `pytest` imports `vaultos` on a fresh
+# clone without an install (#32). `python -m pytest` did this by accident.
+pythonpath = ["."]

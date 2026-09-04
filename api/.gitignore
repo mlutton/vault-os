@@ -1,0 +1,25 @@
+# superpowers worktrees — nested git repos, never part of this tree
+.claude/worktrees/
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# runtime state — the database rebuilds from the vault via `reindex`
+data/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# secrets — never commit; VAULT_ROOT and friends come from the environment
+.env
+.env.*
+!.env.example
+
+# packaging artefacts from `pip install .` / `python -m build`
+build/
+dist/
+*.egg-info/

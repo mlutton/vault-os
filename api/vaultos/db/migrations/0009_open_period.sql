@@ -1,0 +1,11 @@
+-- ADR-0019 / ticket vault-os-api#18: Open Period / Closed Period foundation. Exactly
+-- one month is ever Open (editable) at a time. Reuses finance_settings (migration
+-- 0005's existing "plan-wide, non-per-account" singleton row) rather than a second
+-- singleton table.
+--
+-- NULL until first use, deliberately not seeded with a default here -- "today" isn't
+-- knowable at migration time (and would be wrong for anyone who runs this migration on
+-- a different day than whoever wrote it), so store.get_open_period() lazily establishes
+-- the current calendar month as the initial Open Period the first time it's ever read,
+-- per the ticket's own "on first use" bootstrap requirement.
+ALTER TABLE finance_settings ADD COLUMN open_period TEXT;

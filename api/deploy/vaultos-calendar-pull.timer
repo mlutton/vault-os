@@ -1,0 +1,10 @@
+[Unit]
+Description=Run vaultos-calendar-pull.service periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

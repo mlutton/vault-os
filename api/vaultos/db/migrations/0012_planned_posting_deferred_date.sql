@@ -1,0 +1,15 @@
+-- ADR-0019 / ticket vault-os-api#22: Deferred -- a manual, single-period override
+-- moving a Planned Posting's expected date away from what its Posting's Cadence would
+-- otherwise compute. expected_date (the Cadence-derived date, frozen at Month-End
+-- Close) stays put as the permanent reference -- CONTEXT.md's own wording, "the
+-- Cadence's own date stays put as the reference." deferred_date is the override read
+-- everywhere "when will this actually land" matters (the projection, reconciliation
+-- ordering, the Plan screen's displayed date) -- COALESCE(deferred_date, expected_date)
+-- is that effective date throughout the store/plan/cashflow layers.
+--
+-- NULL means "not deferred" -- the row's Cadence-derived expected_date is still in
+-- effect. Editable repeatedly within the same Open Period (a fresh PATCH just
+-- overwrites it); explicitly clearable back to NULL to revert to the Cadence date.
+-- Reverts automatically the following period for free -- nothing carries it forward,
+-- since Month-End Close always materializes a brand new row with this column NULL.
+ALTER TABLE planned_posting ADD COLUMN deferred_date TEXT;

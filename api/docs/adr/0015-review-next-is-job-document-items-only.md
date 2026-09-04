@@ -1,0 +1,19 @@
+# Review Next is job/document items only; email and calendar-conflict moved out
+
+`GET /review-next` originally merged three unrelated item types into one tier-ranked list: failed/attention-required Jobs (tier 1), triaged action-needed emails (tier 2), overlapping-calendar-event pairs (tier 3), and completed research Jobs (tier 4) — a fixed priority order so a stale failure would always outrank a routine completion. That design was never actually recorded in an ADR; the code cited "ADR-0012" for it, but ADR-0012 is `route_rules.py`'s skill-alias-table decision, unrelated. This ADR is the one that decision should have had, written now because the design itself changed (2026-08-11) rather than as a pure retroactive backfill.
+
+The user's own framing for the change: Review Next should show "only things which generate an md file" — i.e. Job items only, since every Job Review Item always carries a `deliverable_path`. Email and calendar-conflict items never had one (email opens externally via a Gmail deep link; calendar-conflict has no file at all). Mixing types with fundamentally different "what does opening this do" semantics into one list, ranked by an arbitrary fixed tier order, made the panel's actual job — "what generated output needs my attention" — harder to scan than it needed to be.
+
+Decided:
+- `GET /review-next` keeps only the two Job tiers (1 = failed/attention, 4 = completed research) — `build_review_next()` no longer calls `_email_items()` or `_calendar_conflict_items()`. Tier numbering is left as-is (1 and 4, gap at 2/3) rather than renumbered — the values aren't a public contract worth churning for cosmetics, and the gap is self-documenting evidence of what moved out.
+- Email gets its own `GET /email-review` endpoint (`build_email_review()`), reusing the existing `_email_items()`/`_exclude_seen()` building blocks but sorted by recency only — a single item type has no tiers to rank across. Rendered by a new dedicated `EmailReview` panel (Today's left rail, under Schedule), not folded into `ActivityRail`.
+- Calendar-conflict detection (`_find_calendar_conflicts()`, `_conflict_id()`, the whole `calendar_conflict` item type) is deleted outright, not given a new home. The user's call: the calendar is light enough right now (few events, rare overlaps) that a dedicated duplicate-booking alert isn't worth surfacing anywhere yet. If that changes, it's new scope, not a revival of this code.
+
+## Considered Options
+
+- **Keep one merged endpoint, add a `types` query-param filter.** Tried first, reverted. `/review-next?types=job` would work for the frontend's needs, but email doesn't need — and paid the complexity cost of — the tier-ranking system at all (it's always been a single type once split out); keeping the generic filter param around after email left would have been unused generality serving no second caller.
+- **Keep calendar-conflict detection, filter it out at the API layer only.** Rejected per the user's explicit direction: the underlying computation (`_find_calendar_conflicts()`) would have been genuinely dead code (still tested, never surfaced anywhere), which is worse than deleting it outright and re-adding it if the need materializes.
+
+## Consequences
+
+`SpineReviewItem`'s frontend type (`lib/spineClient.ts`) drops `"calendar_conflict"` from its `item_type` union — it's `"job" | "email"` now, and in practice `/review-next` only ever returns `"job"`. `ReviewNext.tsx`'s `displaySummary()` no longer needs to check `item_type` at all (every item it receives is guaranteed `"job"`), only `tier`. Any future code citing "ADR-0012" for Review Next's ranking behavior is citing the wrong decision — this document is now the correct reference; the stale citations in `review_next.py`, `ReviewNext.tsx`, and `spineClient.ts` are fixed to point here instead.

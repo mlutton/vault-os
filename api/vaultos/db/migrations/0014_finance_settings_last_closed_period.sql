@@ -1,0 +1,13 @@
+-- ADR-0019 / ticket vault-os-api#24: Month-End Close on a real rollover. Distinguishes
+-- "no Month-End Close has ever run yet" (the #20 bootstrap-only state, where the old
+-- catch-up leniency -- ticking/adjusting/editing any period before open_period is still
+-- allowed, since there's no real historical Closed Period to violate) from "at least one
+-- real close has happened" (from here on, open_period is the ONLY writable period --
+-- CONTEXT.md's "Closed Period... permanently immutable, a real historical record" is
+-- finally enforced, not just aspirational).
+--
+-- NULL means no close has ever run. Once set, it holds the period that was most
+-- recently closed -- not consulted for anything beyond that "has closing ever
+-- happened" boolean signal today, but kept as the real period value (not a plain flag)
+-- since it's the natural, self-documenting way to record it.
+ALTER TABLE finance_settings ADD COLUMN last_closed_period TEXT;

@@ -1,0 +1,13 @@
+-- ADR-0019 / ticket vault-os-api#21: Reconciliation against Planned Posting. Replaces
+-- the old count-based chronological pairing (count_matched_transactions_for_period,
+-- paired against sorted occurrences at read time) with a real, persisted link between
+-- a Transaction and the specific Planned Posting occurrence it closes -- established
+-- once, at match time (import-time auto-match or a manual ledger edit), not
+-- re-inferred on every read.
+--
+-- NULL means "still open" (Overdue once its expected_date has passed, sourced from the
+-- row itself, not recomputed). A period nothing has materialized yet (before the
+-- user's first Month-End Close, or a still-open prior period Month-End Close never
+-- touches) has no planned_posting rows at all, so reconciliation for it keeps falling
+-- back to the old count-based pairing -- unaffected by this column.
+ALTER TABLE planned_posting ADD COLUMN matched_txn_id TEXT REFERENCES txn(id);

@@ -1,0 +1,8 @@
+[Unit]
+Description=Vault-Os-Api calendar puller (one-shot)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/Vault-Os-Api
+EnvironmentFile=%h/.claude/.env
+ExecStart=/path/to/Vault-Os-Api/.venv/bin/python -m vaultos.cli calendar-pull

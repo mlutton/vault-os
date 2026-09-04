@@ -1,0 +1,339 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "VaultOS Job Execution",
+    "output": "vaultos-job-execution.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Submit to result",
+        "focus": [
+          "submit",
+          "validate",
+          "jobrow",
+          "claim",
+          "route",
+          "engine",
+          "check",
+          "record",
+          "result"
+        ],
+        "note": "One job from POST /jobs to a recorded, verified result."
+      },
+      {
+        "id": "check-retry",
+        "label": "The check decides",
+        "focus": [
+          "engine",
+          "check",
+          "retry",
+          "fail"
+        ],
+        "note": "Worker success claims are ignored \u2014 exit 0 decides, one retry carries the failure context."
+      },
+      {
+        "id": "state-ownership",
+        "label": "Who owns state",
+        "focus": [
+          "validate",
+          "jobrow",
+          "record"
+        ],
+        "note": "Service-canonical: the database owns job state; the registry validates at the door."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "surfaces",
+      "label": "Surfaces"
+    },
+    {
+      "id": "spine",
+      "label": "Spine API"
+    },
+    {
+      "id": "runner",
+      "label": "vaultos.runner"
+    },
+    {
+      "id": "verify",
+      "label": "Verification",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "Submit",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "dispatch",
+      "label": "Queue + claim",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "execute",
+      "label": "Execute + verify",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "groups": [
+    {
+      "id": "retry-loop",
+      "label": "Check + retry loop",
+      "lane": "verify",
+      "fromCol": 3,
+      "toCol": 5,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "submit",
+    "validate",
+    "jobrow",
+    "claim",
+    "route",
+    "engine",
+    "check",
+    "record",
+    "result"
+  ],
+  "semanticChecks": {
+    "allowedRoots": [
+      "submit"
+    ],
+    "allowedTerminals": [
+      "result",
+      "fail"
+    ],
+    "requiredPaths": [
+      {
+        "from": "submit",
+        "to": "result"
+      },
+      {
+        "from": "check",
+        "to": "fail"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "submit",
+      "lane": "surfaces",
+      "col": 0,
+      "type": "external",
+      "label": "Submit",
+      "sublabel": "plugin \u00b7 web \u00b7 POST /jobs",
+      "width": 140
+    },
+    {
+      "id": "result",
+      "lane": "surfaces",
+      "col": 5,
+      "type": "frontend",
+      "label": "Result",
+      "sublabel": "status + deliverable link",
+      "width": 140
+    },
+    {
+      "id": "validate",
+      "lane": "spine",
+      "col": 1,
+      "type": "security",
+      "label": "Validate",
+      "sublabel": "skill + args vs registry",
+      "width": 140
+    },
+    {
+      "id": "jobrow",
+      "lane": "spine",
+      "col": 2,
+      "type": "database",
+      "label": "Job Row",
+      "sublabel": "queued \u2014 SQLite owns state",
+      "width": 150
+    },
+    {
+      "id": "record",
+      "lane": "spine",
+      "col": 5,
+      "type": "database",
+      "label": "Record",
+      "sublabel": "run \u00b7 eval event \u00b7 chain",
+      "width": 140
+    },
+    {
+      "id": "claim",
+      "lane": "runner",
+      "col": 2,
+      "type": "backend",
+      "label": "Claim",
+      "sublabel": "service-canonical poll",
+      "width": 135
+    },
+    {
+      "id": "route",
+      "lane": "runner",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Route",
+      "sublabel": "by Skill.engine",
+      "width": 120
+    },
+    {
+      "id": "engine",
+      "lane": "runner",
+      "col": 4,
+      "type": "backend",
+      "label": "Engine",
+      "sublabel": "claude \u00b7 cursor \u00b7 script",
+      "width": 160
+    },
+    {
+      "id": "check",
+      "lane": "verify",
+      "col": 4,
+      "type": "security",
+      "label": "Check",
+      "sublabel": "shell command \u2014 exit 0?",
+      "width": 140
+    },
+    {
+      "id": "retry",
+      "lane": "verify",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Retry \u00d71",
+      "sublabel": "failure context appended",
+      "width": 140
+    },
+    {
+      "id": "fail",
+      "lane": "verify",
+      "col": 5,
+      "type": "security",
+      "label": "Job Failed",
+      "sublabel": "error + eval event",
+      "width": 130
+    }
+  ],
+  "edges": [
+    {
+      "id": "submit-validate",
+      "from": "submit",
+      "to": "validate",
+      "label": "POST /jobs",
+      "variant": "emphasis"
+    },
+    {
+      "id": "validate-reject",
+      "from": "validate",
+      "to": "submit",
+      "label": "400 \u2014 unknown arg",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "validate-jobrow",
+      "from": "validate",
+      "to": "jobrow",
+      "label": "insert queued",
+      "variant": "emphasis"
+    },
+    {
+      "id": "jobrow-claim",
+      "from": "jobrow",
+      "to": "claim"
+    },
+    {
+      "id": "claim-route",
+      "from": "claim",
+      "to": "route"
+    },
+    {
+      "id": "route-engine",
+      "from": "route",
+      "to": "engine",
+      "label": "spawn CLI / run script",
+      "variant": "emphasis"
+    },
+    {
+      "id": "engine-check",
+      "from": "engine",
+      "to": "check",
+      "label": "output \u2014 claim ignored"
+    },
+    {
+      "id": "check-record",
+      "from": "check",
+      "to": "record",
+      "label": "exit 0",
+      "variant": "emphasis"
+    },
+    {
+      "id": "check-retry",
+      "from": "check",
+      "to": "retry",
+      "label": "non-zero \u2014 attempt 1",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "retry-engine",
+      "from": "retry",
+      "to": "engine",
+      "label": "re-run",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "check-fail",
+      "from": "check",
+      "to": "fail",
+      "label": "non-zero \u2014 attempt 2",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "record-result",
+      "from": "record",
+      "to": "result",
+      "label": "done \u00b7 CHAIN_MAP next"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Service-canonical",
+      "items": [
+        "The database owns job state; surfaces only submit and read",
+        "The registry validates skill + args at the door \u2014 a stale registry rejects loudly, not silently"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust the check, not the worker",
+      "items": [
+        "A worker's own success claim is ignored \u2014 the check command's exit code decides",
+        "One retry, with the failure context appended to the prompt"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Every attempt is data",
+      "items": [
+        "Each attempt emits an eval event: engine, model, duration, outcome",
+        "Engine routing improves from measurements, not vibes"
+      ]
+    }
+  ]
+}

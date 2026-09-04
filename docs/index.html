@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VaultOS — Diagrams</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+    background: #f6f6f4; color: #1c1e21;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0a0d14; color: #dfe3ea; }
+    a.card { background: #10141d; border-color: #232a38; }
+    a.card:hover { border-color: #3a4459; }
+    .sub, footer { color: #7a8494; }
+  }
+  main { max-width: 720px; padding: 48px 24px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h1 .dot { color: #22d3ee; }
+  .sub { margin: 0 0 32px; color: #666e7a; }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    border: 1px solid #d8dade; border-radius: 10px; background: #fff;
+    padding: 18px 20px; margin: 0 0 14px; transition: border-color .15s;
+  }
+  a.card:hover { border-color: #9aa3b2; }
+  a.card b { display: block; margin-bottom: 4px; }
+  a.card span { font-size: 13px; opacity: .75; }
+  footer { margin-top: 28px; font-size: 13px; color: #666e7a; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="dot">●</span> VaultOS</h1>
+  <p class="sub">A local-first personal automation platform — the interactive diagrams.</p>
+  <a class="card" href="architecture/vaultos-architecture.html">
+    <b>System Architecture</b>
+    <span>Brain · plugin · spine · runner · engines · vendors — with the local-first boundary and three guided views.</span>
+  </a>
+  <a class="card" href="architecture/vaultos-job-execution.html">
+    <b>Job Execution</b>
+    <span>Submit → validate → queue → claim → route → engine → check/retry → record, across four lanes.</span>
+  </a>
+  <footer>Source, ADRs, and specs: <a href="https://github.com/mlutton/vault-os">github.com/mlutton/vault-os</a></footer>
+</main>
+</body>
+</html>

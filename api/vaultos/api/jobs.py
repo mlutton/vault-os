@@ -195,28 +195,36 @@ def get_job_detail(job_id: str, conn=Depends(get_conn), settings=Depends(get_set
     return _job_to_dict(job, settings.vault_root, conn)
 
 
-@router.post("/jobs/{job_id}/events")
-def post_job_event(
-    job_id: str,
-    body: JobEvent,
-    conn=Depends(get_conn),
-    registry: Registry = Depends(get_registry),
-    settings=Depends(get_settings),
+def apply_event_and_chain(
+    conn, registry: Registry, vault_root: Path, *,
+    job_id: str, status: str, ts: str, skill: str | None = None, args: dict | None = None,
+    source: str | None = None, exit_code: int | None = None, summary: str | None = None,
+    deliverable_path: str | None = None, md_path: str | None = None, pid: int | None = None,
 ):
+    """Post one job event through store.apply_event and, on a terminal `ok`
+    that CHAIN_MAP maps, auto-dispatch the follow-up skill -- the same two
+    steps POST /jobs/{id}/events performs. Factored out so vaultos.runner can
+    drive the identical path in-process (no HTTP round-trip) when it posts a
+    job's terminal status, per the runner spec ("the same event-posting path
+    jobs.py uses today, so CHAIN_MAP auto-chaining fires unchanged").
+
+    Returns the updated Job, or None if the event couldn't create/find a job
+    (unknown job_id with no skill to create it from -- the same condition
+    the HTTP endpoint turns into a 404)."""
     engine = None
-    if body.skill is not None:
-        skill_def = registry.get(body.skill)
+    if skill is not None:
+        skill_def = registry.get(skill)
         engine = skill_def.engine if skill_def else None
 
     received_at = utcnow_z()
     job = store.apply_event(
-        conn, job_id=job_id, status=body.status, ts=body.ts, received_at=received_at,
-        skill=body.skill, args=body.args, source=body.source, engine=engine,
-        exit_code=body.exit_code, summary=body.summary, deliverable_path=body.deliverable_path,
-        md_path=body.md_path, pid=body.pid,
+        conn, job_id=job_id, status=status, ts=ts, received_at=received_at,
+        skill=skill, args=args, source=source, engine=engine,
+        exit_code=exit_code, summary=summary, deliverable_path=deliverable_path,
+        md_path=md_path, pid=pid,
     )
     if job is None:
-        raise HTTPException(404, detail="job not found and event did not carry enough detail to create it")
+        return None
 
     chained_skill = CHAIN_MAP.get(job.skill)
     if chained_skill and job.status == "ok":
@@ -227,12 +235,33 @@ def post_job_event(
         # something this call site needs to guard against itself.
         chain_source = f"chain:{job.skill}:{job.id}"
         try:
-            dispatch_skill(conn, registry, settings.vault_root, chained_skill, {}, source=chain_source)
+            dispatch_skill(conn, registry, vault_root, chained_skill, {}, source=chain_source)
         except SubmissionError as exc:
             # Don't fail the triggering job's own event just because its
             # chained follow-up couldn't be dispatched (e.g. the follow-up
             # skill isn't registered yet) -- that's a real gap worth seeing
             # in the logs, not a reason to 500 an otherwise-successful event.
             logger.warning("chain dispatch %s -> %s failed: %s", job.skill, chained_skill, exc)
+
+    return job
+
+
+@router.post("/jobs/{job_id}/events")
+def post_job_event(
+    job_id: str,
+    body: JobEvent,
+    conn=Depends(get_conn),
+    registry: Registry = Depends(get_registry),
+    settings=Depends(get_settings),
+):
+    job = apply_event_and_chain(
+        conn, registry, settings.vault_root,
+        job_id=job_id, status=body.status, ts=body.ts,
+        skill=body.skill, args=body.args, source=body.source,
+        exit_code=body.exit_code, summary=body.summary, deliverable_path=body.deliverable_path,
+        md_path=body.md_path, pid=body.pid,
+    )
+    if job is None:
+        raise HTTPException(404, detail="job not found and event did not carry enough detail to create it")
 
     return _job_to_dict(job, settings.vault_root, conn)

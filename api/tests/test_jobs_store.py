@@ -286,3 +286,85 @@ def test_apply_event_backfills_ts_queued_regardless_of_order(tmp_path):
     assert job.ts_queued == "t0"
     assert job.status == "running"  # Status unchanged (0 is not > 1)
     assert job.ts_started == "t1"
+
+
+# --- claim_oldest_queued / release_job (vaultos.runner's claim-execute loop) ---
+
+
+def test_claim_oldest_queued_returns_none_when_empty(conn):
+    assert store.claim_oldest_queued(conn, pid=1, ts="2026-09-04T00:00:00Z") is None
+
+
+def test_claim_oldest_queued_picks_oldest_and_flips_to_running(conn):
+    store.create_job(
+        conn, job_id="newer", skill="metrics-pull", args={}, source="api",
+        engine="script", ts_queued="2026-09-04T00:00:05Z",
+    )
+    store.create_job(
+        conn, job_id="older", skill="metrics-pull", args={}, source="api",
+        engine="script", ts_queued="2026-09-04T00:00:01Z",
+    )
+
+    claimed = store.claim_oldest_queued(conn, pid=555, ts="2026-09-04T00:01:00Z")
+    assert claimed.id == "older"
+    assert claimed.status == "running"
+    assert claimed.runner_pid == 555
+    assert claimed.ts_started == "2026-09-04T00:01:00Z"
+
+    # still-queued job is untouched
+    other = store.get_job(conn, "newer")
+    assert other.status == "queued"
+    assert other.runner_pid is None
+
+
+def test_claim_oldest_queued_two_racers_only_one_wins(conn):
+    store.create_job(
+        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
+        engine="script", ts_queued="2026-09-04T00:00:00Z",
+    )
+
+    results = []
+
+    def racer(pid):
+        results.append(store.claim_oldest_queued(conn, pid=pid, ts="2026-09-04T00:01:00Z"))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(racer, range(8)))
+
+    winners = [r for r in results if r is not None]
+    assert len(winners) == 1
+    assert all(w.id == "j1" for w in winners)
+
+    job = store.get_job(conn, "j1")
+    assert job.status == "running"
+    assert job.runner_pid == winners[0].runner_pid
+
+
+def test_release_job_reverts_running_to_queued(conn):
+    claimed = store.create_job(
+        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
+        engine="script", ts_queued="2026-09-04T00:00:00Z",
+    )
+    store.claim_oldest_queued(conn, pid=42, ts="2026-09-04T00:01:00Z")
+
+    released = store.release_job(conn, job_id=claimed.id, ts="2026-09-04T00:02:00Z")
+    assert released.status == "queued"
+    assert released.runner_pid is None
+    assert released.ts_started is None
+
+
+def test_release_job_is_noop_for_terminal_job(conn):
+    store.create_job(
+        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
+        engine="script", ts_queued="2026-09-04T00:00:00Z",
+    )
+    store.apply_event(
+        conn, job_id="j1", status="ok", ts="2026-09-04T00:05:00Z", received_at="2026-09-04T00:05:00Z",
+        exit_code=0,
+    )
+    released = store.release_job(conn, job_id="j1", ts="2026-09-04T00:06:00Z")
+    assert released.status == "ok"
+
+
+def test_release_job_unknown_id_returns_none(conn):
+    assert store.release_job(conn, job_id="nope", ts="2026-09-04T00:00:00Z") is None

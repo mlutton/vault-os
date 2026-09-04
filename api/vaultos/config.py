@@ -30,6 +30,15 @@ class Settings:
         self.hud_tz = os.environ.get("HUD_TZ", "America/Chicago")
         # Optional -- unset means the calendar simply never populates.
         self.calendar_ical_url = os.environ.get("CALENDAR_ICAL_URL") or None
+        # Optional -- unset means runtime-state paths fall back to the legacy
+        # <VAULT_ROOT>/system location (see vaultos.state.resolve_state_root).
+        # This is the runner's own new paths (heartbeat, per-run logs); the
+        # spine's existing file paths (write_intent, read_heartbeat,
+        # reconcile_from_files) are not migrated by this setting -- that's
+        # the private folder-migration choreography, out of scope here.
+        state_root = os.environ.get("VAULTOS_STATE_ROOT")
+        self.state_root_override = Path(state_root) if state_root else None
+        self.runner_poll_interval_s = float(os.environ.get("RUNNER_POLL_INTERVAL_S", "5"))
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

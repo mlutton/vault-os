@@ -28,6 +28,13 @@ class Skill:
     deck: bool
     engine: str | None
     args: tuple[SkillArg, ...] = field(default_factory=tuple)
+    # Opaque, engine-specific configuration (e.g. the script engine's `argv`
+    # template and `deliverable` path template -- see
+    # vaultos/runner/engines/script.py). The platform never reads its
+    # contents; only the engine adapter named by `engine` interprets it. This
+    # keeps adding a runtime to one adapter plus one registry row (per the
+    # runner spec) instead of growing named fields on Skill for every engine.
+    engine_config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,7 @@ def load_registry(vault_root: Path) -> Registry:
             label=s["label"],
             deck=s["deck"],
             engine=s.get("engine"),
+            engine_config=s.get("engine_config", {}),
             args=tuple(
                 SkillArg(
                     name=a["name"],

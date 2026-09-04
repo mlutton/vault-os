@@ -208,6 +208,64 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
         return _get_job(conn, job_id)
 
 
+def claim_oldest_queued(conn: sqlite3.Connection, *, pid: int, ts: str) -> "Job | None":
+    """Atomically claim the oldest `queued` job for execution: picks the
+    oldest candidate, then flips it to `running` with an UPDATE whose WHERE
+    clause re-checks `status = 'queued'` in the same statement and reports
+    rowcount. Two callers racing this (two runner processes/threads) can
+    never both win the same job -- whichever UPDATE actually flips the row
+    (rowcount 1) is the owner; the loser's rowcount is 0 and it returns None,
+    even if both callers picked the same "oldest" candidate before either
+    committed. Returns None when there is nothing queued, or when this
+    caller lost the race for the row it picked (v1: single job at a time, so
+    a caller that loses a race simply tries again on its next poll rather
+    than immediately hunting for a second candidate)."""
+    with _lock:
+        row = conn.execute(
+            "SELECT id FROM jobs WHERE status = 'queued' ORDER BY ts_queued ASC, id ASC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        job_id = row["id"]
+        cur = conn.execute(
+            "UPDATE jobs SET status = 'running', ts_started = COALESCE(ts_started, ?), "
+            "runner_pid = ?, last_event_ts = ? WHERE id = ? AND status = 'queued'",
+            (ts, pid, ts, job_id),
+        )
+        if cur.rowcount == 0:
+            conn.commit()
+            return None
+        conn.execute(
+            "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) "
+            "VALUES (?, 'running', ?, ?, ?)",
+            (job_id, ts, json.dumps({"pid": pid, "claimed_by": "vaultos.runner"}), ts),
+        )
+        conn.commit()
+        return _get_job(conn, job_id)
+
+
+def release_job(conn: sqlite3.Connection, *, job_id: str, ts: str) -> "Job | None":
+    """Revert a claimed-but-not-yet-executed job from `running` back to
+    `queued`, clearing `runner_pid`/`ts_started`, for a runner shutting down
+    before it starts real work on the claim (vaultos.runner.core.Runner's
+    clean-shutdown path). A no-op (job returned unchanged) if the job has
+    already moved past `running` -- never reverts a terminal status."""
+    with _lock:
+        cur = conn.execute(
+            "UPDATE jobs SET status = 'queued', runner_pid = NULL, ts_started = NULL, "
+            "last_event_ts = ? WHERE id = ? AND status = 'running'",
+            (ts, job_id),
+        )
+        if cur.rowcount:
+            conn.execute(
+                "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) "
+                "VALUES (?, 'queued', ?, ?, ?)",
+                (job_id, ts, json.dumps({"released": True}), ts),
+            )
+        conn.commit()
+        return _get_job(conn, job_id)
+
+
 def apply_event(
     conn, *, job_id, status, ts, received_at, skill=None, args=None, source=None,
     engine=None, exit_code=None, summary=None, deliverable_path=None, md_path=None, pid=None,

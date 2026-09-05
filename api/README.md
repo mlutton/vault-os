@@ -44,7 +44,7 @@ is the seam currently being built. That gap is known, named, and being closed
 | **42 endpoints** | 11 platform routers in `vaultos/api/` + the finance module |
 | **22 of them** | the finance module |
 | **957 tests** | `pytest`, 75 files, no network, no API spend |
-| **16 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
+| **18 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
 | **14 migrations** | plain SQL, `PRAGMA user_version` (`vaultos/db/migrations/`) |
 | **Dependencies** | FastAPI, uvicorn, python-multipart, httpx, icalendar, recurring-ical-events. That's the list. |
 
@@ -135,6 +135,8 @@ Read these before proposing a change — most "why isn't this simpler" questions
 are answered in one of them. Numbering has gaps — those slots were decisions about private-only features, removed from the public tree.
 
 **Platform & contracts** — [0022 module contract](docs/adr/0022-modules-are-packages-with-a-registration-contract.md)
+
+**Core & client boundary** — [0020 core/client boundary](docs/adr/0020-core-client-boundary.md) · [0021 surface policy](docs/adr/0021-surface-policy.md)
 
 **Jobs & reconciliation** — [0001 shared event-application path](docs/adr/0001-reconciliation-shares-the-event-application-path.md) · [0015 review-next is job documents only](docs/adr/0015-review-next-is-job-document-items-only.md) · [0016 auto-chaining via CHAIN_MAP](docs/adr/0016-jobs-can-auto-chain-a-followup-via-chain-map.md)
 

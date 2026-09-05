@@ -8,7 +8,9 @@ skill) lives at the top; engine-level wiring (a builder's prompt/deliverable
 actually reaching claude-cli's subprocess call) is covered separately by
 test_runner_prompts_batch1_end_to_end.py."""
 
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -109,6 +111,72 @@ def test_id8_truncates_to_eight_chars():
     assert id8(None) == "x"
 
 
+# -- timezone correctness (fix round 1, 2026-09-05) -----------------------
+# The tests above only check *shape* (10 chars, two dashes) -- a helper that
+# silently dropped ZoneInfo(settings.hud_tz) and used naive UTC instead
+# would still pass every one of them. These fix a real UTC instant and
+# assert the actual HUD_TZ-local calendar day/time it resolves to, via the
+# injectable `now` param `_resolve_instant` added for exactly this.
+
+
+def _settings_with_tz(monkeypatch, tmp_path, hud_tz):
+    monkeypatch.setenv("VAULT_ROOT", str(tmp_path))
+    monkeypatch.setenv("HUD_TZ", hud_tz)
+    monkeypatch.delenv("WIKI_INGEST_SKILL_DOC_HINT", raising=False)
+    return Settings()
+
+
+def test_today_date_is_genuinely_hud_tz_local_not_naive_utc(monkeypatch, tmp_path):
+    # 2026-03-08T05:30:00Z is 2026-03-07 23:30 in America/Chicago (still
+    # CST, UTC-6, a few hours before that day's own spring-forward
+    # transition) but already 2026-03-08 in UTC -- a genuine cross-midnight
+    # split a naive-UTC implementation would collapse to one date for both.
+    instant = datetime(2026, 3, 8, 5, 30, tzinfo=ZoneInfo("UTC"))
+
+    chicago_settings = _settings_with_tz(monkeypatch, tmp_path, "America/Chicago")
+    assert today_date(chicago_settings, now=instant) == "2026-03-07"
+
+    utc_settings = _settings_with_tz(monkeypatch, tmp_path, "UTC")
+    assert today_date(utc_settings, now=instant) == "2026-03-08"
+
+    # The whole point: the two hud_tz values must disagree on "today" for
+    # this instant. A ZoneInfo-dropping implementation would make both
+    # resolve to the UTC calendar date and this would fail.
+    assert today_date(chicago_settings, now=instant) != today_date(utc_settings, now=instant)
+
+
+def test_now_time_is_genuinely_hud_tz_local(monkeypatch, tmp_path):
+    instant = datetime(2026, 3, 8, 5, 30, tzinfo=ZoneInfo("UTC"))
+
+    chicago_settings = _settings_with_tz(monkeypatch, tmp_path, "America/Chicago")
+    assert now_time(chicago_settings, now=instant) == "23:30"
+
+    utc_settings = _settings_with_tz(monkeypatch, tmp_path, "UTC")
+    assert now_time(utc_settings, now=instant) == "05:30"
+
+
+def test_tomorrow_date_across_a_dst_spring_forward_transition(monkeypatch, tmp_path):
+    # America/Chicago springs forward (2am -> 3am local) on 2026-03-08.
+    # Fixing "now" the evening before, local time, means today_date() is
+    # 2026-03-07 and tomorrow_date() must land on 2026-03-08 -- the actual
+    # transition day -- via plain Y/M/D + 1 arithmetic, never by adding 24
+    # wall-clock hours to the instant (which a DST transition can skew by an
+    # hour and, in principle, onto the wrong calendar day for an instant
+    # close enough to a boundary).
+    instant = datetime(2026, 3, 8, 5, 30, tzinfo=ZoneInfo("UTC"))
+    chicago_settings = _settings_with_tz(monkeypatch, tmp_path, "America/Chicago")
+
+    assert today_date(chicago_settings, now=instant) == "2026-03-07"
+    assert tomorrow_date(chicago_settings, now=instant) == "2026-03-08"
+
+
+def test_injectable_now_defaults_to_real_time_when_omitted(settings):
+    # Every production call site (`today_date(ctx.settings)`, no `now`) must
+    # keep working unchanged -- the param is additive and keyword-only.
+    result = today_date(settings)
+    assert len(result) == 10 and result.count("-") == 2
+
+
 # -- per-skill markers: load-bearing phrases + interpolated args + -------
 # -- deliverable path shape (never full-string goldens) ------------------
 
@@ -173,7 +241,12 @@ def test_metrics_pull(ctx):
     assert built.deliverable_path == f"inbox/reports/metrics-pull/{date}-{id8(ctx.job_id)}.md"
     assert AUTONOMOUS_PREFIX in built.prompt
     assert f"inbox/research/{date}-acquire*.md" in built.prompt
-    assert "## leadership" in built.prompt and "## payments" in built.prompt
+    # All five lane headings, not just the first two -- the legacy prompt
+    # names each of the five `## <lane>` headings by hand (payments and
+    # dev-trends/chicago/ai are easy to drop silently in a future edit since
+    # they're mid-paragraph, not their own bullet).
+    for lane_heading in ("## leadership", "## payments", "## dev-trends", "## chicago", "## ai"):
+        assert lane_heading in built.prompt, lane_heading
     assert "lean-agile merged into leadership" in built.prompt
     assert "eleven rows total" in built.prompt
     assert f"SAVED {built.deliverable_path}" in built.prompt
@@ -275,3 +348,23 @@ def test_draft_persona_fanout_picks_next_round_number(ctx, tmp_path):
     )
 
     assert built.deliverable_path == "writing/articles/my-piece/reviews/round-4/_summary.md"
+
+
+def test_draft_persona_fanout_round_scan_counts_files_not_just_dirs(ctx, tmp_path):
+    # The legacy daemon's own scan is `readdirSync(absReviewsDir).filter(...)`
+    # -- it never checks isDirectory(), so a stray round-N *file* (e.g. a
+    # leftover from a manual edit, or a future format change) counts toward
+    # the max the same as a round-N directory would. The port mirrors that
+    # exactly (see draft_persona_fanout()'s comment in batch1.py) -- this is
+    # the entry-type-agnostic case the earlier round-scan test didn't cover.
+    article_path = "writing/articles/my-piece/my-piece.md"
+    reviews_dir = tmp_path / "writing/articles/my-piece/reviews"
+    reviews_dir.mkdir(parents=True)
+    (reviews_dir / "round-1").mkdir()
+    (reviews_dir / "round-5").write_text("not a directory")  # a FILE, not a dir
+
+    built = PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
+        {"article_path": article_path, "personas": "gem"}, ctx
+    )
+
+    assert built.deliverable_path == "writing/articles/my-piece/reviews/round-6/_summary.md"

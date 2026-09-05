@@ -85,35 +85,60 @@ AUTONOMOUS_PREFIX = (
 )
 
 
-def today_date(settings: Settings) -> str:
+def _resolve_instant(settings: Settings, now: datetime | None) -> datetime:
+    """The real "current instant", converted to settings.hud_tz -- or, for
+    tests, a caller-injected one (fix round 1, 2026-09-05: the timezone
+    behavior these helpers exist for was untested; a broken implementation
+    that silently dropped ZoneInfo(settings.hud_tz) entirely would still
+    have passed the original shape-only tests). `now`, when given, MUST be
+    timezone-aware (e.g. built with `tzinfo=ZoneInfo("UTC")`) -- it's
+    `.astimezone()`d into hud_tz here exactly like the real-time path below,
+    so a test can fix a real UTC instant and assert the HUD_TZ-local
+    calendar day it lands on, same as production does."""
+    instant = now if now is not None else datetime.now(tz=ZoneInfo("UTC"))
+    return instant.astimezone(ZoneInfo(settings.hud_tz))
+
+
+def today_date(settings: Settings, *, now: datetime | None = None) -> str:
     """Local (settings.hud_tz) YYYY-MM-DD. Must match the legacy daemon's
     todayDate() exactly: `new Intl.DateTimeFormat("en-CA", {timeZone:
     HUD_TZ}).format(new Date())` -- HUD_TZ-local, not UTC, because a naive
     UTC date flips to tomorrow's date in the evening for western timezones,
     which would be wrong for "today". `settings.hud_tz` defaults to
     "America/Chicago" (vaultos/config.py), same default as the legacy
-    daemon's own HUD_TZ fallback."""
-    return datetime.now(ZoneInfo(settings.hud_tz)).strftime("%Y-%m-%d")
+    daemon's own HUD_TZ fallback.
+
+    `now`: optional injectable clock (keyword-only, defaults to real time)
+    -- see `_resolve_instant`. Every existing call site (`today_date(ctx.
+    settings)`) is unaffected; this is purely additive, for tests."""
+    return _resolve_instant(settings, now).strftime("%Y-%m-%d")
 
 
-def tomorrow_date(settings: Settings) -> str:
+def tomorrow_date(settings: Settings, *, now: datetime | None = None) -> str:
     """today_date() plus one calendar day. Matches the legacy daemon's
     tomorrowDate(), which deliberately builds tomorrow from today's local
     Y/M/D components via `Date.UTC(y, m-1, d+1)` rather than adding 24h to a
     timezone-aware instant -- plain date arithmetic sidesteps a DST
     transition silently landing on the wrong calendar day. `date(...) +
-    timedelta(days=1)` here is the same plain-date-arithmetic shape."""
-    year, month, day = (int(part) for part in today_date(settings).split("-"))
+    timedelta(days=1)` here is the same plain-date-arithmetic shape: it adds
+    one calendar day to today_date()'s own Y/M/D, never 24 wall-clock hours
+    to `now` itself, so a DST transition between today and tomorrow can't
+    skew the result (see test_runner_prompts.py's DST-transition-day case).
+
+    `now`: see today_date()'s docstring -- forwarded through unchanged."""
+    year, month, day = (int(part) for part in today_date(settings, now=now).split("-"))
     return (date(year, month, day) + timedelta(days=1)).isoformat()
 
 
-def now_time(settings: Settings) -> str:
+def now_time(settings: Settings, *, now: datetime | None = None) -> str:
     """Local (settings.hud_tz) HH:MM, 24-hour. Matches the legacy daemon's
     nowTime() (`Intl.DateTimeFormat("en-GB", {timeZone: HUD_TZ, hour:
     "2-digit", minute: "2-digit", hourCycle: "h23"})`) -- used to
     distinguish same-day re-runs in a dated sub-section heading (e.g.
-    article-refiner's Changelog entries), not just the bare date."""
-    return datetime.now(ZoneInfo(settings.hud_tz)).strftime("%H:%M")
+    article-refiner's Changelog entries), not just the bare date.
+
+    `now`: see today_date()'s docstring -- forwarded through unchanged."""
+    return _resolve_instant(settings, now).strftime("%H:%M")
 
 
 def id8(job_id: str) -> str:

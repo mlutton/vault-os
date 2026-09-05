@@ -36,7 +36,7 @@ it stays off-stage by design:
 [![VaultOS dev orchestration](docs/architecture/img/dev-orchestration-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-dev-orchestration.html)
 
 **Status: pre-1.0, single-operator.** The api runs daily against a live vault
-and has 918 tests; interfaces change without deprecation cycles. Read it as a
+and has 925 tests; interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not something to depend on yet.
 
 ## Start here

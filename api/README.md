@@ -1,12 +1,16 @@
-# Vault-Os-Api
+# VaultOS spine (`api/`)
 
-A local-first personal automation platform. One FastAPI process, one SQLite file,
-and a vault of plain markdown that stays the system of record.
+The built half of [VaultOS](../README.md): the place where the repository's
+claims about agent-built software under platform discipline get tested on real
+work. As a piece of software it is a local-first personal automation platform:
+one FastAPI process, one SQLite file, and a vault of plain markdown that stays
+the system of record.
 
 It records what your agents do, reconciles the record against what actually
 landed on disk, and serves read-models to whatever surface you point at it.
-Today it also carries a personal-finance module — the first real application
-built on it.
+Today it also carries a personal-finance module — the first module held to the
+platform's own contract (ADR-0022), and the worked example of its reconciliation
+shape.
 
 **Status: pre-1.0, single-operator.** It runs daily against a live vault, has 957
 tests, and its interfaces change without deprecation cycles. Read it as a
@@ -23,6 +27,13 @@ useful: on a locked-down work laptop, inside someone else's compliance boundary.
 So the constraint this codebase is built against is:
 
 > **The infrastructure is the portable asset. The data stays where it lives.**
+
+The constraint is also the experiment. A personal tool could meet it with far
+less code than this; the spine is deliberately built the way a platform team
+would build it, so that each practice (seams, contracts, a verified record of
+work, agent-driven delivery behind deterministic gates) is tested daily and
+recorded in an ADR where it can be weighed against another team's needs. The
+[root README](../README.md) maps those claims to their evidence.
 
 Concretely — CPU-only, no GPU dependency; all state on local disk (SQLite + your
 own markdown files, no hosted database); source adapters that read from *exports*
@@ -77,7 +88,7 @@ copies it rather than abstracting over it.
 Requires Python 3.11+ and a vault directory containing `system/skills.json`.
 
 ```bash
-git clone https://github.com/mlutton/vault-os-api && cd vault-os-api
+git clone https://github.com/mlutton/vault-os && cd vault-os/api
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 VAULT_ROOT=/path/to/your/vault .venv/bin/uvicorn vaultos.main:app --port 3109

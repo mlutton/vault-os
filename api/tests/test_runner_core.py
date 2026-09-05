@@ -32,7 +32,7 @@ SCRIPT_REGISTRY = {
             "id": "no-engine-skill",
             "label": "No Engine",
             "deck": True,
-            "engine": "claude-cli",
+            "engine": "nonexistent-engine",
             "args": [],
         },
         {"id": "chained-target", "label": "Chained Target", "deck": True, "engine": "script", "args": []},
@@ -118,13 +118,13 @@ def test_run_once_unknown_engine_fails_fast(conn, registry, settings, vault):
 
     final = store.get_job(conn, job.id)
     assert final.status == "error"
-    assert "claude-cli" in final.summary
+    assert "nonexistent-engine" in final.summary
 
 
 def test_run_once_missing_engine_config_fails_job_not_runner(conn, registry, settings, vault):
-    # "no-engine-skill" declares engine="claude-cli" which has no adapter in
-    # ENGINE_REGISTRY (v1 ships script only) -- the job fails, the runner
-    # itself must be able to keep going and claim the next job.
+    # "no-engine-skill" declares engine="nonexistent-engine" which has no
+    # adapter in ENGINE_REGISTRY at all -- the job fails, the runner itself
+    # must be able to keep going and claim the next job.
     _enqueue(conn, vault, registry, "no-engine-skill", ts="2026-09-04T00:00:00Z")
     second = _enqueue(conn, vault, registry, "hello-script", ts="2026-09-04T00:00:01Z")
 

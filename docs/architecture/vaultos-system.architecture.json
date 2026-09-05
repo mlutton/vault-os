@@ -148,7 +148,7 @@
       "id": "runner",
       "type": "backend",
       "label": "vaultos.runner",
-      "sublabel": "core built · script engine",
+      "sublabel": "core + check-retry built · script + claude-cli engines",
       "pos": [
         1030,
         330
@@ -310,8 +310,8 @@
       "dot": "emerald",
       "title": "Built vs planned",
       "items": [
-        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core, 827 tests",
-        "Planned: claude/cursor engines + check-retry, Obsidian plugin, web surface"
+        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core + check-retry, script + claude-cli engines, 850 tests",
+        "Planned: cursor engine, Obsidian plugin, web surface"
       ]
     },
     {

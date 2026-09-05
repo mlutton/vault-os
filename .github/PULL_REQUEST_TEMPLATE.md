@@ -20,6 +20,12 @@
 | --- | --- |
 |  |  |
 
+## Docs
+
+<!-- Which documents this change required updating (README claims,
+     architecture diagram built/planned annotations, ADR index, specs) —
+     updated in this same PR. Or: "None affected — <why>". -->
+
 ## Design notes
 
 <!-- Decisions the spec left open and how they were resolved, behavior

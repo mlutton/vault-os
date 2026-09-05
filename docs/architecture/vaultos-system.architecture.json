@@ -310,7 +310,8 @@
       "dot": "emerald",
       "title": "Built vs planned",
       "items": [
-        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core + check-retry, script + claude-cli + cursor-cli engines, 872 tests; in progress: web operations cockpit",
+        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core + check-retry, script + claude-cli + cursor-cli engines, 957 API tests",
+        "In progress: web operations cockpit",
         "Planned: Obsidian plugin"
       ]
     },

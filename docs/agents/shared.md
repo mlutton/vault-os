@@ -27,8 +27,9 @@ Never touch live systems or personal data, and never act outside the boundaries 
 VaultOS is a local-first personal automation platform: a **brain** (a plain
 markdown vault — the document store and system of record, not itself part of
 this codebase), a **spine** (`api/` — job execution, the module contract,
-the model-provider seam), and thin surfaces (`web/`, `plugin/`, both
-planned) that never own what the brain or the spine already own.
+the model-provider seam), and thin surfaces (`web/` — shell built, screens
+planned; `plugin/` — planned) that never own what the brain or the spine
+already own.
 
 - **Start here**: root `README.md` for the components table and the system
   diagrams; `api/README.md` for what's actually built and the quickstart.

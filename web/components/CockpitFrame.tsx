@@ -8,8 +8,8 @@ export function CockpitFrame({ children }: Readonly<{ children: ReactNode }>) {
       <a className="skip-link" href="#workspace-content">
         Skip to content
       </a>
-      <aside className="workspace-rail">
-        <div className="workspace-brand" aria-label="VaultOS">
+      <div className="workspace-rail">
+        <div className="workspace-brand">
           <span className="workspace-brand__symbol" aria-hidden="true">
             V
           </span>
@@ -17,7 +17,7 @@ export function CockpitFrame({ children }: Readonly<{ children: ReactNode }>) {
         </div>
         <NavigationRail />
         <p className="workspace-rail__note">Local-first operations</p>
-      </aside>
+      </div>
       <main className="workspace-content" id="workspace-content" tabIndex={-1}>
         {children}
       </main>

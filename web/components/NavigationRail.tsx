@@ -9,10 +9,13 @@ export function NavigationRail() {
   return (
     <nav className="route-menu" aria-label="Primary navigation">
       <p className="route-menu__eyebrow">Workspace</p>
+      <p className="visually-hidden">Three destinations are planned and not yet built.</p>
       <ul className="route-menu__list">
         {destinations.map((destination) => (
           <li key={destination.href}>
             {destination.status === "available" ? (
+              // Cockpit is hardcoded active while it is the only route; the
+              // "exposes exactly one current page" test guards this assumption.
               <a className="route-menu__current" href={destination.href} aria-current="page">
                 <span>{destination.label}</span>
                 <span className="route-menu__marker" aria-hidden="true" />

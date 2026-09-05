@@ -6,7 +6,7 @@ the API, and confirm the stub's logged argv actually carries the
 prompt-builder registry's built prompt.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire` only.
+this file currently covers `acquire` and `daily-topic-digest`.
 """
 
 import json
@@ -59,6 +59,7 @@ def tmp_vault(tmp_path, stub_claude):
         "version": 1,
         "skills": [
             skill_entry("acquire", []),
+            skill_entry("daily-topic-digest", []),
         ],
     }
     (vault / "system" / "skills.json").write_text(json.dumps(registry))
@@ -93,4 +94,28 @@ def test_acquire_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
     assert detail["deliverables"] == [deliverable_rel]
     prompt = _invoked_prompt(log_path)
     assert "Step 1 -- fetch AND synthesize" in prompt
+    assert deliverable_rel in prompt
+
+
+def test_daily_topic_digest_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
+    from vaultos.main import app
+
+    date = today_date(app.state.settings)
+    deliverable_rel = f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
+    log_path = tmp_path / "argv.log"
+    monkeypatch.setenv("CLAUDE_STUB_LOG", str(log_path))
+    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
+
+    res = client.post("/jobs", json={"skill": "daily-topic-digest", "args": {}})
+    assert res.status_code == 201, res.text
+    job_id = res.json()["id"]
+
+    runner = Runner(app.state.conn, app.state.registry, app.state.settings)
+    assert runner.run_once() is True
+    detail = client.get(f"/jobs/{job_id}").json()
+
+    assert detail["status"] == "ok"
+    assert detail["deliverables"] == [deliverable_rel]
+    prompt = _invoked_prompt(log_path)
+    assert "propose ranked article topics" in prompt
     assert deliverable_rel in prompt

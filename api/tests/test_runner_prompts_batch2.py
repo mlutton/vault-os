@@ -5,9 +5,10 @@ on load-bearing phrases and interpolated job args/settings, plus the
 deliverable path's exact shape -- never a full-string golden.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire` only. The shared registry-boundary
-tests (batch-2 fully registered, excluded set unchanged) live in
-`test_runner_prompts.py` and are updated once all five batch-2 skills land.
+this file currently covers `acquire` and `daily-topic-digest`. The shared
+registry-boundary tests (batch-2 fully registered, excluded set unchanged)
+live in `test_runner_prompts.py` and are updated once all five batch-2
+skills land.
 """
 
 import pytest
@@ -67,4 +68,30 @@ def test_acquire_ignores_args_no_required_arg_gate(ctx):
     # Legacy source has no arg check for this skill -- any args dict (even
     # garbage) still produces a built prompt.
     built = PROMPT_BUILDER_REGISTRY["acquire"]({"unexpected": "value"}, ctx)
+    assert built is not None
+
+
+def test_get_builder_returns_a_callable_for_daily_topic_digest():
+    assert callable(get_builder("daily-topic-digest"))
+
+
+def test_daily_topic_digest(ctx):
+    built = PROMPT_BUILDER_REGISTRY["daily-topic-digest"]({}, ctx)
+    assert built is not None
+    date = today_date(ctx.settings)
+    assert built.deliverable_path == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
+    assert AUTONOMOUS_PREFIX in built.prompt
+    assert "Step 1 -- gather everything not yet attached to a topic" in built.prompt
+    assert "Step 4 -- check persona fit, inline, no fan-out" in built.prompt
+    assert "Step 7 -- your final reply must present the ranked list conversationally" in built.prompt
+    assert f"first_seen: {date}" in built.prompt
+    assert f"date: {date}" in built.prompt
+    # Unlike every other batch-1/batch-2 skill, this prompt does NOT end
+    # with "SAVED <deliverable>" -- Step 7's pick-prompt is the final reply
+    # by design (ported verbatim, including that omission).
+    assert "SAVED" not in built.prompt
+
+
+def test_daily_topic_digest_ignores_args_no_required_arg_gate(ctx):
+    built = PROMPT_BUILDER_REGISTRY["daily-topic-digest"]({"unexpected": "value"}, ctx)
     assert built is not None

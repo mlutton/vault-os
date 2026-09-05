@@ -75,6 +75,14 @@ class Settings:
         self.article_refiner_skill_doc_hint = os.environ.get(
             "ARTICLE_REFINER_SKILL_DOC_HINT", "the article-refiner skill's own SKILL.md"
         )
+        self.cache_cli = os.environ.get("CACHE_CLI", "the cache CLI script")
+        self.assemble_review_script = os.environ.get(
+            "ASSEMBLE_REVIEW_SCRIPT", "the assemble-review script"
+        )
+        self.research_persona_fanout_skill_doc_hint = os.environ.get(
+            "RESEARCH_PERSONA_FANOUT_SKILL_DOC_HINT",
+            "the research-persona-fanout skill's own SKILL.md",
+        )
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

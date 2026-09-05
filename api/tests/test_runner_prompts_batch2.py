@@ -5,10 +5,10 @@ on load-bearing phrases and interpolated job args/settings, plus the
 deliverable path's exact shape -- never a full-string golden.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire`, `daily-topic-digest`,
-`deep-research`, and `article-refiner`. The shared registry-boundary tests
-(batch-2 fully registered, excluded set unchanged) live in
-`test_runner_prompts.py` and are updated once all five batch-2 skills land.
+this file now covers the full five-skill batch-2 set: `acquire`,
+`daily-topic-digest`, `deep-research`, `article-refiner`, and
+`research-persona-fanout`. The shared registry-boundary tests (batch-2 fully
+registered, excluded set unchanged) live in `test_runner_prompts.py`.
 """
 
 import json
@@ -38,6 +38,9 @@ def settings(monkeypatch, tmp_path):
     monkeypatch.delenv("ASSEMBLE_ACQUIRE_REPORT_CLI", raising=False)
     monkeypatch.delenv("YT_SEARCH_SCRIPT", raising=False)
     monkeypatch.delenv("ARTICLE_REFINER_SKILL_DOC_HINT", raising=False)
+    monkeypatch.delenv("CACHE_CLI", raising=False)
+    monkeypatch.delenv("ASSEMBLE_REVIEW_SCRIPT", raising=False)
+    monkeypatch.delenv("RESEARCH_PERSONA_FANOUT_SKILL_DOC_HINT", raising=False)
     return Settings()
 
 
@@ -205,4 +208,37 @@ def test_article_refiner(ctx):
     assert f"### Hook Options ({run_stamp})" in built.prompt
     assert f"### {run_stamp}" in built.prompt
     assert "skill: article-refiner" in built.prompt
+    assert f"SAVED {built.deliverable_path}" in built.prompt
+
+
+def test_research_persona_fanout_requires_article_path(ctx):
+    assert PROMPT_BUILDER_REGISTRY["research-persona-fanout"]({}, ctx) is None
+    assert PROMPT_BUILDER_REGISTRY["research-persona-fanout"]({"article_path": " "}, ctx) is None
+
+
+def test_research_persona_fanout(ctx):
+    article_path = "writing/articles/my-piece/my-piece.md"
+    built = PROMPT_BUILDER_REGISTRY["research-persona-fanout"]({"article_path": article_path}, ctx)
+    assert built is not None
+    date = today_date(ctx.settings)
+    assert built.deliverable_path == (
+        f"inbox/reports/research-persona-fanout/{date}-research-persona-fanout-{id8(ctx.job_id)}.md"
+    )
+    assert AUTONOMOUS_PREFIX in built.prompt
+    assert article_path in built.prompt
+    assert ctx.settings.research_persona_fanout_skill_doc_hint in built.prompt
+    assert "~/" not in built.prompt and "/home/" not in built.prompt
+    # slug is derived from the article's own parent directory name, and used
+    # to build the deep-research report join path -- same filename-join
+    # discipline as batch 1's research-into-draft.
+    assert "inbox/deep-research/my-piece-deep-research.md" in built.prompt
+    assert 'test -f "inbox/deep-research/my-piece-deep-research.md" && echo EXISTS || echo MISSING' in built.prompt
+    assert ctx.settings.cache_cli in built.prompt
+    assert ctx.settings.assemble_review_script in built.prompt
+    run_stamp = f"{date} {now_time(ctx.settings)}"
+    assert f"### Research Persona Review ({run_stamp})" in built.prompt
+    # Literal-brace JSON example (Part 2's persist payload) -- confirms the
+    # f-string's `{{`/`}}` escaping rendered single braces.
+    assert '{"persona": "<this persona' in built.prompt
+    assert "{{" not in built.prompt and "}}" not in built.prompt
     assert f"SAVED {built.deliverable_path}" in built.prompt

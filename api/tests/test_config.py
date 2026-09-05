@@ -38,3 +38,22 @@ def test_vault_readable(monkeypatch, tmp_path):
     assert settings.vault_readable() is False
     (tmp_path / "system").mkdir()
     assert settings.vault_readable() is True
+
+
+def test_wiki_ingest_skill_doc_hint_defaults_to_a_path_free_description(monkeypatch, tmp_path):
+    # ticket #25's lifted-config value: the legacy wiki-ingest prompt's
+    # hardcoded home-relative doc pointer becomes this setting, and the
+    # default must contain no path at all -- see vaultos/runner/prompts/
+    # batch1.py's wiki_ingest() builder.
+    monkeypatch.setenv("VAULT_ROOT", str(tmp_path))
+    monkeypatch.delenv("WIKI_INGEST_SKILL_DOC_HINT", raising=False)
+    settings = Settings()
+    assert settings.wiki_ingest_skill_doc_hint == "the wiki-ingest skill's own SKILL.md"
+    assert "/" not in settings.wiki_ingest_skill_doc_hint
+
+
+def test_wiki_ingest_skill_doc_hint_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("VAULT_ROOT", str(tmp_path))
+    monkeypatch.setenv("WIKI_INGEST_SKILL_DOC_HINT", "the ops team's internal rules doc")
+    settings = Settings()
+    assert settings.wiki_ingest_skill_doc_hint == "the ops team's internal rules doc"

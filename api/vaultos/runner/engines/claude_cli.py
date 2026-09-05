@@ -21,12 +21,29 @@ vaultos/registry.py's Skill.engine_config docstring):
   is the registry author's call -- this ticket supports both rather than
   forcing every claude-cli skill to reshape its args around a template.
 
+**Prompt-builder registry (ticket #25)**: before either of the above, this
+adapter checks `vaultos.runner.prompts.get_builder(skill.id)`. A skill with
+a registered builder gets its prompt (and deliverable path) from there --
+`engine_config`'s own `prompt` template and the job's `prompt` arg are both
+ignored in that case. A skill with no builder keeps the exact behavior
+described above, unchanged (the no-builder passthrough).
+
 The prompt is passed as the invocation's final argv element (one-shot,
 matching the legacy daemon's shape); stdout is the run's output.
+
+**Deliverable path**: for a builder-driven skill, `EngineResult.deliverable_
+path` is set the same way the script engine sets it from its own
+`engine_config['deliverable']` template (see script.py) -- only when the run
+succeeded (exit 0) AND the file actually exists under `ctx.vault_root`
+afterward. This is the "small generalization" the ticket calls for: before
+this ticket, claude-cli/cursor-cli never reported a deliverable_path at all
+(EngineResult's field defaulted to None); a skill with NO builder still gets
+None here, unchanged.
 """
 
 import subprocess
 
+from ..prompts import BuilderContext, get_builder
 from .base import EngineContext, EngineResult
 
 DEFAULT_TIMEOUT_S = 120
@@ -60,7 +77,7 @@ class ClaudeCliEngine:
         if not binary:
             raise ClaudeCliEngineError(f"claude-cli skill '{skill.id}' has no binary configured")
 
-        prompt = self._build_prompt(job, skill, config)
+        prompt, deliverable_path = self._build_prompt(job, skill, config, ctx)
         if retry_context is not None:
             prompt = f"{prompt}{RETRY_CONTEXT_MARKER}{retry_context}"
 
@@ -80,20 +97,40 @@ class ClaudeCliEngine:
 
         self._write_run_log(ctx, job.id, argv, proc)
 
+        resolved_deliverable = None
+        if proc.returncode == 0 and deliverable_path and (ctx.vault_root / deliverable_path).exists():
+            resolved_deliverable = deliverable_path
+
         summary = (proc.stdout.strip() or proc.stderr.strip() or f"claude-cli exited {proc.returncode}")
         return EngineResult(
             success=proc.returncode == 0,
             exit_code=proc.returncode,
             summary=summary[:SUMMARY_MAX_CHARS],
+            deliverable_path=resolved_deliverable,
         )
 
     @staticmethod
-    def _build_prompt(job, skill, config: dict) -> str:
+    def _build_prompt(job, skill, config: dict, ctx: EngineContext) -> tuple[str, str | None]:
+        """Returns (prompt, deliverable_path) -- deliverable_path is None
+        unless a registered prompt builder supplied one (see module
+        docstring's "Prompt-builder registry" section)."""
+        builder = get_builder(skill.id)
+        if builder is not None:
+            built = builder(
+                job.args, BuilderContext(vault_root=ctx.vault_root, settings=ctx.settings, job_id=job.id)
+            )
+            if built is None:
+                raise ClaudeCliEngineError(
+                    f"claude-cli skill '{skill.id}' prompt builder rejected this job's args "
+                    f"(missing or blank required field)"
+                )
+            return built.prompt, built.deliverable_path
+
         template = config.get("prompt")
         if template:
             subst = {**job.args, "job_id": job.id}
             try:
-                return template.format(**subst)
+                return template.format(**subst), None
             except KeyError as exc:
                 raise ClaudeCliEngineError(
                     f"claude-cli skill '{skill.id}' prompt template references unknown placeholder {exc}"
@@ -105,7 +142,7 @@ class ClaudeCliEngine:
                 f"claude-cli skill '{skill.id}' has no engine_config 'prompt' template "
                 f"and the job carries no 'prompt' arg"
             )
-        return prompt
+        return prompt, None
 
     @staticmethod
     def _write_run_log(ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess) -> None:

@@ -133,3 +133,32 @@ and emits eval events through a `ctx` hook that defaults to logging.
 The web cockpit (see the web v1 spec) binds only to the jobs/runs HTTP
 API, so it is deliberately insulated from this change — it becomes the
 runner's first observability surface when both land.
+
+## Decisions: check+retry + claude-cli adapter (2026-09-05, pre-build)
+
+Resolved ahead of the check+retry/claude-cli build; the adapter
+interface and eval schema referenced here are frozen on main.
+
+- **`check` is a top-level Skill registry field, not an engine-config
+  key.** Verification is engine-agnostic — a script skill deserves a
+  check as much as an LLM one — so the check runner lives in runner
+  core, above the engine seam, and every adapter inherits it. A check
+  is a shell command run with the job's working context; exit 0 passes;
+  no check declared = engine success is job success.
+- **Retry ownership is split**: core decides *that* exactly one retry
+  happens (carrying the check's stdout+stderr as failure context); each
+  adapter decides *how* that context enters its input — appended to the
+  prompt under a clear marker for CLI engines, an environment variable
+  for the script engine. The core stays engine-blind.
+- **claude-cli adapter**: binary and base args from engine config
+  (absolute path — headless environments have no login PATH); the
+  prompt passes as the invocation argument, matching the legacy
+  daemon's shape; stdout is the output; optional `model` in engine
+  config becomes the model flag; timeout honored as in the script
+  adapter.
+- **Eval events**: the existing schema's `check` field (null since the
+  core landed) now records the real outcome, including which attempt
+  passed.
+- Tests keep the established seam: end-to-end through the HTTP API with
+  a stub CLI binary scripted to succeed/fail/hang — no real vendor CLI,
+  key, or network.

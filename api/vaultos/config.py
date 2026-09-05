@@ -50,6 +50,24 @@ class Settings:
         self.wiki_ingest_skill_doc_hint = os.environ.get(
             "WIKI_INGEST_SKILL_DOC_HINT", "the wiki-ingest skill's own SKILL.md"
         )
+        # Batch 2 (ticket #26), added incrementally per skill: the heavy
+        # research/writing pipeline prompts shell out to a handful of helper
+        # scripts and one Workflow script by absolute path in the legacy
+        # daemon -- same "configuration does the scrubbing" treatment as
+        # wiki_ingest_skill_doc_hint above: each lifts to its own Settings
+        # field, env var, and PATH-FREE default (a plain description of the
+        # script's role), read at prompt-build time. A deployment that wants
+        # the prompt to literally name a real script path sets the matching
+        # env var. This slice is what `acquire` needs; more fields land
+        # alongside the skills that need them.
+        self.python_bin = os.environ.get("PYTHON_BIN", "python3")
+        self.rss_poll_script = os.environ.get("RSS_POLL_SCRIPT", "the RSS poll script")
+        self.websearch_cached_fetch_workflow = os.environ.get(
+            "WEBSEARCH_CACHED_FETCH_WORKFLOW", "the websearch-cached-fetch workflow script"
+        )
+        self.assemble_acquire_report_cli = os.environ.get(
+            "ASSEMBLE_ACQUIRE_REPORT_CLI", "the assemble-acquire-report CLI script"
+        )
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

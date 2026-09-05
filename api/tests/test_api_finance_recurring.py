@@ -3,14 +3,21 @@ import pytest
 
 @pytest.fixture
 def account_id(client):
-    res = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True})
+    res = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}
+    )
     return res.json()["id"]
 
 
 def _import_csv(client, account_id, csv_bytes):
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     return client.post(
         f"/finance/accounts/{account_id}/import",

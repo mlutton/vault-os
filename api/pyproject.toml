@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+dev = ["pytest>=8.0.0", "ruff>=0.16,<0.17"]  # minor-pinned: ruff's formatter changes between minors, and an unpinned bump would reformat the tree and fail CI on untouched code
 
 [project.scripts]
 # `vaultos reindex` / `vaultos calendar-pull`; `python -m vaultos.cli` keeps working.
@@ -41,3 +41,11 @@ testpaths = ["tests"]
 # Puts the repo root on sys.path so bare `pytest` imports `vaultos` on a fresh
 # clone without an install (#32). `python -m pytest` did this by accident.
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

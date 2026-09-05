@@ -1,4 +1,3 @@
-import os
 import stat
 from dataclasses import dataclass
 
@@ -30,15 +29,17 @@ def _write_script(path, body):
 def _ctx(vault_root, state_root=None):
     settings_stub = object.__new__(Settings)  # unused by the engine itself
     return EngineContext(
-        vault_root=vault_root, state_root=state_root or (vault_root / "system"),
-        settings=settings_stub, emit=lambda event: None,
+        vault_root=vault_root,
+        state_root=state_root or (vault_root / "system"),
+        settings=settings_stub,
+        emit=lambda event: None,
     )
 
 
 def test_script_engine_success_and_deliverable(tmp_path):
     script = _write_script(
         tmp_path / "hello.sh",
-        "#!/bin/sh\nmkdir -p \"$(dirname \"$2\")\"\necho \"hello $1\" > \"$2\"\n",
+        '#!/bin/sh\nmkdir -p "$(dirname "$2")"\necho "hello $1" > "$2"\n',
     )
     (tmp_path / "vault").mkdir()
     vault_root = tmp_path / "vault"
@@ -46,7 +47,11 @@ def test_script_engine_success_and_deliverable(tmp_path):
     skill = _Skill(
         id="hello-script",
         engine_config={
-            "argv": [str(script), "{job_id}", "{vault_root}/inbox/reports/hello-script/{job_id}.md"],
+            "argv": [
+                str(script),
+                "{job_id}",
+                "{vault_root}/inbox/reports/hello-script/{job_id}.md",
+            ],
             "deliverable": "inbox/reports/hello-script/{job_id}.md",
         },
     )
@@ -62,7 +67,7 @@ def test_script_engine_success_and_deliverable(tmp_path):
 
 
 def test_script_engine_substitutes_job_args(tmp_path):
-    script = _write_script(tmp_path / "echo_arg.sh", "#!/bin/sh\necho \"topic=$1\"\n")
+    script = _write_script(tmp_path / "echo_arg.sh", '#!/bin/sh\necho "topic=$1"\n')
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(id="s", engine_config={"argv": [str(script), "{topic}"]})

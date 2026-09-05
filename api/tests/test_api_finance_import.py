@@ -44,7 +44,12 @@ def test_create_column_mapping_single_amount_column(client):
     account = _account(client)
     res = client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     assert res.status_code == 201
     mapping = res.json()
@@ -59,7 +64,12 @@ def test_create_column_mapping_debit_credit_split(client):
     account = _account(client)
     res = client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_debit": "Debit", "source_credit": "Credit"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_debit": "Debit",
+            "source_credit": "Credit",
+        },
     )
     assert res.status_code == 201
     assert res.json()["source_amount"] is None
@@ -70,8 +80,11 @@ def test_create_column_mapping_rejects_both_amount_and_split(client):
     res = client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
         json={
-            "source_date": "Date", "source_merchant": "Description",
-            "source_amount": "Amount", "source_debit": "Debit", "source_credit": "Credit",
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "source_debit": "Debit",
+            "source_credit": "Credit",
         },
     )
     assert res.status_code == 400
@@ -88,7 +101,12 @@ def test_create_column_mapping_rejects_neither_amount_nor_split(client):
 
 def test_create_column_mapping_rejects_a_second_confirmation_for_the_same_account(client):
     account = _account(client)
-    body = {"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"}
+    body = {
+        "source_date": "Date",
+        "source_merchant": "Description",
+        "source_amount": "Amount",
+        "amount_sign_convention": "as_is",
+    }
     first = client.post(f"/finance/accounts/{account['id']}/column-mapping", json=body)
     assert first.status_code == 201
     second = client.post(f"/finance/accounts/{account['id']}/column-mapping", json=body)
@@ -99,7 +117,12 @@ def test_import_after_mapping_confirmed_writes_transactions_and_reports_counts(c
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     res = _upload(client, account["id"])
     assert res.status_code == 201  # a real import row was just created
@@ -113,7 +136,12 @@ def test_reimporting_the_same_file_dedupes_and_reports_skipped(client):
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     first = _upload(client, account["id"]).json()
     assert first["rows_added"] == 2
@@ -127,7 +155,12 @@ def test_preview_true_reports_counts_without_writing_anything(client):
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     preview = _upload(client, account["id"], preview=True).json()
     assert preview["mapping_required"] is False
@@ -143,7 +176,12 @@ def test_malformed_csv_is_rejected_before_any_row_is_written(client):
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     bad_csv = b"Date,Description,Amount\nnot-a-date,COMCAST,-10.00\n"
     res = _upload(client, account["id"], csv_bytes=bad_csv)
@@ -167,10 +205,20 @@ def test_import_history_lists_newest_first(client):
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     _upload(client, account["id"], filename="first.csv")
-    _upload(client, account["id"], csv_bytes=CSV_HEADER + b"2026-03-03,ANOTHER,-500.00\n", filename="second.csv")
+    _upload(
+        client,
+        account["id"],
+        csv_bytes=CSV_HEADER + b"2026-03-03,ANOTHER,-500.00\n",
+        filename="second.csv",
+    )
 
     imports = client.get(f"/finance/accounts/{account['id']}/imports").json()
     assert [i["filename"] for i in imports] == ["second.csv", "first.csv"]
@@ -180,10 +228,17 @@ def test_imported_transactions_are_never_auto_matched_by_this_ticket(client):
     account = _account(client)
     client.post(
         f"/finance/accounts/{account['id']}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     _upload(client, account["id"])
     # No ledger/txn-list endpoint exists yet (that's ticket #8's Ledger screen) --
     # this is asserted indirectly via the import result never mentioning matching.
-    result = _upload(client, account["id"], csv_bytes=CSV_HEADER + b"2026-03-05,NEW ROW,-1.00\n").json()
+    result = _upload(
+        client, account["id"], csv_bytes=CSV_HEADER + b"2026-03-05,NEW ROW,-1.00\n"
+    ).json()
     assert "match" not in result

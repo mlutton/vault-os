@@ -14,7 +14,9 @@ _VALID_LEDGER_FILTERS = {"all", "needs_review", "unmatched", "spending"}
 @router.get("/finance/ledger")
 def get_ledger(filter: str = "all", conn=Depends(get_conn)):  # noqa: A002 -- matches the query param name the client sends
     if filter not in _VALID_LEDGER_FILTERS:
-        raise HTTPException(400, detail=f"filter must be one of {sorted(_VALID_LEDGER_FILTERS)}, got {filter!r}")
+        raise HTTPException(
+            400, detail=f"filter must be one of {sorted(_VALID_LEDGER_FILTERS)}, got {filter!r}"
+        )
     return ledger.build_ledger(conn, filter)
 
 
@@ -56,7 +58,9 @@ def update_transaction(txn_id: str, body: TransactionUpdate, conn=Depends(get_co
         # this same request -- "a matched transaction inherits its plan item's type
         # unless the user overrides" (README).
         if "category" not in fields:
-            matched_item = store.get_plan_item(conn, body.plan_item_id) if body.plan_item_id else None
+            matched_item = (
+                store.get_plan_item(conn, body.plan_item_id) if body.plan_item_id else None
+            )
             kwargs["category"] = matched_item.type if matched_item else None
             kwargs["category_source"] = "user"
 

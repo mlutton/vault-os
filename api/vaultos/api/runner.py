@@ -9,8 +9,15 @@ router = APIRouter()
 def _runner_to_dict(heartbeat) -> dict:
     if heartbeat is None:
         return {
-            "ts": None, "pid": None, "active": None, "pending": None, "alive": False,
-            "version": None, "busy": False, "max_concurrent": None, "heartbeat_age_s": None,
+            "ts": None,
+            "pid": None,
+            "active": None,
+            "pending": None,
+            "alive": False,
+            "version": None,
+            "busy": False,
+            "max_concurrent": None,
+            "heartbeat_age_s": None,
         }
     return {
         "ts": heartbeat.ts,

@@ -5,7 +5,13 @@ from vaultos.modules.finance.matching import annotate_with_matches, match_transa
 
 def _item(**over):
     defaults = dict(
-        id="p1", name="Rent", payee="Landlord", match_text=[], is_catch_all=False, type="Rent", kind="posting",
+        id="p1",
+        name="Rent",
+        payee="Landlord",
+        match_text=[],
+        is_catch_all=False,
+        type="Rent",
+        kind="posting",
     )
     defaults.update(over)
     return SimpleNamespace(**defaults)
@@ -103,8 +109,18 @@ def test_no_match_when_nothing_resembles_anything():
 def test_annotate_with_matches_attaches_plan_item_id_match_source_and_category():
     item = _item(id="p1", type="Utilities", match_text=["COMCAST"])
     rows = [
-        {"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000, "dedupe_hash": "h1"},
-        {"date": "2026-03-02", "merchant_raw": "RANDOM STORE", "amount_cents": -500, "dedupe_hash": "h2"},
+        {
+            "date": "2026-03-01",
+            "merchant_raw": "COMCAST CABLE",
+            "amount_cents": -1000,
+            "dedupe_hash": "h1",
+        },
+        {
+            "date": "2026-03-02",
+            "merchant_raw": "RANDOM STORE",
+            "amount_cents": -500,
+            "dedupe_hash": "h2",
+        },
     ]
     result = annotate_with_matches(rows, [item])
     assert result[0]["plan_item_id"] == "p1"

@@ -3,7 +3,6 @@ mirroring test_runner_engine_script.py's pattern: a stub shell script stands
 in for the vendor CLI (never a real one, no keys, no network), and every
 test drives ClaudeCliEngine().run() directly against it."""
 
-import os
 import stat
 from dataclasses import dataclass
 
@@ -53,13 +52,15 @@ def _echo_argv_stub(path, log_path):
 def _ctx(vault_root, state_root=None):
     settings_stub = object.__new__(Settings)  # unused by the engine itself
     return EngineContext(
-        vault_root=vault_root, state_root=state_root or (vault_root / "system"),
-        settings=settings_stub, emit=lambda event: None,
+        vault_root=vault_root,
+        state_root=state_root or (vault_root / "system"),
+        settings=settings_stub,
+        emit=lambda event: None,
     )
 
 
 def test_claude_cli_success_prompt_from_job_arg(tmp_path):
-    stub = _write_stub(tmp_path / "claude", "#!/bin/sh\necho \"reply to: $1\"\n")
+    stub = _write_stub(tmp_path / "claude", '#!/bin/sh\necho "reply to: $1"\n')
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(id="ask-claude", engine_config={"binary": str(stub)})
@@ -73,7 +74,7 @@ def test_claude_cli_success_prompt_from_job_arg(tmp_path):
 
 
 def test_claude_cli_prompt_template_interpolation(tmp_path):
-    stub = _write_stub(tmp_path / "claude", "#!/bin/sh\necho \"$1\"\n")
+    stub = _write_stub(tmp_path / "claude", '#!/bin/sh\necho "$1"\n')
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(
@@ -122,7 +123,8 @@ def test_claude_cli_misconfigured_binary_path_fails_fast(tmp_path):
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(
-        id="s", engine_config={"binary": str(tmp_path / "does-not-exist-claude")},
+        id="s",
+        engine_config={"binary": str(tmp_path / "does-not-exist-claude")},
     )
     job = _Job(id="job-6", args={"prompt": "hi"})
 
@@ -179,25 +181,38 @@ def test_claude_cli_base_args_precede_model_and_prompt(tmp_path):
     vault_root.mkdir()
     skill = _Skill(
         id="s",
-        engine_config={"binary": str(stub), "args": ["--print", "--dangerously-skip-permissions"], "model": "sonnet"},
+        engine_config={
+            "binary": str(stub),
+            "args": ["--print", "--dangerously-skip-permissions"],
+            "model": "sonnet",
+        },
     )
     job = _Job(id="job-10", args={"prompt": "hello there"})
 
     ClaudeCliEngine().run(job=job, skill=skill, ctx=_ctx(vault_root))
 
-    lines = [l for l in log.read_text().splitlines() if l != "=== invocation ==="]
-    assert lines == ["--print", "--dangerously-skip-permissions", "--model", "sonnet", "hello there"]
+    lines = [line for line in log.read_text().splitlines() if line != "=== invocation ==="]
+    assert lines == [
+        "--print",
+        "--dangerously-skip-permissions",
+        "--model",
+        "sonnet",
+        "hello there",
+    ]
 
 
 def test_claude_cli_retry_context_appended_under_marker(tmp_path):
-    stub = _write_stub(tmp_path / "claude", "#!/bin/sh\necho \"$1\"\n")
+    stub = _write_stub(tmp_path / "claude", '#!/bin/sh\necho "$1"\n')
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(id="s", engine_config={"binary": str(stub)})
     job = _Job(id="job-11", args={"prompt": "original prompt"})
 
     result = ClaudeCliEngine().run(
-        job=job, skill=skill, ctx=_ctx(vault_root), retry_context="check said: missing frobnicator",
+        job=job,
+        skill=skill,
+        ctx=_ctx(vault_root),
+        retry_context="check said: missing frobnicator",
     )
 
     assert result.summary.startswith("original prompt")

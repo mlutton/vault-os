@@ -9,7 +9,6 @@ actually reaching claude-cli's subprocess call) is covered separately by
 test_runner_prompts_batch1_end_to_end.py."""
 
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -256,7 +255,9 @@ def test_vault_cleanup(ctx):
     built = PROMPT_BUILDER_REGISTRY["vault-cleanup"]({}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/reports/vault-cleanup/{date}-cleanup-{id8(ctx.job_id)}.md"
+    assert (
+        built.deliverable_path == f"inbox/reports/vault-cleanup/{date}-cleanup-{id8(ctx.job_id)}.md"
+    )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "retention: ephemeral" in built.prompt
     assert "retention: durable" in built.prompt
@@ -270,7 +271,10 @@ def test_inbox_brief(ctx):
     built = PROMPT_BUILDER_REGISTRY["inbox-brief"]({}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/reports/inbox-briefs/{date}-inbox-brief-{id8(ctx.job_id)}.md"
+    assert (
+        built.deliverable_path
+        == f"inbox/reports/inbox-briefs/{date}-inbox-brief-{id8(ctx.job_id)}.md"
+    )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "inbox/notes/" in built.prompt
     assert "Gmail MCP connector" in built.prompt
@@ -325,7 +329,10 @@ def test_wiki_ingest(ctx):
     built = PROMPT_BUILDER_REGISTRY["wiki-ingest"]({"source_path": source_path}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/reports/wiki-ingest/{date}-wiki-ingest-{id8(ctx.job_id)}.md"
+    assert (
+        built.deliverable_path
+        == f"inbox/reports/wiki-ingest/{date}-wiki-ingest-{id8(ctx.job_id)}.md"
+    )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert source_path in built.prompt
     assert "distill, don't copy" in built.prompt
@@ -358,15 +365,19 @@ def test_visual_asset_proposal(ctx):
 
 def test_draft_persona_fanout_requires_article_path_and_personas(ctx):
     assert PROMPT_BUILDER_REGISTRY["draft-persona-fanout"]({}, ctx) is None
-    assert PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
-        {"article_path": "writing/articles/x/x.md"}, ctx
-    ) is None
-    assert PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
-        {"personas": "gem, cto"}, ctx
-    ) is None
-    assert PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
-        {"article_path": "writing/articles/x/x.md", "personas": "  ,  "}, ctx
-    ) is None
+    assert (
+        PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
+            {"article_path": "writing/articles/x/x.md"}, ctx
+        )
+        is None
+    )
+    assert PROMPT_BUILDER_REGISTRY["draft-persona-fanout"]({"personas": "gem, cto"}, ctx) is None
+    assert (
+        PROMPT_BUILDER_REGISTRY["draft-persona-fanout"](
+            {"article_path": "writing/articles/x/x.md", "personas": "  ,  "}, ctx
+        )
+        is None
+    )
 
 
 def test_draft_persona_fanout_first_round(ctx):

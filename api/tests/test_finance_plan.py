@@ -15,18 +15,35 @@ def conn(tmp_path):
 @pytest.fixture
 def account_id(conn):
     account = store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     return account.id
 
 
 def _make_item(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Rent", estimate_cents=-150000, plan_type="Rent", payee="Landlord",
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=[],
+        item_id="p1",
+        name="Rent",
+        estimate_cents=-150000,
+        plan_type="Rent",
+        payee="Landlord",
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=[],
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -50,7 +67,9 @@ def test_monthly_item_occurring_this_period_is_a_checkable_row(conn, account_id)
     row = summary["items"][0]
     assert row["checkable"] is True
     assert row["lands"] == "2026-03-14"
-    assert row["status"] == "overdue"  # 14th has passed relative to TODAY (the 20th), unticked, unmatched
+    assert (
+        row["status"] == "overdue"
+    )  # 14th has passed relative to TODAY (the 20th), unticked, unmatched
     assert summary["out_cents"] == -150000
     assert summary["dated_count"] == 1
     assert summary["progress_total"] == 1
@@ -76,8 +95,13 @@ def test_a_materialized_planned_posting_is_used_instead_of_a_fresh_occurrence(co
     # what fresh Cadence computation would otherwise say.
     _make_item(conn, account_id, day_of_month=14, estimate_cents=-150000)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-25", expected_amount_cents=-160000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-25",
+        expected_amount_cents=-160000,
+        created_at="2026-03-01T00:00:00Z",
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
@@ -91,16 +115,32 @@ def test_a_multi_occurrence_materialized_item_sums_its_own_per_occurrence_amount
     # OWN expected_amount_cents, not a flat item.estimate_cents x occurrence_count
     # multiply, so a per-occurrence edit (once Deferred/a raw edit sets one) is honored.
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-06", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-06",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=210000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=210000,
+        created_at="2026-03-01T00:00:00Z",
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
@@ -120,8 +160,15 @@ def test_quarterly_item_outside_its_cycle_contributes_no_row_and_no_total(conn, 
 
 def test_spread_item_contributes_to_totals_but_is_never_checkable(conn, account_id):
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-15000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-15000,
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
@@ -145,8 +192,15 @@ def test_weekly_spread_item_scales_its_total_by_how_many_resets_land_this_period
     # this fix had, caught in code review). occurrence_count (a separate, display-only
     # "how many times did this reset" figure) still reports the whole-week count.
     _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-7000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-7000,
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
@@ -165,10 +219,19 @@ def test_budget_row_reflects_an_active_adjustment_for_the_current_window(conn, a
     # adjusted_spread_daily_amounts's own money-layer tests; here we just confirm the
     # Plan row surfaces the adjusted total and the adjustment itself.
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-15000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-15000,
     )
-    store.set_adjusted(conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03"
+    )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
     assert row["estimate_cents"] == -9300
@@ -181,17 +244,28 @@ def test_budget_row_ignores_a_stale_adjustment_from_a_previous_reset_window(conn
     # Reset Period has begun -- "reverts automatically at the next Reset Period"
     # (CONTEXT.md), with nothing anywhere explicitly clearing it.
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-15000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-15000,
     )
-    store.set_adjusted(conn, "p1", "2026-02", -5000, "2026-02-01", "2026-02-11T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-02", -5000, "2026-02-01", "2026-02-11T00:00:00Z", open_period="2026-03"
+    )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
     assert row["estimate_cents"] == -15000  # the baseline, untouched
     assert row["adjusted_target_cents"] is None
 
 
-def test_budget_row_finds_a_weekly_adjustment_recorded_under_the_previous_months_bucket(conn, account_id):
+def test_budget_row_finds_a_weekly_adjustment_recorded_under_the_previous_months_bucket(
+    conn, account_id
+):
     # ticket #23 code review: a Weekly Budget's Reset window can straddle a month
     # boundary -- set on Aug 31 (a Monday, this window's own start) for the Aug 31-Sep 6
     # window, the override is stored under period="2026-08" (August was the Open Period
@@ -206,10 +280,19 @@ def test_budget_row_finds_a_weekly_adjustment_recorded_under_the_previous_months
     # boundary week's in-September days (Sep 28-30, 3 days at -1000/day = -3000) are
     # untouched -- baseline September total -30000, adjusted -27000.
     _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-7000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-7000,
     )
-    store.set_adjusted(conn, "p1", "2026-08", -3500, "2026-08-31", "2026-08-31T00:00:00Z", open_period="2026-08")
+    store.set_adjusted(
+        conn, "p1", "2026-08", -3500, "2026-08-31", "2026-08-31T00:00:00Z", open_period="2026-08"
+    )
 
     summary = build_plan_summary(conn, "2026-09", date(2026, 9, 1))
     row = summary["items"][0]
@@ -218,7 +301,9 @@ def test_budget_row_finds_a_weekly_adjustment_recorded_under_the_previous_months
 
 
 def test_income_item_counts_toward_in_cents_and_income_count_not_out(conn, account_id):
-    _make_item(conn, account_id, item_id="p2", name="Paycheck", estimate_cents=325000, day_of_month=1)
+    _make_item(
+        conn, account_id, item_id="p2", name="Paycheck", estimate_cents=325000, day_of_month=1
+    )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     assert summary["in_cents"] == 325000
     assert summary["out_cents"] == 0
@@ -263,8 +348,13 @@ def test_materialized_occurrence_status_uses_its_own_matched_txn_id_not_a_count(
     # matched_txn_id, not the old count_matched_transactions_for_period pairing.
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -286,20 +376,33 @@ def test_posting_row_exposes_occurrences_with_both_cadence_and_deferred_dates(co
     # deferred override, not just the merged effective date.
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-14", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-14",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-03-20"}, "2026-03")
 
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
     assert row["occurrences"] == [
-        {"id": "pp1", "cadence_date": "2026-03-14", "deferred_date": "2026-03-20", "date": "2026-03-20", "status": "due_today"},
+        {
+            "id": "pp1",
+            "cadence_date": "2026-03-14",
+            "deferred_date": "2026-03-20",
+            "date": "2026-03-20",
+            "status": "due_today",
+        },
     ]
     assert row["lands"] == "2026-03-20"  # the effective (deferred) date
 
 
-def test_posting_row_occurrences_is_none_before_month_end_close_has_materialized_anything(conn, account_id):
+def test_posting_row_occurrences_is_none_before_month_end_close_has_materialized_anything(
+    conn, account_id
+):
     # Deferred moves a real Planned Posting's date -- there's nothing to defer until
     # one exists, so the frontend must not be offered a Defer action here at all.
     _make_item(conn, account_id, day_of_month=14)
@@ -313,8 +416,15 @@ def test_budget_row_occurrences_is_always_none(conn, account_id):
     # override, and never materializes anything occurrence-shaped to point a Defer
     # action at.
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-31000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-31000,
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     row = summary["items"][0]
@@ -327,16 +437,32 @@ def test_materialized_multi_occurrence_closes_in_order_never_reversed(conn, acco
     # attributed to it), never silently marked processed just because SOME transaction
     # matched this item somewhere this period.
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-06", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-06",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -355,7 +481,9 @@ def test_materialized_multi_occurrence_closes_in_order_never_reversed(conn, acco
     assert summary["progress_total"] == 2
 
 
-def test_materialized_unmatching_one_occurrence_never_flips_a_different_occurrences_status(conn, account_id):
+def test_materialized_unmatching_one_occurrence_never_flips_a_different_occurrences_status(
+    conn, account_id
+):
     # ticket #21's core fix, demonstrated concretely: each occurrence's matched state
     # is tracked independently via its own matched_txn_id, not re-inferred from a
     # shared per-item COUNT. Under the old count-based pairing, clearing the EARLIER
@@ -364,16 +492,32 @@ def test_materialized_unmatching_one_occurrence_never_flips_a_different_occurren
     # flipping the SECOND occurrence (which still has its own real, untouched match)
     # to look unprocessed, and the first (which just lost its match) to look processed.
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-06", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-06",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -470,13 +614,22 @@ def test_january_rolls_back_to_december_of_the_previous_year(conn, account_id):
     assert summary["previous_month_note"] == "december not reconciled yet"
 
 
-def test_income_and_unverified_counts_exclude_items_outside_their_cycle_this_period(conn, account_id):
+def test_income_and_unverified_counts_exclude_items_outside_their_cycle_this_period(
+    conn, account_id
+):
     # A quarterly income item anchored to Jan/Apr/Jul/Oct, unverified -- queried for
     # March, which is outside its cycle. It must contribute nothing anywhere, including
     # the income/unverified counts, matching the empty items list.
     _make_item(
-        conn, account_id, item_id="p1", name="Bonus", estimate_cents=50000, cadence_frequency=3,
-        anchor_period="2026-01", day_of_month=1, verified=False,
+        conn,
+        account_id,
+        item_id="p1",
+        name="Bonus",
+        estimate_cents=50000,
+        cadence_frequency=3,
+        anchor_period="2026-01",
+        day_of_month=1,
+        verified=False,
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)
     assert summary["items"] == []
@@ -489,14 +642,22 @@ def test_income_and_unverified_counts_exclude_items_outside_their_cycle_this_per
     assert summary_in_cycle["unverified_count"] == 1
 
 
-def test_a_week_unit_item_landing_twice_this_period_is_still_one_row_with_scaled_totals(conn, account_id):
+def test_a_week_unit_item_landing_twice_this_period_is_still_one_row_with_scaled_totals(
+    conn, account_id
+):
     # ADR-0018's "lighter" decision: one row, not two -- but the money and checkable
     # totals must still reflect BOTH occurrences, and the row's status is the worst of
     # the two (an unlanded 2026-03-06 occurrence + a due-today 2026-03-20 one -> the row
     # reads "overdue", not "due_today", so the user notices the older one first).
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     summary = build_plan_summary(conn, "2026-03", TODAY)  # TODAY = 2026-03-20
     assert len(summary["items"]) == 1  # one row, not two
@@ -520,14 +681,22 @@ def test_a_week_unit_item_landing_twice_this_period_is_still_one_row_with_scaled
     assert summary_ticked["cleared_outflow_cents"] == 0  # income, never counted as cleared outflow
 
 
-def test_a_matched_transaction_only_lands_its_own_occurrence_not_every_occurrence_this_item_has(conn, account_id):
+def test_a_matched_transaction_only_lands_its_own_occurrence_not_every_occurrence_this_item_has(
+    conn, account_id
+):
     # The bug this guards against (caught live-testing the first real week-unit item):
     # a plain "did ANYTHING match this item this period" boolean would mark BOTH
     # occurrences Processed the moment just the first one's real transaction landed --
     # silently claiming a paycheck had arrived before it actually had.
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "

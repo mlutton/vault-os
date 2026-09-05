@@ -25,7 +25,9 @@ def _engine_for(registry: Registry, skill: str) -> str | None:
     return skill_def.engine if skill_def else None
 
 
-def reconcile_from_files(vault_root: Path, conn: sqlite3.Connection, registry: Registry) -> ReconcileResult:
+def reconcile_from_files(
+    vault_root: Path, conn: sqlite3.Connection, registry: Registry
+) -> ReconcileResult:
     """Walk system/queue/ + system/runs/ and apply each file's state via apply_event() --
     the same monotonic transition logic live events use (ADR-0001). Unparseable files are
     skipped and logged, never fatal to the rest of the pass."""
@@ -48,8 +50,14 @@ def reconcile_from_files(vault_root: Path, conn: sqlite3.Connection, registry: R
                 continue
             queue_files_seen += 1
             apply_event(
-                conn, job_id=job_id, status="queued", ts=ts, received_at=received_at,
-                skill=skill, args=data.get("args", {}), source=data.get("source", "api"),
+                conn,
+                job_id=job_id,
+                status="queued",
+                ts=ts,
+                received_at=received_at,
+                skill=skill,
+                args=data.get("args", {}),
+                source=data.get("source", "api"),
                 engine=_engine_for(registry, skill),
             )
 
@@ -65,24 +73,41 @@ def reconcile_from_files(vault_root: Path, conn: sqlite3.Connection, registry: R
 
         if record.ts_queued:
             apply_event(
-                conn, job_id=record.id, status="queued", ts=record.ts_queued,
-                received_at=received_at, skill=record.skill, args=record.args,
-                source=record.source, engine=engine,
+                conn,
+                job_id=record.id,
+                status="queued",
+                ts=record.ts_queued,
+                received_at=received_at,
+                skill=record.skill,
+                args=record.args,
+                source=record.source,
+                engine=engine,
             )
 
         if record.ts_started:
             apply_event(
-                conn, job_id=record.id, status="running", ts=record.ts_started,
-                received_at=received_at, skill=record.skill, args=record.args,
-                source=record.source, engine=engine,
-                md_path=record.md_path, deliverable_path=record.deliverable_path,
+                conn,
+                job_id=record.id,
+                status="running",
+                ts=record.ts_started,
+                received_at=received_at,
+                skill=record.skill,
+                args=record.args,
+                source=record.source,
+                engine=engine,
+                md_path=record.md_path,
+                deliverable_path=record.deliverable_path,
             )
 
         if record.status in ("ok", "error"):
             apply_event(
-                conn, job_id=record.id, status=record.status,
+                conn,
+                job_id=record.id,
+                status=record.status,
                 ts=record.ts_completed or record.ts_started or received_at,
-                received_at=received_at, exit_code=record.exit_code, summary=record.summary,
+                received_at=received_at,
+                exit_code=record.exit_code,
+                summary=record.summary,
             )
 
     return ReconcileResult(
@@ -99,9 +124,7 @@ def detect_orphans(conn: sqlite3.Connection, heartbeat: RunnerHeartbeat | None) 
     orphaned_ids = []
     for job in list_jobs(conn, statuses=["running"]):
         pid_mismatch = (
-            job.runner_pid is not None
-            and heartbeat is not None
-            and job.runner_pid != heartbeat.pid
+            job.runner_pid is not None and heartbeat is not None and job.runner_pid != heartbeat.pid
         )
         stale_or_missing = heartbeat is None or not heartbeat.alive
 
@@ -111,7 +134,11 @@ def detect_orphans(conn: sqlite3.Connection, heartbeat: RunnerHeartbeat | None) 
             # already-existing running job) -- it lands only in job_events.detail,
             # identifying this transition as detector-originated in the audit trail.
             apply_event(
-                conn, job_id=job.id, status="orphaned", ts=received_at, received_at=received_at,
+                conn,
+                job_id=job.id,
+                status="orphaned",
+                ts=received_at,
+                received_at=received_at,
                 source="orphan-detector",
             )
             orphaned_ids.append(job.id)

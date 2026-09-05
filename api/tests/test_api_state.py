@@ -36,7 +36,12 @@ def _complete_job(client, skill, ts_ok, exit_code=0, summary="done"):
     client.post(f"/jobs/{job_id}/events", json={"status": "running", "ts": "2026-08-01T00:00:00Z"})
     client.post(
         f"/jobs/{job_id}/events",
-        json={"status": "ok" if exit_code == 0 else "error", "ts": ts_ok, "exit_code": exit_code, "summary": summary},
+        json={
+            "status": "ok" if exit_code == 0 else "error",
+            "ts": ts_ok,
+            "exit_code": exit_code,
+            "summary": summary,
+        },
     )
     return job_id
 
@@ -46,8 +51,16 @@ def test_get_state_response_shape(client):
     assert res.status_code == 200
     body = res.json()
     assert set(body.keys()) == {
-        "generated_at", "vault_root", "metrics", "runner", "daily",
-        "runs", "queue", "morning", "skill_etas", "lane_briefs",
+        "generated_at",
+        "vault_root",
+        "metrics",
+        "runner",
+        "daily",
+        "runs",
+        "queue",
+        "morning",
+        "skill_etas",
+        "lane_briefs",
     }
 
 
@@ -58,6 +71,7 @@ def test_get_state_no_lane_highlights_key_at_all(client):
 
 def test_get_state_503_when_vault_unreadable(client, tmp_vault):
     import shutil
+
     shutil.rmtree(tmp_vault / "system")
     res = client.get("/state")
     assert res.status_code == 503
@@ -119,7 +133,9 @@ def test_get_state_running_jobs_come_before_completed_in_runs(client):
 def test_get_state_metrics_and_runner_match_individual_endpoints(client, tmp_vault):
     system = tmp_vault / "system"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    (system / "runner-status.json").write_text(json.dumps({"ts": ts, "pid": 1, "active": 0, "pending": 0}))
+    (system / "runner-status.json").write_text(
+        json.dumps({"ts": ts, "pid": 1, "active": 0, "pending": 0})
+    )
     metrics_dir = system / "metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
     (metrics_dir / "metrics.csv").write_text(

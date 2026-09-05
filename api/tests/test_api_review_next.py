@@ -163,7 +163,10 @@ def test_email_review_excludes_seen_items(client, tmp_vault):
 def test_email_review_respects_limit(client, tmp_vault):
     _write_inbox_brief(
         tmp_vault,
-        [{"id": f"e{i}", "sender": "A", "subject": f"S{i}", "priority": "action"} for i in range(3)],
+        [
+            {"id": f"e{i}", "sender": "A", "subject": f"S{i}", "priority": "action"}
+            for i in range(3)
+        ],
     )
     res = client.get("/email-review", params={"limit": 2})
     assert len(res.json()) == 2

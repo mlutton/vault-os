@@ -123,7 +123,9 @@ def _job_to_dict(job, vault_root: Path, conn) -> dict:
     }
 
 
-def dispatch_skill(conn, registry: Registry, vault_root: Path, skill_id: str, args: dict, source: str):
+def dispatch_skill(
+    conn, registry: Registry, vault_root: Path, skill_id: str, args: dict, source: str
+):
     """Validate + create_job + write_intent, shared by /jobs and the voice
     router (/route) -- both submission paths must go through the same
     registry validation and land in the same Jobs store. Raises
@@ -141,8 +143,13 @@ def dispatch_skill(conn, registry: Registry, vault_root: Path, skill_id: str, ar
     job_id = str(uuid.uuid4())
     ts = utcnow_z()
     job = store.create_job(
-        conn, job_id=job_id, skill=skill.id, args=args, source=source,
-        engine=skill.engine, ts_queued=ts,
+        conn,
+        job_id=job_id,
+        skill=skill.id,
+        args=args,
+        source=source,
+        engine=skill.engine,
+        ts_queued=ts,
     )
     if job.id == job_id:
         write_intent(vault_root, job_id=job_id, skill=skill.id, args=args, ts=ts, source=source)
@@ -168,7 +175,9 @@ def submit_job(
         raise HTTPException(503, detail="vault root is missing or unreadable")
 
     try:
-        job_id, skill = dispatch_skill(conn, registry, settings.vault_root, body.skill, body.args, body.source)
+        job_id, skill = dispatch_skill(
+            conn, registry, settings.vault_root, body.skill, body.args, body.source
+        )
     except SubmissionError as exc:
         raise HTTPException(400, detail={"field": exc.field, "message": str(exc)})
 
@@ -196,10 +205,21 @@ def get_job_detail(job_id: str, conn=Depends(get_conn), settings=Depends(get_set
 
 
 def apply_event_and_chain(
-    conn, registry: Registry, vault_root: Path, *,
-    job_id: str, status: str, ts: str, skill: str | None = None, args: dict | None = None,
-    source: str | None = None, exit_code: int | None = None, summary: str | None = None,
-    deliverable_path: str | None = None, md_path: str | None = None, pid: int | None = None,
+    conn,
+    registry: Registry,
+    vault_root: Path,
+    *,
+    job_id: str,
+    status: str,
+    ts: str,
+    skill: str | None = None,
+    args: dict | None = None,
+    source: str | None = None,
+    exit_code: int | None = None,
+    summary: str | None = None,
+    deliverable_path: str | None = None,
+    md_path: str | None = None,
+    pid: int | None = None,
 ):
     """Post one job event through store.apply_event and, on a terminal `ok`
     that CHAIN_MAP maps, auto-dispatch the follow-up skill -- the same two
@@ -218,10 +238,20 @@ def apply_event_and_chain(
 
     received_at = utcnow_z()
     job = store.apply_event(
-        conn, job_id=job_id, status=status, ts=ts, received_at=received_at,
-        skill=skill, args=args, source=source, engine=engine,
-        exit_code=exit_code, summary=summary, deliverable_path=deliverable_path,
-        md_path=md_path, pid=pid,
+        conn,
+        job_id=job_id,
+        status=status,
+        ts=ts,
+        received_at=received_at,
+        skill=skill,
+        args=args,
+        source=source,
+        engine=engine,
+        exit_code=exit_code,
+        summary=summary,
+        deliverable_path=deliverable_path,
+        md_path=md_path,
+        pid=pid,
     )
     if job is None:
         return None
@@ -255,13 +285,24 @@ def post_job_event(
     settings=Depends(get_settings),
 ):
     job = apply_event_and_chain(
-        conn, registry, settings.vault_root,
-        job_id=job_id, status=body.status, ts=body.ts,
-        skill=body.skill, args=body.args, source=body.source,
-        exit_code=body.exit_code, summary=body.summary, deliverable_path=body.deliverable_path,
-        md_path=body.md_path, pid=body.pid,
+        conn,
+        registry,
+        settings.vault_root,
+        job_id=job_id,
+        status=body.status,
+        ts=body.ts,
+        skill=body.skill,
+        args=body.args,
+        source=body.source,
+        exit_code=body.exit_code,
+        summary=body.summary,
+        deliverable_path=body.deliverable_path,
+        md_path=body.md_path,
+        pid=body.pid,
     )
     if job is None:
-        raise HTTPException(404, detail="job not found and event did not carry enough detail to create it")
+        raise HTTPException(
+            404, detail="job not found and event did not carry enough detail to create it"
+        )
 
     return _job_to_dict(job, settings.vault_root, conn)

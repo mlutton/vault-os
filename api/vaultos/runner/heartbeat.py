@@ -14,8 +14,14 @@ RUNNER_VERSION = "0.1.0"
 
 
 def write_heartbeat(
-    state_root: Path, *, pid: int, active: int, pending: int, busy: bool,
-    max_concurrent: int = 1, version: str = RUNNER_VERSION,
+    state_root: Path,
+    *,
+    pid: int,
+    active: int,
+    pending: int,
+    busy: bool,
+    max_concurrent: int = 1,
+    version: str = RUNNER_VERSION,
 ) -> Path:
     state_root.mkdir(parents=True, exist_ok=True)
     path = state_root / "runner-status.json"

@@ -90,7 +90,9 @@ def dated_cadence_label(cadence_unit: str, cadence_frequency: int) -> str:
     return f"Every {cadence_frequency} {cadence_unit}s"
 
 
-def dedupe_hash(account_id: str, txn_date: str, amount_cents: int, merchant_raw: str, occurrence: int = 0) -> str:
+def dedupe_hash(
+    account_id: str, txn_date: str, amount_cents: int, merchant_raw: str, occurrence: int = 0
+) -> str:
     """Deterministic identity for one imported statement row. Same inputs always produce
     the same hash -- that equality IS the "this is a duplicate" signal CSV import dedupes
     on (skip-and-report, never silent).
@@ -148,7 +150,9 @@ def partition_new_rows(
     batch_claimed: set[str] = set()
     for row in rows:
         for occurrence in range(_MAX_OCCURRENCE_PROBE):
-            h = dedupe_hash(account_id, row["date"], row["amount_cents"], row["merchant_raw"], occurrence)
+            h = dedupe_hash(
+                account_id, row["date"], row["amount_cents"], row["merchant_raw"], occurrence
+            )
             if h in existing_hashes:
                 skipped += 1
                 break
@@ -175,7 +179,10 @@ def spread_daily_amounts(estimate_cents: int, day_count: int) -> list[int]:
 
 
 def adjusted_spread_daily_amounts(
-    baseline_cents: int, day_count: int, elapsed_days: int, adjusted_target_cents: int,
+    baseline_cents: int,
+    day_count: int,
+    elapsed_days: int,
+    adjusted_target_cents: int,
 ) -> list[int]:
     """Same shape as spread_daily_amounts (day_count ints) for one Reset Period window,
     but blends two rates at an Adjusted override's cutover point (ADR-0019 ticket #23,
@@ -279,7 +286,10 @@ def budget_reset_count_in_period(reset_period: str, period: str) -> int:
 
 
 def budget_planned_cents_in_period(
-    estimate_cents: int, reset_period: str, period: str, adjustment: tuple[int, int, str] | None = None,
+    estimate_cents: int,
+    reset_period: str,
+    period: str,
+    adjustment: tuple[int, int, str] | None = None,
 ) -> int:
     """The exact cents a Budget contributes within `period` (a calendar month) --
     day-precise, summing each day's own window rate over every day in the period, so
@@ -309,7 +319,9 @@ def budget_planned_cents_in_period(
         if distribution is None:
             if adjustment is not None and adjustment[2] == window_start.isoformat():
                 adjusted_target_cents, elapsed_days, _ = adjustment
-                distribution = adjusted_spread_daily_amounts(estimate_cents, day_count, elapsed_days, adjusted_target_cents)
+                distribution = adjusted_spread_daily_amounts(
+                    estimate_cents, day_count, elapsed_days, adjusted_target_cents
+                )
             else:
                 distribution = spread_daily_amounts(estimate_cents, day_count)
             distributions[window_start] = distribution
@@ -333,7 +345,11 @@ def one_off_occurrence(day_of_month: int, anchor_period: str | None, period: str
 
 
 def _month_unit_occurrences(
-    cadence_frequency: int, day_of_month: int, anchor_period: str | None, start: date, end: date,
+    cadence_frequency: int,
+    day_of_month: int,
+    anchor_period: str | None,
+    start: date,
+    end: date,
 ) -> list[date]:
     """Every occurrence of a month-unit "dated" item (frequency in months: 1=monthly,
     3=quarterly, 6=semiannual, 12=annual, ADR-0018) landing within [start, end], both
@@ -373,7 +389,9 @@ def _month_unit_occurrences(
     return occurrences
 
 
-def _week_unit_occurrences(cadence_frequency: int, anchor_date: date, start: date, end: date) -> list[date]:
+def _week_unit_occurrences(
+    cadence_frequency: int, anchor_date: date, start: date, end: date
+) -> list[date]:
     """Every occurrence of a week-unit "dated" item (frequency in weeks: 1=weekly,
     2=biweekly, ..., ADR-0018) landing within [start, end], both inclusive. Never
     occurs before anchor_date -- the same forward-only rule as the month-unit cycles,
@@ -399,8 +417,13 @@ def _week_unit_occurrences(cadence_frequency: int, anchor_date: date, start: dat
 
 
 def dated_occurrences_in_range(
-    cadence_unit: str, cadence_frequency: int, day_of_month: int | None,
-    anchor_period: str | None, anchor_date: str | None, start: date, end: date,
+    cadence_unit: str,
+    cadence_frequency: int,
+    day_of_month: int | None,
+    anchor_period: str | None,
+    anchor_date: str | None,
+    start: date,
+    end: date,
 ) -> list[date]:
     """Every occurrence of a "dated" Plan Item (Unit x Frequency, ADR-0018) landing
     within [start, end], both inclusive -- replaces four hand-written cadence-name
@@ -413,7 +436,9 @@ def dated_occurrences_in_range(
     if cadence_unit == "week":
         if anchor_date is None:
             raise ValueError("week-unit cadence requires anchor_date")
-        return _week_unit_occurrences(cadence_frequency, date.fromisoformat(anchor_date), start, end)
+        return _week_unit_occurrences(
+            cadence_frequency, date.fromisoformat(anchor_date), start, end
+        )
     if cadence_unit == "month":
         if day_of_month is None:
             raise ValueError("month-unit cadence requires day_of_month")

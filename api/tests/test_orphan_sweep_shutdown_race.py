@@ -24,6 +24,7 @@ real `app`/lifespan) as a *subprocess* instead, and asserts on its exit code
 -- mirroring how CI itself first surfaced this (faulthandler dumped a
 SIGSEGV, process exit 139).
 """
+
 import subprocess
 import sys
 import textwrap
@@ -89,7 +90,9 @@ def test_shutdown_never_closes_conn_while_orphan_sweep_thread_is_using_it(tmp_pa
 
     result = subprocess.run(
         [sys.executable, str(script), str(work_dir), str(ITERATIONS)],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
     assert result.returncode == 0, (

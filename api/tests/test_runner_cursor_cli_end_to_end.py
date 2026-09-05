@@ -159,11 +159,15 @@ def test_cursor_cli_timeout_fails_job_via_runner(client, tmp_vault, monkeypatch)
     assert "failed to run" in detail["summary"] or "timed out" in detail["summary"].lower()
 
 
-def test_cursor_cli_retry_context_appears_in_retried_invocation(client, tmp_vault, monkeypatch, tmp_path):
+def test_cursor_cli_retry_context_appears_in_retried_invocation(
+    client, tmp_vault, monkeypatch, tmp_path
+):
     log_path = tmp_path / "argv.log"
     monkeypatch.setenv("CURSOR_STUB_LOG", str(log_path))
 
-    res = client.post("/jobs", json={"skill": "checked-cursor", "args": {"prompt": "original prompt text"}})
+    res = client.post(
+        "/jobs", json={"skill": "checked-cursor", "args": {"prompt": "original prompt text"}}
+    )
     assert res.status_code == 201
     job_id = res.json()["id"]
 

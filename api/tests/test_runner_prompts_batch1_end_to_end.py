@@ -72,8 +72,12 @@ def tmp_vault(tmp_path, stub_claude):
 
     def skill_entry(skill_id, args):
         return {
-            "id": skill_id, "label": skill_id, "deck": True, "engine": "claude-cli",
-            "args": args, "engine_config": {"binary": str(stub_claude)},
+            "id": skill_id,
+            "label": skill_id,
+            "deck": True,
+            "engine": "claude-cli",
+            "args": args,
+            "engine_config": {"binary": str(stub_claude)},
         }
 
     registry = {
@@ -140,7 +144,12 @@ def test_plan_today_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
     deliverable_rel = f"daily-notes/{date}.md"
     log_path = tmp_path / "argv.log"
     job_id, detail = _run_and_fetch(
-        client, monkeypatch, log_path, tmp_vault / deliverable_rel, "plan-today", {},
+        client,
+        monkeypatch,
+        log_path,
+        tmp_vault / deliverable_rel,
+        "plan-today",
+        {},
     )
 
     assert detail["status"] == "ok"
@@ -156,7 +165,12 @@ def test_plan_tomorrow_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
     deliverable_rel = f"daily-notes/{tomorrow_date(app.state.settings)}.md"
     log_path = tmp_path / "argv.log"
     job_id, detail = _run_and_fetch(
-        client, monkeypatch, log_path, tmp_vault / deliverable_rel, "plan-tomorrow", {},
+        client,
+        monkeypatch,
+        log_path,
+        tmp_vault / deliverable_rel,
+        "plan-tomorrow",
+        {},
     )
 
     assert detail["status"] == "ok"
@@ -167,7 +181,6 @@ def test_plan_tomorrow_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
 def test_vault_cleanup_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
     from vaultos.main import app
 
-    job_id_placeholder = "unused"
     log_path = tmp_path / "argv.log"
 
     # deliverable path embeds the SERVER-assigned job id (id8), unknowable
@@ -244,7 +257,9 @@ def test_research_into_draft_end_to_end(client, tmp_vault, monkeypatch, tmp_path
     res = client.post("/jobs", json={"skill": "research-into-draft", "args": {}})
     job_id = res.json()["id"]
     date = today_date(app.state.settings)
-    deliverable_rel = f"inbox/reports/research-into-draft/{date}-research-into-draft-{id8(job_id)}.md"
+    deliverable_rel = (
+        f"inbox/reports/research-into-draft/{date}-research-into-draft-{id8(job_id)}.md"
+    )
     monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
 
     Runner(app.state.conn, app.state.registry, app.state.settings).run_once()
@@ -287,8 +302,12 @@ def test_visual_asset_proposal_end_to_end(client, tmp_vault, monkeypatch, tmp_pa
     deliverable_rel = "writing/articles/my-piece/visual-assets-proposal.md"
     log_path = tmp_path / "argv.log"
     job_id, detail = _run_and_fetch(
-        client, monkeypatch, log_path, tmp_vault / deliverable_rel,
-        "visual-asset-proposal", {"article_path": article_path},
+        client,
+        monkeypatch,
+        log_path,
+        tmp_vault / deliverable_rel,
+        "visual-asset-proposal",
+        {"article_path": article_path},
     )
 
     assert detail["status"] == "ok"
@@ -303,8 +322,12 @@ def test_draft_persona_fanout_end_to_end(client, tmp_vault, monkeypatch, tmp_pat
     deliverable_rel = "writing/articles/my-piece/reviews/round-1/_summary.md"
     log_path = tmp_path / "argv.log"
     job_id, detail = _run_and_fetch(
-        client, monkeypatch, log_path, tmp_vault / deliverable_rel,
-        "draft-persona-fanout", {"article_path": article_path, "personas": "gem, cto"},
+        client,
+        monkeypatch,
+        log_path,
+        tmp_vault / deliverable_rel,
+        "draft-persona-fanout",
+        {"article_path": article_path, "personas": "gem, cto"},
     )
 
     assert detail["status"] == "ok"

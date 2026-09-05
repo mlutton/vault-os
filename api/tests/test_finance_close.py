@@ -12,18 +12,35 @@ def conn(tmp_path):
 @pytest.fixture
 def account_id(conn):
     account = store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     return account.id
 
 
 def _make_item(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Rent", estimate_cents=-150000, plan_type="Rent", payee="Landlord",
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=[],
+        item_id="p1",
+        name="Rent",
+        estimate_cents=-150000,
+        plan_type="Rent",
+        payee="Landlord",
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=[],
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -48,8 +65,14 @@ def test_materializes_one_planned_posting_per_posting_occurrence(conn, account_i
 
 def test_a_week_unit_item_landing_twice_materializes_two_independent_rows(conn, account_id):
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     created = close.run_month_end_close(conn, "2026-03", CREATED_AT)
     assert len(created) == 2
@@ -71,8 +94,15 @@ def test_running_twice_in_a_row_does_not_duplicate(conn, account_id):
 
 def test_budgets_never_materialize_a_planned_posting(conn, account_id):
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-40000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-40000,
     )
     created = close.run_month_end_close(conn, "2026-03", CREATED_AT)
     assert created == []
@@ -88,8 +118,13 @@ def test_an_item_outside_its_cadence_cycle_this_period_materializes_nothing(conn
 
 def test_a_one_off_item_materializes_a_single_row(conn, account_id):
     _make_item(
-        conn, account_id, name="Vet Bill", estimate_cents=-30000, day_of_month=4,
-        cadence="one-off", anchor_period="2026-03",
+        conn,
+        account_id,
+        name="Vet Bill",
+        estimate_cents=-30000,
+        day_of_month=4,
+        cadence="one-off",
+        anchor_period="2026-03",
     )
     created = close.run_month_end_close(conn, "2026-03", CREATED_AT)
     assert len(created) == 1
@@ -177,7 +212,9 @@ def test_close_month_does_not_carry_forward_a_reconciled_posting(conn, account_i
     result = close.close_month(conn, "2026-03", CREATED_AT)
     assert result.carried_forward == []
     # The reconciled row stays put in its original, now-closed period.
-    assert created[0].id in {pp.id for pp in store.list_planned_postings_for_period(conn, "2026-03")}
+    assert created[0].id in {
+        pp.id for pp in store.list_planned_postings_for_period(conn, "2026-03")
+    }
 
 
 def test_close_month_does_not_carry_forward_a_manually_ticked_item(conn, account_id):
@@ -195,7 +232,11 @@ def test_close_month_closes_the_old_period_to_further_writes(conn, account_id):
     close.close_month(conn, "2026-03", CREATED_AT)
     with pytest.raises(store.PeriodClosedError):
         store.set_ticked(
-            conn, "p1", "2026-03", True, "2026-03-15T00:00:00Z",
+            conn,
+            "p1",
+            "2026-03",
+            True,
+            "2026-03-15T00:00:00Z",
             open_period=store.get_open_period(conn, "2026-03"),
             last_closed_period=store.get_last_closed_period(conn),
         )

@@ -80,11 +80,13 @@ def annotate_with_matches(rows: list[dict], candidates: list) -> list[dict]:
     annotated = []
     for row in rows:
         item, source = match_transaction(row["merchant_raw"], candidates)
-        annotated.append({
-            **row,
-            "plan_item_id": item.id if item else None,
-            "match_source": source,
-            "category": item.type if item else None,
-            "category_source": source,
-        })
+        annotated.append(
+            {
+                **row,
+                "plan_item_id": item.id if item else None,
+                "match_source": source,
+                "category": item.type if item else None,
+                "category_source": source,
+            }
+        )
     return annotated

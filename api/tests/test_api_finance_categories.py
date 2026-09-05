@@ -3,15 +3,25 @@ import pytest
 
 @pytest.fixture
 def account_id(client):
-    res = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True})
+    res = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}
+    )
     return res.json()["id"]
 
 
 def _make_item(client, account_id, **over):
     body = {
-        "name": "Rent", "estimate_cents": -150000, "type": "Rent", "payee": "Landlord",
-        "day_of_month": 1, "cadence": "dated", "cadence_unit": "month", "cadence_frequency": 1,
-        "account_id": account_id, "verified": True, "match_text": ["COMCAST"],
+        "name": "Rent",
+        "estimate_cents": -150000,
+        "type": "Rent",
+        "payee": "Landlord",
+        "day_of_month": 1,
+        "cadence": "dated",
+        "cadence_unit": "month",
+        "cadence_frequency": 1,
+        "account_id": account_id,
+        "verified": True,
+        "match_text": ["COMCAST"],
     }
     body.update(over)
     return client.post("/finance/plan-items", json=body).json()["id"]
@@ -20,7 +30,12 @@ def _make_item(client, account_id, **over):
 def _import_csv(client, account_id, csv_bytes):
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     return client.post(
         f"/finance/accounts/{account_id}/import",
@@ -53,9 +68,19 @@ def test_get_categories_weekly_budget_sums_its_per_week_contributions(client, ac
     # -35000 -- the boundary weeks only partly fall in August, so the true total is
     # -31000 (a real cross-screen inconsistency an earlier version of this fix had).
     _make_item(
-        client, account_id, name="Lunch", type="Food", payee=None,
-        day_of_month=None, cadence=None, cadence_unit=None, cadence_frequency=None,
-        kind="budget", reset_period="weekly", estimate_cents=-7000, match_text=[],
+        client,
+        account_id,
+        name="Lunch",
+        type="Food",
+        payee=None,
+        day_of_month=None,
+        cadence=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        kind="budget",
+        reset_period="weekly",
+        estimate_cents=-7000,
+        match_text=[],
     )
     res = client.get("/finance/categories", params={"period": "2026-08"})
     assert res.status_code == 200
@@ -79,7 +104,13 @@ def test_get_categories_reflects_a_matched_transaction(client, account_id):
 
 def test_get_categories_unmatched_row_has_no_type_and_is_invisible(client, account_id):
     # Same anchor pin as above -- see that test's comment.
-    _make_item(client, account_id, type="Utility", match_text=["NOTHING MATCHES THIS"], anchor_period="2026-01")
+    _make_item(
+        client,
+        account_id,
+        type="Utility",
+        match_text=["NOTHING MATCHES THIS"],
+        anchor_period="2026-01",
+    )
     _import_csv(client, account_id, CSV)
     res = client.get("/finance/categories", params={"period": "2026-03"})
     body = res.json()

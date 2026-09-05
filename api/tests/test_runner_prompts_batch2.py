@@ -82,7 +82,10 @@ def test_acquire(ctx):
     # with a generic equivalent, keeping the "don't chain into it yourself"
     # instruction. Assert the neutral wording landed and the private name
     # didn't survive.
-    assert "queued automatically once you finish -- see the platform's own job chaining" in built.prompt
+    assert (
+        "queued automatically once you finish -- see the platform's own job chaining"
+        in built.prompt
+    )
     assert "don't chain into it yourself here" in built.prompt
     assert "Vault-Os-Api" not in built.prompt
     assert "CHAIN_MAP" not in built.prompt
@@ -121,7 +124,9 @@ def test_daily_topic_digest(ctx):
     built = PROMPT_BUILDER_REGISTRY["daily-topic-digest"]({}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
+    assert (
+        built.deliverable_path == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
+    )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "Step 1 -- gather everything not yet attached to a topic" in built.prompt
     # Fix round 1: Steps 2/3/5/6 were unasserted -- a validator proved this
@@ -132,7 +137,9 @@ def test_daily_topic_digest(ctx):
     assert "Step 4 -- check persona fit, inline, no fan-out" in built.prompt
     assert "Step 5 -- write topic notes" in built.prompt
     assert "Step 6 -- write the report at exactly" in built.prompt
-    assert "Step 7 -- your final reply must present the ranked list conversationally" in built.prompt
+    assert (
+        "Step 7 -- your final reply must present the ranked list conversationally" in built.prompt
+    )
     assert f"first_seen: {date}" in built.prompt
     assert f"date: {date}" in built.prompt
     # Unlike every other batch-1/batch-2 skill, this prompt does NOT end
@@ -238,7 +245,10 @@ def test_article_refiner(ctx):
     built = PROMPT_BUILDER_REGISTRY["article-refiner"]({"article_path": article_path}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/reports/article-refiner/{date}-article-refiner-{id8(ctx.job_id)}.md"
+    assert (
+        built.deliverable_path
+        == f"inbox/reports/article-refiner/{date}-article-refiner-{id8(ctx.job_id)}.md"
+    )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert article_path in built.prompt
     assert ctx.settings.article_refiner_skill_doc_hint in built.prompt
@@ -273,7 +283,10 @@ def test_research_persona_fanout(ctx):
     # to build the deep-research report join path -- same filename-join
     # discipline as batch 1's research-into-draft.
     assert "inbox/deep-research/my-piece-deep-research.md" in built.prompt
-    assert 'test -f "inbox/deep-research/my-piece-deep-research.md" && echo EXISTS || echo MISSING' in built.prompt
+    assert (
+        'test -f "inbox/deep-research/my-piece-deep-research.md" && echo EXISTS || echo MISSING'
+        in built.prompt
+    )
     assert ctx.settings.cache_cli in built.prompt
     assert ctx.settings.assemble_review_script in built.prompt
     # Fix round 1: Step 3 (load active personas) was never asserted -- this

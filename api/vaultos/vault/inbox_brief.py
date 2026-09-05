@@ -79,8 +79,10 @@ def read_latest_action_items(vault_root: Path) -> list[InboxActionItem]:
         try:
             result.append(
                 InboxActionItem(
-                    id=str(entry["id"]), sender=str(entry["sender"]),
-                    subject=str(entry["subject"]), ts=ts,
+                    id=str(entry["id"]),
+                    sender=str(entry["sender"]),
+                    subject=str(entry["subject"]),
+                    ts=ts,
                 )
             )
         except KeyError:

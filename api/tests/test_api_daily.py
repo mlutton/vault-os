@@ -78,4 +78,11 @@ def test_get_daily_today_resolves_a_concrete_date(client):
 def test_get_daily_response_shape(client, tmp_vault):
     _write_note(tmp_vault, "2026-08-08", REAL_NOTE)
     res = client.get("/daily", params={"date": "2026-08-08"})
-    assert set(res.json().keys()) == {"date", "exists", "focus", "schedule", "top3", "daily_drivers"}
+    assert set(res.json().keys()) == {
+        "date",
+        "exists",
+        "focus",
+        "schedule",
+        "top3",
+        "daily_drivers",
+    }

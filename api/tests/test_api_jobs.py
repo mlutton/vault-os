@@ -50,7 +50,9 @@ def test_submit_job_missing_required_arg_400(client):
 
 
 def test_submit_job_unknown_arg_key_400(client):
-    res = client.post("/jobs", json={"skill": "deep-research", "args": {"topic": "x", "bogus": "y"}})
+    res = client.post(
+        "/jobs", json={"skill": "deep-research", "args": {"topic": "x", "bogus": "y"}}
+    )
     assert res.status_code == 400
     assert res.json()["detail"]["field"] == "bogus"
 
@@ -65,8 +67,13 @@ def test_list_jobs_returns_only_queued_and_running(client):
     running = client.post("/jobs", json={"skill": "acquire"}).json()["id"]
     client.post(f"/jobs/{running}/events", json={"status": "running", "ts": "2026-08-09T00:00:01Z"})
     terminal = client.post("/jobs", json={"skill": "metrics-pull"}).json()["id"]
-    client.post(f"/jobs/{terminal}/events", json={"status": "running", "ts": "2026-08-09T00:00:02Z"})
-    client.post(f"/jobs/{terminal}/events", json={"status": "ok", "ts": "2026-08-09T00:00:03Z", "exit_code": 0})
+    client.post(
+        f"/jobs/{terminal}/events", json={"status": "running", "ts": "2026-08-09T00:00:02Z"}
+    )
+    client.post(
+        f"/jobs/{terminal}/events",
+        json={"status": "ok", "ts": "2026-08-09T00:00:03Z", "exit_code": 0},
+    )
 
     res = client.get("/jobs")
     assert res.status_code == 200
@@ -128,13 +135,17 @@ def test_job_response_includes_label_link_duration_s(client, tmp_vault):
     (tmp_vault / "inbox" / "x.md").write_text('---\nlink: "https://example.com/out"\n---\n')
 
     job_id = client.post(
-        "/jobs", json={"skill": "metrics-pull"},
+        "/jobs",
+        json={"skill": "metrics-pull"},
     ).json()["id"]
     client.post(f"/jobs/{job_id}/events", json={"status": "running", "ts": "2026-08-09T00:00:01Z"})
     res = client.post(
         f"/jobs/{job_id}/events",
         json={
-            "status": "ok", "ts": "2026-08-09T00:00:11Z", "exit_code": 0, "summary": "done",
+            "status": "ok",
+            "ts": "2026-08-09T00:00:11Z",
+            "exit_code": 0,
+            "summary": "done",
             "deliverable_path": "inbox/x.md",
         },
     )
@@ -158,7 +169,9 @@ def test_job_response_link_null_when_not_ok(client, tmp_vault):
     res = client.post(
         f"/jobs/{job_id}/events",
         json={
-            "status": "error", "ts": "2026-08-09T00:00:01Z", "exit_code": 1,
+            "status": "error",
+            "ts": "2026-08-09T00:00:01Z",
+            "exit_code": 1,
             "deliverable_path": "inbox/x.md",
         },
     )
@@ -279,7 +292,12 @@ def _complete(client, job_id, status, ts="2026-08-01T00:00:01Z"):
     client.post(f"/jobs/{job_id}/events", json={"status": "running", "ts": "2026-08-01T00:00:00Z"})
     client.post(
         f"/jobs/{job_id}/events",
-        json={"status": status, "ts": ts, "exit_code": 0 if status == "ok" else 1, "summary": "done"},
+        json={
+            "status": status,
+            "ts": ts,
+            "exit_code": 0 if status == "ok" else 1,
+            "summary": "done",
+        },
     )
 
 
@@ -314,7 +332,8 @@ def test_duplicate_ok_event_does_not_double_dispatch(client, tmp_vault):
     assert len(chained) == 1
 
     queue_files = [
-        f for f in (tmp_vault / "system" / "queue").glob("*.json")
+        f
+        for f in (tmp_vault / "system" / "queue").glob("*.json")
         if json.loads(f.read_text())["skill"] == "daily-topic-digest"
     ]
     assert len(queue_files) == 1

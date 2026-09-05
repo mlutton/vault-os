@@ -52,9 +52,15 @@ def default_emit(event: dict) -> None:
 
 class Runner:
     def __init__(
-        self, conn, registry: Registry, settings: Settings, *,
-        engines: dict | None = None, poll_interval_s: float | None = None,
-        emit=None, pid: int | None = None,
+        self,
+        conn,
+        registry: Registry,
+        settings: Settings,
+        *,
+        engines: dict | None = None,
+        poll_interval_s: float | None = None,
+        emit=None,
+        pid: int | None = None,
     ):
         self.conn = conn
         self.registry = registry
@@ -110,14 +116,18 @@ class Runner:
         engine = self.engines.get(job.engine) if job.engine else None
         if engine is None:
             self._post_terminal(
-                job, status="error", exit_code=None,
+                job,
+                status="error",
+                exit_code=None,
                 summary=f"unknown or unconfigured engine {job.engine!r} for skill {job.skill!r}",
             )
             return
 
         ctx = EngineContext(
-            vault_root=self.settings.vault_root, state_root=self.state_root,
-            settings=self.settings, emit=self.emit,
+            vault_root=self.settings.vault_root,
+            state_root=self.state_root,
+            settings=self.settings,
+            emit=self.emit,
         )
         self._executing = True
         start = time.monotonic()
@@ -125,22 +135,39 @@ class Runner:
             result, check_outcome = self._run_with_check(job, skill, engine, ctx)
         except Exception as exc:  # noqa: BLE001 - any engine crash must not take the runner down
             duration_s = time.monotonic() - start
-            self.emit({
-                "run_id": job.id, "skill": job.skill, "engine": job.engine,
-                "duration_s": duration_s, "success": False, "check": None,
-            })
+            self.emit(
+                {
+                    "run_id": job.id,
+                    "skill": job.skill,
+                    "engine": job.engine,
+                    "duration_s": duration_s,
+                    "success": False,
+                    "check": None,
+                }
+            )
             logger.exception("runner: engine %r crashed on job %s", job.engine, job.id)
-            self._post_terminal(job, status="error", exit_code=None, summary=f"engine crashed: {exc}")
+            self._post_terminal(
+                job, status="error", exit_code=None, summary=f"engine crashed: {exc}"
+            )
             return
 
         duration_s = time.monotonic() - start
-        self.emit({
-            "run_id": job.id, "skill": job.skill, "engine": job.engine,
-            "duration_s": duration_s, "success": result.success, "check": check_outcome,
-        })
+        self.emit(
+            {
+                "run_id": job.id,
+                "skill": job.skill,
+                "engine": job.engine,
+                "duration_s": duration_s,
+                "success": result.success,
+                "check": check_outcome,
+            }
+        )
         self._post_terminal(
-            job, status=("ok" if result.success else "error"), exit_code=result.exit_code,
-            summary=result.summary, deliverable_path=result.deliverable_path,
+            job,
+            status=("ok" if result.success else "error"),
+            exit_code=result.exit_code,
+            summary=result.summary,
+            deliverable_path=result.deliverable_path,
         )
 
     def _run_with_check(self, job, skill, engine, ctx: EngineContext):
@@ -199,8 +226,13 @@ class Runner:
         env = {**os.environ, "VAULT_ROOT": str(ctx.vault_root)}
         try:
             proc = subprocess.run(
-                skill.check, shell=True, cwd=ctx.vault_root, capture_output=True,
-                text=True, env=env, timeout=CHECK_TIMEOUT_S,
+                skill.check,
+                shell=True,
+                cwd=ctx.vault_root,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=CHECK_TIMEOUT_S,
             )
         except subprocess.TimeoutExpired as exc:
             feedback = f"check command timed out after {CHECK_TIMEOUT_S}s: {exc}"
@@ -210,9 +242,15 @@ class Runner:
 
     def _post_terminal(self, job, *, status, exit_code, summary, deliverable_path=None) -> None:
         apply_event_and_chain(
-            self.conn, self.registry, self.settings.vault_root,
-            job_id=job.id, status=status, ts=utcnow_z(),
-            exit_code=exit_code, summary=summary, deliverable_path=deliverable_path,
+            self.conn,
+            self.registry,
+            self.settings.vault_root,
+            job_id=job.id,
+            status=status,
+            ts=utcnow_z(),
+            exit_code=exit_code,
+            summary=summary,
+            deliverable_path=deliverable_path,
             pid=self.pid,
         )
 
@@ -221,10 +259,13 @@ class Runner:
     def write_heartbeat(self) -> None:
         pending = len(store.list_jobs(self.conn, statuses=["queued"]))
         write_heartbeat(
-            self.state_root, pid=self.pid,
+            self.state_root,
+            pid=self.pid,
             active=1 if self._current_job_id else 0,
-            pending=pending, busy=bool(self._current_job_id),
-            max_concurrent=1, version=RUNNER_VERSION,
+            pending=pending,
+            busy=bool(self._current_job_id),
+            max_concurrent=1,
+            version=RUNNER_VERSION,
         )
 
     # -- clean shutdown --------------------------------------------------

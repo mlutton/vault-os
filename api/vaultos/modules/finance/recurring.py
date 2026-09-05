@@ -53,7 +53,11 @@ def _find_recurring_run(sorted_pairs: list[tuple[str, int]]) -> list[tuple[str, 
     run = [sorted_pairs[0]]
     for i in range(1, len(sorted_pairs)):
         gap = (_parse(sorted_pairs[i][0]) - _parse(sorted_pairs[i - 1][0])).days
-        gap_ok = INTERVAL_DAYS - INTERVAL_TOLERANCE_DAYS <= gap <= INTERVAL_DAYS + INTERVAL_TOLERANCE_DAYS
+        gap_ok = (
+            INTERVAL_DAYS - INTERVAL_TOLERANCE_DAYS
+            <= gap
+            <= INTERVAL_DAYS + INTERVAL_TOLERANCE_DAYS
+        )
         amount_ok = _amounts_within_tolerance([a for _, a in run] + [sorted_pairs[i][1]])
         if gap_ok and amount_ok:
             run.append(sorted_pairs[i])
@@ -101,15 +105,17 @@ def detect_recurring(transactions: list) -> list[dict]:
         if run is None:
             continue
         monthly_cents = run[-1][1]  # the most recent charge -- what they're paying now
-        rows.append({
-            "merchant": merchant,
-            "monthly_cents": monthly_cents,
-            "annual_cents": monthly_cents * 12,
-            "occurrences": len(run),
-            "first_date": run[0][0],
-            "last_date": run[-1][0],
-            "signal": _signal_for(run),
-        })
+        rows.append(
+            {
+                "merchant": merchant,
+                "monthly_cents": monthly_cents,
+                "annual_cents": monthly_cents * 12,
+                "occurrences": len(run),
+                "first_date": run[0][0],
+                "last_date": run[-1][0],
+                "signal": _signal_for(run),
+            }
+        )
 
     rows.sort(key=lambda r: abs(r["monthly_cents"]), reverse=True)
     return rows

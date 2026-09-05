@@ -2,7 +2,12 @@ import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from vaultos.vault.calendar import CalendarEvent, CalendarSnapshot, parse_ical_events, read_calendar_today
+from vaultos.vault.calendar import (
+    CalendarEvent,
+    CalendarSnapshot,
+    parse_ical_events,
+    read_calendar_today,
+)
 
 TZ = "America/Chicago"
 
@@ -113,7 +118,12 @@ def test_read_calendar_today_parses_real_shape(tmp_path):
             {
                 "pulled_at": "2026-08-09T12:00:00Z",
                 "events": [
-                    {"summary": "Standup", "start": "2026-08-09T09:00:00-05:00", "end": "2026-08-09T09:30:00-05:00", "all_day": False}
+                    {
+                        "summary": "Standup",
+                        "start": "2026-08-09T09:00:00-05:00",
+                        "end": "2026-08-09T09:30:00-05:00",
+                        "all_day": False,
+                    }
                 ],
             }
         )
@@ -121,7 +131,14 @@ def test_read_calendar_today_parses_real_shape(tmp_path):
     snapshot = read_calendar_today(tmp_path)
     assert snapshot == CalendarSnapshot(
         pulled_at="2026-08-09T12:00:00Z",
-        events=[CalendarEvent(summary="Standup", start="2026-08-09T09:00:00-05:00", end="2026-08-09T09:30:00-05:00", all_day=False)],
+        events=[
+            CalendarEvent(
+                summary="Standup",
+                start="2026-08-09T09:00:00-05:00",
+                end="2026-08-09T09:30:00-05:00",
+                all_day=False,
+            )
+        ],
     )
 
 

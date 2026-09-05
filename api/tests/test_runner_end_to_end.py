@@ -35,7 +35,13 @@ def tmp_vault(tmp_path):
     registry = {
         "version": 1,
         "skills": [
-            {"id": "metrics-pull", "label": "Pull Metrics", "deck": True, "engine": "claude", "args": []},
+            {
+                "id": "metrics-pull",
+                "label": "Pull Metrics",
+                "deck": True,
+                "engine": "claude",
+                "args": [],
+            },
             {
                 "id": "hello-script",
                 "label": "Hello Script",

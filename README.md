@@ -39,6 +39,11 @@ it stays off-stage by design:
 and has 957 tests; interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not something to depend on yet.
 
+Run `./preflight` from the repository root before submitting a change. It runs
+lint and formatting checks, the API suite, privacy and documentation checks,
+and instruction-surface validation; use `./preflight --only <gate>` to iterate
+on one gate.
+
 ## Start here
 
 - [`api/README.md`](api/README.md) — what's actually built, quickstart, the ADR index.

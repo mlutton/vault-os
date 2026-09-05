@@ -7,7 +7,9 @@ SCHEDULE_SECTION_RE = re.compile(r"^## Schedule\s*\n(.*?)(?=^## |\Z)", re.MULTIL
 SCHEDULE_LINE_RE = re.compile(r"^- (\d{2}:\d{2}) — (.+)$", re.MULTILINE)
 TOP3_SECTION_RE = re.compile(r"^## Top 3 Priorities\s*\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 TOP3_LINE_RE = re.compile(r"^\d+\.\s+\[([ x])\][ \t]*(.*)$", re.MULTILINE)
-DAILY_DRIVERS_SECTION_RE = re.compile(r"^## Daily Drivers\s*\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
+DAILY_DRIVERS_SECTION_RE = re.compile(
+    r"^## Daily Drivers\s*\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
+)
 # NOTE: the frozen schema (system/schemas/daily-note.md) states Daily Drivers
 # use the same numbered-checkbox regex as Top 3 ("match the same regex
 # without positional index"). Checked against real production daily notes
@@ -69,8 +71,7 @@ def _parse_schedule(text: str) -> list[ScheduleEntry]:
         return []
     section = section_match.group(1)
     return [
-        ScheduleEntry(time=m.group(1), text=m.group(2))
-        for m in SCHEDULE_LINE_RE.finditer(section)
+        ScheduleEntry(time=m.group(1), text=m.group(2)) for m in SCHEDULE_LINE_RE.finditer(section)
     ]
 
 
@@ -99,13 +100,18 @@ def _parse_daily_drivers(text: str) -> list[Top3Item]:
 def read_daily_note(vault_root: Path, date: str) -> DailyNote:
     path = vault_root / "daily-notes" / f"{date}.md"
     if not path.exists():
-        return DailyNote(date=date, exists=False, focus=None, schedule=[], top3=[], daily_drivers=[])
+        return DailyNote(
+            date=date, exists=False, focus=None, schedule=[], top3=[], daily_drivers=[]
+        )
 
     text = path.read_text()
     frontmatter = _extract_frontmatter(text)
     focus = _parse_focus(frontmatter) if frontmatter is not None else None
     return DailyNote(
-        date=date, exists=True, focus=focus,
-        schedule=_parse_schedule(text), top3=_parse_top3(text),
+        date=date,
+        exists=True,
+        focus=focus,
+        schedule=_parse_schedule(text),
+        top3=_parse_top3(text),
         daily_drivers=_parse_daily_drivers(text),
     )

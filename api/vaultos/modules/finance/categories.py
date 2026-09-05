@@ -22,21 +22,33 @@ def _occurrence_count_in_period(item: store.PlanItem, period: str) -> int:
     if item.kind == "budget":
         return money.budget_reset_count_in_period(item.reset_period, period)
     if item.cadence == "one-off":
-        return 1 if money.one_off_occurrence(item.day_of_month, item.anchor_period, period) is not None else 0
+        return (
+            1
+            if money.one_off_occurrence(item.day_of_month, item.anchor_period, period) is not None
+            else 0
+        )
     if item.cadence == "dated":
         start_s, end_s = money.period_bounds(period)
         start_d = date.fromisoformat(start_s)
         end_d = date.fromisoformat(end_s) - timedelta(days=1)
         occurrences = money.dated_occurrences_in_range(
-            item.cadence_unit, item.cadence_frequency, item.day_of_month,
-            item.anchor_period, item.anchor_date, start_d, end_d,
+            item.cadence_unit,
+            item.cadence_frequency,
+            item.day_of_month,
+            item.anchor_period,
+            item.anchor_date,
+            start_d,
+            end_d,
         )
         return len(occurrences)
     return 0
 
 
 def _planned_cents_in_period(
-    conn: sqlite3.Connection, item: store.PlanItem, period: str, today: date,
+    conn: sqlite3.Connection,
+    item: store.PlanItem,
+    period: str,
+    today: date,
 ) -> int:
     """The exact cents `item` contributes to `period`'s planned total. A Budget uses
     day-precise summation (money.budget_planned_cents_in_period) so this always agrees
@@ -59,12 +71,17 @@ def _planned_cents_in_period(
     can straddle a month boundary)."""
     if item.kind == "budget":
         adjustment = plan.active_budget_adjustment(conn, item, today)
-        return money.budget_planned_cents_in_period(item.estimate_cents, item.reset_period, period, adjustment=adjustment)
+        return money.budget_planned_cents_in_period(
+            item.estimate_cents, item.reset_period, period, adjustment=adjustment
+        )
     return item.estimate_cents * _occurrence_count_in_period(item, period)
 
 
 def _planned_by_category(
-    items: list[store.PlanItem], conn: sqlite3.Connection, period: str, today: date,
+    items: list[store.PlanItem],
+    conn: sqlite3.Connection,
+    period: str,
+    today: date,
 ) -> tuple[dict[str, int], set[str], set[str]]:
     """Sum of planned cents by type, for every non-catch-all, outflow-only Plan Item
     genuinely contributing to `period` (see _planned_cents_in_period), mirroring plan.py's
@@ -105,7 +122,9 @@ def _planned_by_category(
 
 
 def _resolve_linked_item(
-    conn: sqlite3.Connection, items_by_id: dict[str, store.PlanItem | None], plan_item_id: str,
+    conn: sqlite3.Connection,
+    items_by_id: dict[str, store.PlanItem | None],
+    plan_item_id: str,
 ) -> store.PlanItem | None:
     """`items_by_id` is seeded from store.list_plan_items, which filters retired_at IS
     NULL -- a transaction can still carry plan_item_id pointing at a now-retired item,
@@ -118,7 +137,10 @@ def _resolve_linked_item(
 
 
 def _actual_by_category(
-    conn: sqlite3.Connection, period: str, items_by_id: dict[str, store.PlanItem | None], budget_types: set[str],
+    conn: sqlite3.Connection,
+    period: str,
+    items_by_id: dict[str, store.PlanItem | None],
+    budget_types: set[str],
 ) -> tuple[dict[str, int], dict[str, int]]:
     """Sum of amount_cents by category, from outflow-only transactions dated within
     `period` alone -- derived only from the ledger, never from the plan.
@@ -164,16 +186,28 @@ def _actual_by_category(
             continue
         totals[txn.category] = totals.get(txn.category, 0) + txn.amount_cents
         if txn.category in COMMITTED_TYPES:
-            linked = _resolve_linked_item(conn, items_by_id, txn.plan_item_id) if txn.plan_item_id else None
-            is_budget_txn = linked.kind == "budget" if linked is not None else txn.category in budget_types
+            linked = (
+                _resolve_linked_item(conn, items_by_id, txn.plan_item_id)
+                if txn.plan_item_id
+                else None
+            )
+            is_budget_txn = (
+                linked.kind == "budget" if linked is not None else txn.category in budget_types
+            )
             if not is_budget_txn:
-                committed_totals[txn.category] = committed_totals.get(txn.category, 0) + txn.amount_cents
+                committed_totals[txn.category] = (
+                    committed_totals.get(txn.category, 0) + txn.amount_cents
+                )
     return totals, committed_totals
 
 
 def _row(
-    category: str, actual: dict[str, int], planned: dict[str, int],
-    committed_actual: dict[str, int], budget_types: set[str], posting_types: set[str],
+    category: str,
+    actual: dict[str, int],
+    planned: dict[str, int],
+    committed_actual: dict[str, int],
+    budget_types: set[str],
+    posting_types: set[str],
 ) -> dict:
     seen = category in actual
     actual_cents = actual.get(category) if seen else None
@@ -185,7 +219,9 @@ def _row(
     # positive = spent more than planned, negative = spent less, matching the
     # reference prototype's own v = amt - plan (computed from magnitudes there too).
     variance_cents = (
-        abs(actual_cents) - abs(planned_cents) if actual_cents is not None and planned_cents is not None else None
+        abs(actual_cents) - abs(planned_cents)
+        if actual_cents is not None and planned_cents is not None
+        else None
     )
     # ticket #25: a seen row's committed status comes from the precise per-transaction
     # split (see _actual_by_category) -- committed if ANY of this category's real
@@ -196,7 +232,9 @@ def _row(
     # seen-row rule above, so an unrelated same-named Budget can never defeat a
     # genuinely committed but not-yet-observed Posting.
     budget_only = category in budget_types and category not in posting_types
-    committed = category in committed_actual if seen else category in COMMITTED_TYPES and not budget_only
+    committed = (
+        category in committed_actual if seen else category in COMMITTED_TYPES and not budget_only
+    )
     return {
         "category": category,
         "actual_cents": actual_cents,
@@ -227,7 +265,9 @@ def build_categories(conn: sqlite3.Connection, period: str, today: date) -> dict
     planned, posting_types, budget_types = _planned_by_category(items, conn, period, today)
     actual, committed_actual = _actual_by_category(conn, period, items_by_id, budget_types)
     keys = sorted(set(planned) | set(actual))
-    all_rows = [_row(key, actual, planned, committed_actual, budget_types, posting_types) for key in keys]
+    all_rows = [
+        _row(key, actual, planned, committed_actual, budget_types, posting_types) for key in keys
+    ]
 
     observed = [r for r in all_rows if r["seen"]]
     unseen = [r for r in all_rows if not r["seen"]]

@@ -50,4 +50,13 @@ def test_get_metrics_response_shape(client, tmp_vault):
     _write_csv(tmp_vault, ["2026-08-09T08:00:00Z,vault,new_files_24h,50.0,ok,\n"])
     res = client.get("/metrics")
     entry = res.json()[0]
-    assert set(entry.keys()) == {"source", "metric", "value", "delta", "delta_week", "timestamp", "status", "error"}
+    assert set(entry.keys()) == {
+        "source",
+        "metric",
+        "value",
+        "delta",
+        "delta_week",
+        "timestamp",
+        "status",
+        "error",
+    }

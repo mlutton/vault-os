@@ -53,8 +53,12 @@ def tmp_vault(tmp_path, stub_claude):
 
     def skill_entry(skill_id, args):
         return {
-            "id": skill_id, "label": skill_id, "deck": True, "engine": "claude-cli",
-            "args": args, "engine_config": {"binary": str(stub_claude)},
+            "id": skill_id,
+            "label": skill_id,
+            "deck": True,
+            "engine": "claude-cli",
+            "args": args,
+            "engine_config": {"binary": str(stub_claude)},
         }
 
     registry = {
@@ -233,7 +237,9 @@ def test_research_persona_fanout_missing_article_path_fails_fast(client, tmp_vau
     assert res.status_code == 400
 
 
-def test_deep_research_blank_after_sanitization_topic_errors_via_runner(client, tmp_vault, monkeypatch):
+def test_deep_research_blank_after_sanitization_topic_errors_via_runner(
+    client, tmp_vault, monkeypatch
+):
     # Fix round 1: distinct from the missing-arg 400 path above. A topic
     # that's non-empty (passes the API's own `required and not value` gate,
     # so job creation succeeds) but sanitizes down to nothing at the

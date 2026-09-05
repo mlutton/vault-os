@@ -30,7 +30,13 @@ def _morning_to_dict(report) -> dict | None:
 
 def _lane_briefs_to_list(items) -> list[dict]:
     return [
-        {"source": item.source, "skill": item.skill, "title": item.title, "rel": item.rel, "headline": item.headline}
+        {
+            "source": item.source,
+            "skill": item.skill,
+            "title": item.title,
+            "rel": item.rel,
+            "headline": item.headline,
+        }
         for item in items
     ]
 

@@ -95,7 +95,8 @@ def _find_todays_acquire_report(vault_root: Path, tz: str) -> tuple[str, str] | 
     today = today_in_tz(tz)
     try:
         names = sorted(
-            f.name for f in directory.iterdir()
+            f.name
+            for f in directory.iterdir()
             if f.name.startswith(f"{today}-acquire") and f.name.endswith(".md")
         )
     except OSError:

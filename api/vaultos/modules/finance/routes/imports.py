@@ -77,11 +77,17 @@ def create_column_mapping(account_id: str, body: ColumnMappingCreate, conn=Depen
     has_amount = body.source_amount is not None
     has_split = body.source_debit is not None or body.source_credit is not None
     if has_amount == has_split:  # neither chosen, or both -- exactly one mode required
-        raise HTTPException(400, detail="map either a single amount column or debit/credit columns, not both or neither")
+        raise HTTPException(
+            400,
+            detail="map either a single amount column or debit/credit columns, not both or neither",
+        )
     if has_split and (body.source_debit is None or body.source_credit is None):
         raise HTTPException(400, detail="a debit/credit mapping needs both columns set")
     if has_amount and body.amount_sign_convention not in ("as_is", "flip"):
-        raise HTTPException(400, detail="amount_sign_convention must be 'as_is' or 'flip' when mapping a single amount column")
+        raise HTTPException(
+            400,
+            detail="amount_sign_convention must be 'as_is' or 'flip' when mapping a single amount column",
+        )
 
     try:
         mapping = store.create_column_mapping(
@@ -112,7 +118,11 @@ def list_imports(account_id: str, conn=Depends(get_conn)):
 
 @router.post("/finance/accounts/{account_id}/import")
 async def import_csv(
-    account_id: str, response: Response, file: UploadFile = File(...), preview: bool = False, conn=Depends(get_conn)
+    account_id: str,
+    response: Response,
+    file: UploadFile = File(...),
+    preview: bool = False,
+    conn=Depends(get_conn),
 ):
     account = store.get_account(conn, account_id)
     if account is None:
@@ -120,7 +130,9 @@ async def import_csv(
 
     raw = await file.read()
     if len(raw) > MAX_IMPORT_BYTES:
-        raise HTTPException(400, detail=f"file is too large ({len(raw)} bytes, max {MAX_IMPORT_BYTES})")
+        raise HTTPException(
+            400, detail=f"file is too large ({len(raw)} bytes, max {MAX_IMPORT_BYTES})"
+        )
     try:
         columns, row_count = csvimport.sniff(raw)
         if account.mapping_id is None:
@@ -137,7 +149,12 @@ async def import_csv(
     to_add, skipped_count = money.partition_new_rows(account_id, rows, existing)
 
     if preview:
-        return {"mapping_required": False, "row_count": row_count, "would_add": len(to_add), "would_skip": skipped_count}
+        return {
+            "mapping_required": False,
+            "row_count": row_count,
+            "would_add": len(to_add),
+            "would_skip": skipped_count,
+        }
 
     result = store.commit_import(
         conn,

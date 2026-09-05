@@ -31,14 +31,22 @@ def fresh_occurrences_for_item(item: store.PlanItem, period: str) -> list[date]:
         start_d = date.fromisoformat(start_s)
         end_d = date.fromisoformat(end_s) - timedelta(days=1)
         return money.dated_occurrences_in_range(
-            item.cadence_unit, item.cadence_frequency, item.day_of_month,
-            item.anchor_period, item.anchor_date, start_d, end_d,
+            item.cadence_unit,
+            item.cadence_frequency,
+            item.day_of_month,
+            item.anchor_period,
+            item.anchor_date,
+            start_d,
+            end_d,
         )
     return []
 
 
 def occurrences_for_item(
-    conn: sqlite3.Connection, item: store.PlanItem, period: str, matched_count_fallback: int = 0,
+    conn: sqlite3.Connection,
+    item: store.PlanItem,
+    period: str,
+    matched_count_fallback: int = 0,
 ) -> list[tuple[date, int, bool, store.PlannedPosting | None]]:
     """Every (date, expected_amount_cents, matched, posting) quadruple `item` lands on
     within `period` -- ticket #20/#21/#22. Sourced from materialized Planned Posting
@@ -62,7 +70,12 @@ def occurrences_for_item(
     materialized = store.list_planned_postings_for_item_period(conn, item.id, period)
     if materialized:
         return [
-            (date.fromisoformat(p.deferred_date or p.expected_date), p.expected_amount_cents, p.matched_txn_id is not None, p)
+            (
+                date.fromisoformat(p.deferred_date or p.expected_date),
+                p.expected_amount_cents,
+                p.matched_txn_id is not None,
+                p,
+            )
             for p in materialized
         ]
     return [
@@ -70,8 +83,11 @@ def occurrences_for_item(
         for i, occ in enumerate(fresh_occurrences_for_item(item, period))
     ]
 
+
 def active_budget_adjustment(
-    conn: sqlite3.Connection, item: store.PlanItem, on: date,
+    conn: sqlite3.Connection,
+    item: store.PlanItem,
+    on: date,
 ) -> tuple[int, int, str] | None:
     """(adjusted_target_cents, elapsed_days, window_start_iso) if `item` (a Budget) has
     a live Adjusted override (ADR-0019 ticket #23) for the Reset Period window `on`
@@ -112,8 +128,18 @@ def active_budget_adjustment(
 # Lowercase, matching the handoff spec's own example wording verbatim
 # ("february not reconciled yet") -- these feed directly into that sentence.
 _MONTH_NAMES = {
-    1: "january", 2: "february", 3: "march", 4: "april", 5: "may", 6: "june",
-    7: "july", 8: "august", 9: "september", 10: "october", 11: "november", 12: "december",
+    1: "january",
+    2: "february",
+    3: "march",
+    4: "april",
+    5: "may",
+    6: "june",
+    7: "july",
+    8: "august",
+    9: "september",
+    10: "october",
+    11: "november",
+    12: "december",
 }
 
 
@@ -130,7 +156,9 @@ def _month_name(period: str) -> str:
     return _MONTH_NAMES[int(period.split("-")[1])]
 
 
-def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], period: str, today: date):
+def _summarize_period(
+    conn: sqlite3.Connection, items: list[store.PlanItem], period: str, today: date
+):
     """One period's rows + aggregates. Spread items contribute to the money totals every
     period (they have no discrete occurrence) but are never part of the checkable/progress
     set -- there's no "did it land" question for something smeared across every day of the
@@ -143,9 +171,15 @@ def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], per
 
     rows = []
     agg = {
-        "out_cents": 0, "in_cents": 0, "dated_count": 0, "spread_count": 0,
-        "income_count": 0, "unverified_count": 0, "checkable_total": 0,
-        "checkable_landed": 0, "cleared_outflow_cents": 0,
+        "out_cents": 0,
+        "in_cents": 0,
+        "dated_count": 0,
+        "spread_count": 0,
+        "income_count": 0,
+        "unverified_count": 0,
+        "checkable_total": 0,
+        "checkable_landed": 0,
+        "cleared_outflow_cents": 0,
     }
 
     for item in items:
@@ -207,7 +241,10 @@ def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], per
             # own docstring for what "live" means and why a stale one reads as absent.
             adjustment = active_budget_adjustment(conn, item, today)
             planned_cents = money.budget_planned_cents_in_period(
-                item.estimate_cents, item.reset_period, period, adjustment=adjustment,
+                item.estimate_cents,
+                item.reset_period,
+                period,
+                adjustment=adjustment,
             )
             agg["spread_count"] += 1
             if is_income:
@@ -215,12 +252,19 @@ def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], per
             if not item.verified:
                 agg["unverified_count"] += 1
             agg["in_cents" if is_income else "out_cents"] += planned_cents
-            rows.append({
-                **base_row, "estimate_cents": planned_cents,
-                "lands": None, "occurrence_count": reset_count, "checkable": False, "ticked": None, "status": None,
-                "occurrences": None,  # ticket #22: Deferred has no equivalent for a Budget
-                "adjusted_target_cents": adjustment[0] if adjustment else None,
-            })
+            rows.append(
+                {
+                    **base_row,
+                    "estimate_cents": planned_cents,
+                    "lands": None,
+                    "occurrence_count": reset_count,
+                    "checkable": False,
+                    "ticked": None,
+                    "status": None,
+                    "occurrences": None,  # ticket #22: Deferred has no equivalent for a Budget
+                    "adjusted_target_cents": adjustment[0] if adjustment else None,
+                }
+            )
             continue
 
         # ticket #20/#21/#22: sourced from materialized Planned Posting rows once
@@ -276,7 +320,9 @@ def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], per
         agg["checkable_total"] += len(occurrences)
         agg["checkable_landed"] += landed_count
         if not is_income:
-            landed_amounts = [amt for (_, amt, _, _), s in zip(occ_triples, statuses) if s == "processed"]
+            landed_amounts = [
+                amt for (_, amt, _, _), s in zip(occ_triples, statuses) if s == "processed"
+            ]
             agg["cleared_outflow_cents"] += sum(landed_amounts)
 
         # The row's single "lands" date: the earliest occurrence still awaiting
@@ -304,17 +350,19 @@ def _summarize_period(conn: sqlite3.Connection, items: list[store.PlanItem], per
             if posting is not None
         ] or None
 
-        rows.append({
-            **base_row,
-            "estimate_cents": period_estimate_cents,
-            "lands": lands_date.isoformat(),
-            "occurrence_count": len(occurrences),
-            "checkable": True,
-            "ticked": ticked,
-            "status": status,
-            "occurrences": row_occurrences,
-            "adjusted_target_cents": None,  # ticket #23: Adjusted has no equivalent for a Posting
-        })
+        rows.append(
+            {
+                **base_row,
+                "estimate_cents": period_estimate_cents,
+                "lands": lands_date.isoformat(),
+                "occurrence_count": len(occurrences),
+                "checkable": True,
+                "ticked": ticked,
+                "status": status,
+                "occurrences": row_occurrences,
+                "adjusted_target_cents": None,  # ticket #23: Adjusted has no equivalent for a Posting
+            }
+        )
 
     return rows, agg
 

@@ -14,7 +14,9 @@ router = APIRouter()
 
 
 @router.get("/finance/categories")
-def get_categories(period: str | None = None, conn=Depends(get_conn), settings=Depends(get_settings)):
+def get_categories(
+    period: str | None = None, conn=Depends(get_conn), settings=Depends(get_settings)
+):
     today = date.fromisoformat(today_in_tz(settings.hud_tz))
     resolved_period = period or today.strftime("%Y-%m")
     validate_period(resolved_period)

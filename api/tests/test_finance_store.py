@@ -14,16 +14,30 @@ def conn(tmp_path):
 @pytest.fixture
 def account_id(conn):
     account = store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     return account.id
 
 
 def test_create_and_get_account(conn):
     account = store.create_account(
-        conn, account_id="a1", nickname="Checking", institution="PNC", account_type="checking",
-        last_four="1234", balance_cents=500000, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution="PNC",
+        account_type="checking",
+        last_four="1234",
+        balance_cents=500000,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     assert account.nickname == "Checking"
     assert account.is_primary is True
@@ -39,12 +53,26 @@ def test_get_account_missing_returns_none(conn):
 
 def test_list_accounts_returns_insertion_order(conn):
     store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     store.create_account(
-        conn, account_id="a2", nickname="Savings", institution=None, account_type="savings",
-        last_four=None, balance_cents=0, is_primary=False, created_at="2026-08-17T00:00:01Z",
+        conn,
+        account_id="a2",
+        nickname="Savings",
+        institution=None,
+        account_type="savings",
+        last_four=None,
+        balance_cents=0,
+        is_primary=False,
+        created_at="2026-08-17T00:00:01Z",
     )
     accounts = store.list_accounts(conn)
     assert [a.id for a in accounts] == ["a1", "a2"]
@@ -52,12 +80,26 @@ def test_list_accounts_returns_insertion_order(conn):
 
 def test_creating_a_second_primary_account_unprimaries_the_first(conn):
     store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     store.create_account(
-        conn, account_id="a2", nickname="Savings", institution=None, account_type="savings",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:01Z",
+        conn,
+        account_id="a2",
+        nickname="Savings",
+        institution=None,
+        account_type="savings",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:01Z",
     )
     a1 = store.get_account(conn, "a1")
     a2 = store.get_account(conn, "a2")
@@ -67,8 +109,15 @@ def test_creating_a_second_primary_account_unprimaries_the_first(conn):
 
 def test_update_account_only_changes_passed_fields(conn):
     store.create_account(
-        conn, account_id="a1", nickname="Checking", institution="PNC", account_type="checking",
-        last_four="1234", balance_cents=500000, is_primary=False, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution="PNC",
+        account_type="checking",
+        last_four="1234",
+        balance_cents=500000,
+        is_primary=False,
+        created_at="2026-08-17T00:00:00Z",
     )
     updated = store.update_account(conn, "a1", balance_cents=475000)
     assert updated.balance_cents == 475000
@@ -82,12 +131,26 @@ def test_update_account_missing_returns_none(conn):
 
 def test_updating_an_account_to_primary_unprimaries_the_previous_one(conn):
     store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-08-17T00:00:00Z",
     )
     store.create_account(
-        conn, account_id="a2", nickname="Savings", institution=None, account_type="savings",
-        last_four=None, balance_cents=0, is_primary=False, created_at="2026-08-17T00:00:01Z",
+        conn,
+        account_id="a2",
+        nickname="Savings",
+        institution=None,
+        account_type="savings",
+        last_four=None,
+        balance_cents=0,
+        is_primary=False,
+        created_at="2026-08-17T00:00:01Z",
     )
     store.update_account(conn, "a2", is_primary=True)
     a1 = store.get_account(conn, "a1")
@@ -98,10 +161,20 @@ def test_updating_an_account_to_primary_unprimaries_the_previous_one(conn):
 
 def _make_item(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Rent", estimate_cents=-150000, plan_type="Rent", payee="Landlord",
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=["RENT PAYMT"],
+        item_id="p1",
+        name="Rent",
+        estimate_cents=-150000,
+        plan_type="Rent",
+        payee="Landlord",
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=["RENT PAYMT"],
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -149,10 +222,14 @@ def test_update_plan_item_can_explicitly_null_day_of_month_and_anchor_period(con
     # non-None value, not just skips the column like an absent key would.
     _make_item(conn, account_id, cadence_frequency=3, anchor_period="2026-01", day_of_month=1)
     updated = store.update_plan_item(
-        conn, "p1",
+        conn,
+        "p1",
         {
-            "cadence_unit": "week", "cadence_frequency": 2, "anchor_date": "2026-03-06",
-            "day_of_month": None, "anchor_period": None,
+            "cadence_unit": "week",
+            "cadence_frequency": 2,
+            "anchor_date": "2026-03-06",
+            "day_of_month": None,
+            "anchor_period": None,
         },
     )
     assert updated.cadence_unit == "week"
@@ -166,14 +243,23 @@ def test_update_plan_item_missing_returns_none(conn):
 
 def test_update_plan_item_ignores_unknown_keys(conn, account_id):
     _make_item(conn, account_id)
-    updated = store.update_plan_item(conn, "p1", {"bogus_field": "should-be-ignored", "name": "Rent 2"})
+    updated = store.update_plan_item(
+        conn, "p1", {"bogus_field": "should-be-ignored", "name": "Rent 2"}
+    )
     assert updated.name == "Rent 2"
 
 
 def test_update_plan_item_can_reassign_its_account(conn, account_id):
     other = store.create_account(
-        conn, account_id="a2", nickname="Savings", institution=None, account_type="savings",
-        last_four=None, balance_cents=0, is_primary=False, created_at="2026-08-17T00:00:00Z",
+        conn,
+        account_id="a2",
+        nickname="Savings",
+        institution=None,
+        account_type="savings",
+        last_four=None,
+        balance_cents=0,
+        is_primary=False,
+        created_at="2026-08-17T00:00:00Z",
     )
     _make_item(conn, account_id)
     updated = store.update_plan_item(conn, "p1", {"account_id": other.id})
@@ -198,7 +284,9 @@ def test_set_ticked_creates_the_plan_period_lazily(conn, account_id):
     periods_before = store.get_plan_periods_for_period(conn, "2026-03")
     assert periods_before == {}
 
-    pp = store.set_ticked(conn, "p1", "2026-03", True, "2026-03-02T00:00:00Z", open_period="2026-03")
+    pp = store.set_ticked(
+        conn, "p1", "2026-03", True, "2026-03-02T00:00:00Z", open_period="2026-03"
+    )
     assert pp.ticked is True
     assert pp.ticked_at == "2026-03-02T00:00:00Z"
 
@@ -206,7 +294,9 @@ def test_set_ticked_creates_the_plan_period_lazily(conn, account_id):
     assert periods_after["p1"].ticked is True
 
 
-def test_set_ticked_is_scoped_per_month_a_bill_on_the_31st_stays_tickable_on_the_2nd(conn, account_id):
+def test_set_ticked_is_scoped_per_month_a_bill_on_the_31st_stays_tickable_on_the_2nd(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=31)
     store.set_ticked(conn, "p1", "2026-01", True, "2026-01-31T00:00:00Z", open_period="2026-01")
     # A fresh month has no row yet -- untouched, not carrying over January's tick.
@@ -222,7 +312,9 @@ def test_set_ticked_toggling_back_to_false_updates_the_same_row_not_a_new_one(co
     assert periods["p1"].ticked is False
 
 
-def test_sum_matched_transactions_for_period_groups_by_plan_item_and_scopes_by_month(conn, account_id):
+def test_sum_matched_transactions_for_period_groups_by_plan_item_and_scopes_by_month(
+    conn, account_id
+):
     _make_item(conn, account_id)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -241,7 +333,9 @@ def test_sum_matched_transactions_for_period_groups_by_plan_item_and_scopes_by_m
 
 def test_count_matched_transactions_for_period_counts_rows_not_cents(conn, account_id):
     _make_item(conn, account_id)
-    for i, (date_, dedupe) in enumerate([("2026-03-01", "h1"), ("2026-03-15", "h2"), ("2026-04-01", "h3")]):
+    for i, (date_, dedupe) in enumerate(
+        [("2026-03-01", "h1"), ("2026-03-15", "h2"), ("2026-04-01", "h3")]
+    ):
         conn.execute(
             "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
             "VALUES (?, ?, ?, 'RENT PAYMT', 'Landlord', -75000, 'p1', ?)",
@@ -254,9 +348,21 @@ def test_count_matched_transactions_for_period_counts_rows_not_cents(conn, accou
 
 def test_count_matched_transactions_for_period_attributes_unmatched_to_catch_all(conn, account_id):
     store.create_plan_item(
-        conn, item_id="catch", name="Everything else", estimate_cents=0, plan_type="Other", payee=None,
-        day_of_month=None, cadence="budget", anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=True, match_text=[], kind="budget", reset_period="monthly",
+        conn,
+        item_id="catch",
+        name="Everything else",
+        estimate_cents=0,
+        plan_type="Other",
+        payee=None,
+        day_of_month=None,
+        cadence="budget",
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=True,
+        match_text=[],
+        kind="budget",
+        reset_period="monthly",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -267,11 +373,25 @@ def test_count_matched_transactions_for_period_attributes_unmatched_to_catch_all
     assert store.count_matched_transactions_for_period(conn, "2026-03") == {"catch": 1}
 
 
-def test_sum_matched_transactions_for_period_attributes_unmatched_txns_to_the_catch_all(conn, account_id):
+def test_sum_matched_transactions_for_period_attributes_unmatched_txns_to_the_catch_all(
+    conn, account_id
+):
     store.create_plan_item(
-        conn, item_id="catch", name="Everything else", estimate_cents=0, plan_type="Other", payee=None,
-        day_of_month=None, cadence="budget", anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=True, match_text=[], kind="budget", reset_period="monthly",
+        conn,
+        item_id="catch",
+        name="Everything else",
+        estimate_cents=0,
+        plan_type="Other",
+        payee=None,
+        day_of_month=None,
+        cadence="budget",
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=True,
+        match_text=[],
+        kind="budget",
+        reset_period="monthly",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -283,7 +403,9 @@ def test_sum_matched_transactions_for_period_attributes_unmatched_txns_to_the_ca
     assert totals == {"catch": -2500}
 
 
-def test_sum_matched_transactions_for_period_ignores_unmatched_txns_with_no_catch_all(conn, account_id):
+def test_sum_matched_transactions_for_period_ignores_unmatched_txns_with_no_catch_all(
+    conn, account_id
+):
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
         "VALUES ('t1', ?, '2026-03-05', 'RANDOM STORE', 'Random Store', -2500, NULL, 'h1')",
@@ -345,7 +467,9 @@ def test_create_plan_item_rejects_unsupported_cadences(conn, account_id):
         _make_item(conn, account_id, cadence="twice a month")
 
 
-def test_create_posting_with_no_cadence_gives_a_clear_error_not_unknown_cadence_none(conn, account_id):
+def test_create_posting_with_no_cadence_gives_a_clear_error_not_unknown_cadence_none(
+    conn, account_id
+):
     # ADR-0019 made cadence Optional at the API layer (a Budget never sends one), so an
     # omitted cadence for a Posting no longer gets Pydantic's own 422 "field required"
     # -- must name the real problem, not surface "unknown cadence None" as if the
@@ -356,35 +480,70 @@ def test_create_posting_with_no_cadence_gives_a_clear_error_not_unknown_cadence_
 
 def test_create_plan_item_allows_weekly_and_biweekly_with_an_anchor_date(conn, account_id):
     weekly = _make_item(
-        conn, account_id, item_id="p1", cadence_unit="week", cadence_frequency=1,
-        day_of_month=None, anchor_period=None, anchor_date="2026-08-07",
+        conn,
+        account_id,
+        item_id="p1",
+        cadence_unit="week",
+        cadence_frequency=1,
+        day_of_month=None,
+        anchor_period=None,
+        anchor_date="2026-08-07",
     )
     assert weekly.cadence_unit == "week"
     assert weekly.cadence_frequency == 1
     assert weekly.anchor_date == "2026-08-07"
 
     biweekly = _make_item(
-        conn, account_id, item_id="p2", cadence_unit="week", cadence_frequency=2,
-        day_of_month=None, anchor_period=None, anchor_date="2026-08-07",
+        conn,
+        account_id,
+        item_id="p2",
+        cadence_unit="week",
+        cadence_frequency=2,
+        day_of_month=None,
+        anchor_period=None,
+        anchor_date="2026-08-07",
     )
     assert biweekly.cadence_frequency == 2
 
 
 def test_create_plan_item_rejects_week_unit_dated_cadence_without_anchor_date(conn, account_id):
     with pytest.raises(store.InvalidPlanItemError):
-        _make_item(conn, account_id, cadence_unit="week", cadence_frequency=2, day_of_month=None, anchor_period=None)
+        _make_item(
+            conn,
+            account_id,
+            cadence_unit="week",
+            cadence_frequency=2,
+            day_of_month=None,
+            anchor_period=None,
+        )
 
 
-def test_create_plan_item_rejects_a_cadence_unit_frequency_pair_outside_the_presets(conn, account_id):
+def test_create_plan_item_rejects_a_cadence_unit_frequency_pair_outside_the_presets(
+    conn, account_id
+):
     with pytest.raises(store.InvalidPlanItemError):
-        _make_item(conn, account_id, cadence_unit="week", cadence_frequency=3, day_of_month=None, anchor_date="2026-08-07")
+        _make_item(
+            conn,
+            account_id,
+            cadence_unit="week",
+            cadence_frequency=3,
+            day_of_month=None,
+            anchor_date="2026-08-07",
+        )
     with pytest.raises(store.InvalidPlanItemError):
         _make_item(conn, account_id, cadence_unit="month", cadence_frequency=2)
 
 
 def test_create_plan_item_rejects_an_unknown_cadence_unit(conn, account_id):
     with pytest.raises(store.InvalidPlanItemError):
-        _make_item(conn, account_id, cadence_unit="day", cadence_frequency=1, day_of_month=None, anchor_date="2026-08-07")
+        _make_item(
+            conn,
+            account_id,
+            cadence_unit="day",
+            cadence_frequency=1,
+            day_of_month=None,
+            anchor_date="2026-08-07",
+        )
 
 
 def test_create_plan_item_rejects_a_legacy_spread_cadence_on_a_posting(conn, account_id):
@@ -395,7 +554,9 @@ def test_create_plan_item_rejects_a_legacy_spread_cadence_on_a_posting(conn, acc
     # accepted, stored, and then contributed zero occurrences forever, invisible on
     # both the Plan and cash-flow screens.
     with pytest.raises(store.InvalidPlanItemError):
-        _make_item(conn, account_id, cadence="spread monthly", day_of_month=None, anchor_period=None)
+        _make_item(
+            conn, account_id, cadence="spread monthly", day_of_month=None, anchor_period=None
+        )
 
 
 def test_create_plan_item_defaults_to_kind_posting(conn, account_id):
@@ -406,8 +567,15 @@ def test_create_plan_item_defaults_to_kind_posting(conn, account_id):
 
 def test_create_budget_kind_plan_item(conn, account_id):
     item = _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
         match_text=[],
     )
     assert item.kind == "budget"
@@ -417,22 +585,38 @@ def test_create_budget_kind_plan_item(conn, account_id):
 def test_create_budget_kind_rejects_match_text(conn, account_id):
     with pytest.raises(store.InvalidPlanItemError):
         _make_item(
-            conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-            day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+            conn,
+            account_id,
+            kind="budget",
+            reset_period="weekly",
+            cadence="budget",
+            day_of_month=None,
+            cadence_unit=None,
+            cadence_frequency=None,
+            anchor_period=None,
             match_text=["MCDONALDS"],
         )
 
 
 def test_create_budget_kind_rejects_cadence_fields(conn, account_id):
     with pytest.raises(store.InvalidPlanItemError):
-        _make_item(conn, account_id, kind="budget", reset_period="weekly", match_text=[])  # day_of_month/cadence_unit/frequency still set
+        _make_item(
+            conn, account_id, kind="budget", reset_period="weekly", match_text=[]
+        )  # day_of_month/cadence_unit/frequency still set
 
 
 def test_create_budget_kind_requires_a_valid_reset_period(conn, account_id):
     with pytest.raises(store.InvalidPlanItemError):
         _make_item(
-            conn, account_id, kind="budget", reset_period="daily", cadence="budget",
-            day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+            conn,
+            account_id,
+            kind="budget",
+            reset_period="daily",
+            cadence="budget",
+            day_of_month=None,
+            cadence_unit=None,
+            cadence_frequency=None,
+            anchor_period=None,
             match_text=[],
         )
 
@@ -452,14 +636,24 @@ def test_catch_all_budget_silently_clears_stray_match_text_instead_of_rejecting(
     # runs, so a catch-all Budget with leftover match_text is fixed, not rejected --
     # unlike a non-catch-all Budget explicitly sent with match_text (400).
     item = _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
-        match_text=["STRAY"], is_catch_all=True,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
+        match_text=["STRAY"],
+        is_catch_all=True,
     )
     assert item.match_text == []
 
 
-def test_update_to_catch_all_clears_match_text_even_when_sent_explicitly_in_the_same_call(conn, account_id):
+def test_update_to_catch_all_clears_match_text_even_when_sent_explicitly_in_the_same_call(
+    conn, account_id
+):
     # update_plan_item's early is_catch_all check deliberately skips clearing when the
     # SAME call also explicitly sends match_text (letting a genuinely new value through
     # to validation first) -- this is the one that actually enforces "catch-all has no
@@ -481,11 +675,18 @@ def test_update_plan_item_can_switch_a_posting_to_a_budget(conn, account_id):
     # "budget" sentinel itself rather than trusting the caller sent one.
     _make_item(conn, account_id)
     updated = store.update_plan_item(
-        conn, "p1",
+        conn,
+        "p1",
         {
-            "kind": "budget", "reset_period": "monthly", "cadence": None,
-            "day_of_month": None, "cadence_unit": None, "cadence_frequency": None,
-            "anchor_period": None, "anchor_date": None, "match_text": [],
+            "kind": "budget",
+            "reset_period": "monthly",
+            "cadence": None,
+            "day_of_month": None,
+            "cadence_unit": None,
+            "cadence_frequency": None,
+            "anchor_period": None,
+            "anchor_date": None,
+            "match_text": [],
         },
     )
     assert updated.kind == "budget"
@@ -493,72 +694,119 @@ def test_update_plan_item_can_switch_a_posting_to_a_budget(conn, account_id):
     assert updated.cadence == "budget"
 
 
-def test_update_plan_item_switching_a_posting_to_a_budget_deletes_its_materialized_planned_postings(conn, account_id):
+def test_update_plan_item_switching_a_posting_to_a_budget_deletes_its_materialized_planned_postings(
+    conn, account_id
+):
     # ticket #21: a Budget never materializes a Planned Posting (ADR-0019) -- rows
     # materialized while this item was still a Posting must not survive the switch as
     # orphaned, still-matchable rows invisible to the Plan screen.
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.update_plan_item(
-        conn, "p1",
+        conn,
+        "p1",
         {
-            "kind": "budget", "reset_period": "monthly", "cadence": None,
-            "day_of_month": None, "cadence_unit": None, "cadence_frequency": None,
-            "anchor_period": None, "anchor_date": None, "match_text": [],
+            "kind": "budget",
+            "reset_period": "monthly",
+            "cadence": None,
+            "day_of_month": None,
+            "cadence_unit": None,
+            "cadence_frequency": None,
+            "anchor_period": None,
+            "anchor_date": None,
+            "match_text": [],
         },
     )
     assert store.list_planned_postings_for_period(conn, "2026-08") == []
 
 
-def test_update_plan_item_can_switch_a_budget_to_a_posting_without_explicitly_clearing_reset_period(conn, account_id):
+def test_update_plan_item_can_switch_a_budget_to_a_posting_without_explicitly_clearing_reset_period(
+    conn, account_id
+):
     # Symmetric to the posting->budget test above. reset_period is meaningless for a
     # Posting, but a caller switching Kind shouldn't need to remember to explicitly
     # null it out themselves -- same courtesy update_plan_item already gives the
     # reverse direction by forcing the cadence="budget" sentinel on its own.
     _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
         match_text=[],
     )
     updated = store.update_plan_item(
-        conn, "p1",
-        {"kind": "posting", "cadence": "dated", "cadence_unit": "month", "cadence_frequency": 1, "day_of_month": 1},
+        conn,
+        "p1",
+        {
+            "kind": "posting",
+            "cadence": "dated",
+            "cadence_unit": "month",
+            "cadence_frequency": 1,
+            "day_of_month": 1,
+        },
     )
     assert updated.kind == "posting"
     assert updated.reset_period is None
     assert updated.cadence == "dated"
 
 
-def test_update_plan_item_switching_to_posting_without_a_cadence_gives_a_clear_error(conn, account_id):
+def test_update_plan_item_switching_to_posting_without_a_cadence_gives_a_clear_error(
+    conn, account_id
+):
     # Unlike reset_period, there's no single sensible Cadence to auto-default a Posting
     # to (it's a required field with many valid shapes) -- but the error for omitting
     # it during a Kind switch should name the real problem, not surface the internal
     # "budget" NOT-NULL sentinel as if it were a garbled cadence value.
     _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
         match_text=[],
     )
     with pytest.raises(store.InvalidPlanItemError, match="cadence is required"):
         store.update_plan_item(conn, "p1", {"kind": "posting"})
 
 
-def test_update_plan_item_rejects_switching_to_quarterly_without_setting_an_anchor(conn, account_id):
+def test_update_plan_item_rejects_switching_to_quarterly_without_setting_an_anchor(
+    conn, account_id
+):
     _make_item(conn, account_id)
     with pytest.raises(store.InvalidPlanItemError):
         store.update_plan_item(conn, "p1", {"cadence_frequency": 3})
 
 
-def test_update_plan_item_allows_switching_to_quarterly_when_anchor_supplied_in_the_same_call(conn, account_id):
+def test_update_plan_item_allows_switching_to_quarterly_when_anchor_supplied_in_the_same_call(
+    conn, account_id
+):
     _make_item(conn, account_id)
-    updated = store.update_plan_item(conn, "p1", {"cadence_frequency": 3, "anchor_period": "2026-01"})
+    updated = store.update_plan_item(
+        conn, "p1", {"cadence_frequency": 3, "anchor_period": "2026-01"}
+    )
     assert updated.cadence_frequency == 3
 
 
-def test_update_plan_item_downgrading_from_quarterly_to_monthly_keeps_its_stale_anchor(conn, account_id):
+def test_update_plan_item_downgrading_from_quarterly_to_monthly_keeps_its_stale_anchor(
+    conn, account_id
+):
     # anchor_period is never auto-cleared on a cadence_frequency change, same as every
     # other field update_plan_item doesn't touch unless the caller says so (matches
     # test_update_plan_item_rejects_clearing_day_of_month_while_still_dated's own
@@ -610,8 +858,15 @@ def test_get_primary_account_returns_none_when_no_account_exists(conn):
 
 def test_get_primary_account_finds_the_primary_one(conn, account_id):
     store.create_account(
-        conn, account_id="a2", nickname="Savings", institution=None, account_type="savings",
-        last_four=None, balance_cents=0, is_primary=False, created_at="2026-08-17T00:00:01Z",
+        conn,
+        account_id="a2",
+        nickname="Savings",
+        institution=None,
+        account_type="savings",
+        last_four=None,
+        balance_cents=0,
+        is_primary=False,
+        created_at="2026-08-17T00:00:01Z",
     )
     primary = store.get_primary_account(conn)
     assert primary.id == account_id
@@ -645,7 +900,9 @@ def test_get_last_closed_period_defaults_to_none(conn):
 
 def test_set_ticked_allows_ticking_the_open_period_itself(conn, account_id):
     _make_item(conn, account_id)
-    pp = store.set_ticked(conn, "p1", "2026-08", True, "2026-08-02T00:00:00Z", open_period="2026-08")
+    pp = store.set_ticked(
+        conn, "p1", "2026-08", True, "2026-08-02T00:00:00Z", open_period="2026-08"
+    )
     assert pp.ticked is True
 
 
@@ -657,7 +914,9 @@ def test_set_ticked_allows_catching_up_on_a_period_before_the_open_period(conn, 
     # Open Period is rejected for now; the stricter "only the exact Open Period" rule
     # is deferred until #20 gives Closed Periods a real way to become read-only.
     _make_item(conn, account_id)
-    pp = store.set_ticked(conn, "p1", "2026-07", True, "2026-08-02T00:00:00Z", open_period="2026-08")
+    pp = store.set_ticked(
+        conn, "p1", "2026-07", True, "2026-08-02T00:00:00Z", open_period="2026-08"
+    )
     assert pp.ticked is True
 
 
@@ -676,26 +935,48 @@ def test_set_ticked_rejects_a_past_period_once_a_real_close_has_happened(conn, a
     _make_item(conn, account_id)
     with pytest.raises(store.PeriodClosedError):
         store.set_ticked(
-            conn, "p1", "2026-07", True, "2026-08-02T00:00:00Z",
-            open_period="2026-08", last_closed_period="2026-07",
+            conn,
+            "p1",
+            "2026-07",
+            True,
+            "2026-08-02T00:00:00Z",
+            open_period="2026-08",
+            last_closed_period="2026-07",
         )
 
 
 def test_set_ticked_still_allows_the_open_period_itself_after_a_real_close(conn, account_id):
     _make_item(conn, account_id)
     pp = store.set_ticked(
-        conn, "p1", "2026-08", True, "2026-08-02T00:00:00Z",
-        open_period="2026-08", last_closed_period="2026-07",
+        conn,
+        "p1",
+        "2026-08",
+        True,
+        "2026-08-02T00:00:00Z",
+        open_period="2026-08",
+        last_closed_period="2026-07",
     )
     assert pp.ticked is True
 
 
 def _make_budget(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Groceries", estimate_cents=-50000, plan_type="Food", payee=None,
-        day_of_month=None, cadence="budget", cadence_unit=None, cadence_frequency=None,
-        anchor_period=None, account_id=account_id, verified=True, is_catch_all=False, match_text=[],
-        kind="budget", reset_period="monthly",
+        item_id="p1",
+        name="Groceries",
+        estimate_cents=-50000,
+        plan_type="Food",
+        payee=None,
+        day_of_month=None,
+        cadence="budget",
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=[],
+        kind="budget",
+        reset_period="monthly",
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -707,7 +988,13 @@ def test_set_adjusted_creates_the_plan_period_lazily(conn, account_id):
     assert periods_before == {}
 
     pp = store.set_adjusted(
-        conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03",
+        conn,
+        "p1",
+        "2026-03",
+        -40000,
+        "2026-03-01",
+        "2026-03-15T00:00:00Z",
+        open_period="2026-03",
     )
     assert pp.adjusted_target_cents == -40000
     assert pp.adjusted_window_start == "2026-03-01"
@@ -724,7 +1011,9 @@ def test_get_plan_period_for_item_returns_none_when_no_row_exists(conn, account_
 
 def test_get_plan_period_for_item_returns_the_single_row(conn, account_id):
     _make_budget(conn, account_id)
-    store.set_adjusted(conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03"
+    )
     pp = store.get_plan_period_for_item(conn, "p1", "2026-03")
     assert pp.adjusted_target_cents == -40000
     # A different period for the same item is a genuinely separate row/query.
@@ -733,8 +1022,12 @@ def test_get_plan_period_for_item_returns_the_single_row(conn, account_id):
 
 def test_set_adjusted_overwrites_a_previous_adjustment_for_the_same_row(conn, account_id):
     _make_budget(conn, account_id)
-    store.set_adjusted(conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03")
-    pp = store.set_adjusted(conn, "p1", "2026-03", -30000, "2026-03-01", "2026-03-20T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03"
+    )
+    pp = store.set_adjusted(
+        conn, "p1", "2026-03", -30000, "2026-03-01", "2026-03-20T00:00:00Z", open_period="2026-03"
+    )
     assert pp.adjusted_target_cents == -30000
     assert pp.adjusted_set_at == "2026-03-20T00:00:00Z"
     assert len(store.get_plan_periods_for_period(conn, "2026-03")) == 1
@@ -743,15 +1036,29 @@ def test_set_adjusted_overwrites_a_previous_adjustment_for_the_same_row(conn, ac
 def test_set_adjusted_rejects_a_period_after_the_open_period(conn, account_id):
     _make_budget(conn, account_id)
     with pytest.raises(store.PeriodClosedError):
-        store.set_adjusted(conn, "p1", "2026-09", -40000, "2026-09-01", "2026-08-20T00:00:00Z", open_period="2026-08")
+        store.set_adjusted(
+            conn,
+            "p1",
+            "2026-09",
+            -40000,
+            "2026-09-01",
+            "2026-08-20T00:00:00Z",
+            open_period="2026-08",
+        )
 
 
 def test_set_adjusted_rejects_a_past_period_once_a_real_close_has_happened(conn, account_id):
     _make_budget(conn, account_id)
     with pytest.raises(store.PeriodClosedError):
         store.set_adjusted(
-            conn, "p1", "2026-07", -40000, "2026-07-01", "2026-08-01T00:00:00Z",
-            open_period="2026-08", last_closed_period="2026-07",
+            conn,
+            "p1",
+            "2026-07",
+            -40000,
+            "2026-07-01",
+            "2026-08-01T00:00:00Z",
+            open_period="2026-08",
+            last_closed_period="2026-07",
         )
 
 
@@ -761,7 +1068,9 @@ def test_set_adjusted_does_not_disturb_an_existing_rows_ticked_fields(conn, acco
     # must not clobber the other Kind's columns regardless.
     _make_item(conn, account_id)
     store.set_ticked(conn, "p1", "2026-03", True, "2026-03-02T00:00:00Z", open_period="2026-03")
-    pp = store.set_adjusted(conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03")
+    pp = store.set_adjusted(
+        conn, "p1", "2026-03", -40000, "2026-03-01", "2026-03-15T00:00:00Z", open_period="2026-03"
+    )
     assert pp.ticked is True
     assert pp.ticked_at == "2026-03-02T00:00:00Z"
     assert pp.adjusted_target_cents == -40000
@@ -769,20 +1078,30 @@ def test_set_adjusted_does_not_disturb_an_existing_rows_ticked_fields(conn, acco
 
 def test_transactions_for_account_between_scopes_by_date_and_account(conn, account_id):
     other = store.create_account(
-        conn, account_id="a2", nickname="Other", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=False, created_at="2026-08-17T00:00:01Z",
+        conn,
+        account_id="a2",
+        nickname="Other",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=False,
+        created_at="2026-08-17T00:00:01Z",
     ).id
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'X', 'X', -100, 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'X', 'X', -100, 'h1')",
+        (account_id,),
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, dedupe_hash) "
-        "VALUES ('t2', ?, '2026-02-28', 'X', 'X', -200, 'h2')", (account_id,),  # before the window
+        "VALUES ('t2', ?, '2026-02-28', 'X', 'X', -200, 'h2')",
+        (account_id,),  # before the window
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, dedupe_hash) "
-        "VALUES ('t3', ?, '2026-03-05', 'X', 'X', -300, 'h3')", (other,),  # different account
+        "VALUES ('t3', ?, '2026-03-05', 'X', 'X', -300, 'h3')",
+        (other,),  # different account
     )
     conn.commit()
     rows = store.transactions_for_account_between(conn, account_id, "2026-03-01", "2026-03-31")
@@ -791,8 +1110,13 @@ def test_transactions_for_account_between_scopes_by_date_and_account(conn, accou
 
 def test_create_balance_adjustment_re_anchors_the_account_balance(conn, account_id):
     adjustment = store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-14",
-        real_balance_cents=750000, plan_predicted_cents=700000, created_at="2026-03-14T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-14",
+        real_balance_cents=750000,
+        plan_predicted_cents=700000,
+        created_at="2026-03-14T00:00:00Z",
     )
     assert adjustment.difference_cents == 50000
     assert store.get_account(conn, account_id).balance_cents == 750000
@@ -800,12 +1124,22 @@ def test_create_balance_adjustment_re_anchors_the_account_balance(conn, account_
 
 def test_list_balance_adjustments_between_scopes_by_date(conn, account_id):
     store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-01",
-        real_balance_cents=100000, plan_predicted_cents=100000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-01",
+        real_balance_cents=100000,
+        plan_predicted_cents=100000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_balance_adjustment(
-        conn, adjustment_id="adj2", account_id=account_id, as_of_date="2026-04-01",
-        real_balance_cents=200000, plan_predicted_cents=200000, created_at="2026-04-01T00:00:00Z",
+        conn,
+        adjustment_id="adj2",
+        account_id=account_id,
+        as_of_date="2026-04-01",
+        real_balance_cents=200000,
+        plan_predicted_cents=200000,
+        created_at="2026-04-01T00:00:00Z",
     )
     rows = store.list_balance_adjustments_between(conn, account_id, "2026-03-01", "2026-03-31")
     assert [r.id for r in rows] == ["adj1"]
@@ -814,12 +1148,22 @@ def test_list_balance_adjustments_between_scopes_by_date(conn, account_id):
 def test_get_latest_balance_adjustment_returns_the_most_recent(conn, account_id):
     assert store.get_latest_balance_adjustment(conn, account_id) is None
     store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-01",
-        real_balance_cents=100000, plan_predicted_cents=100000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-01",
+        real_balance_cents=100000,
+        plan_predicted_cents=100000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_balance_adjustment(
-        conn, adjustment_id="adj2", account_id=account_id, as_of_date="2026-03-10",
-        real_balance_cents=200000, plan_predicted_cents=200000, created_at="2026-03-10T00:00:00Z",
+        conn,
+        adjustment_id="adj2",
+        account_id=account_id,
+        as_of_date="2026-03-10",
+        real_balance_cents=200000,
+        plan_predicted_cents=200000,
+        created_at="2026-03-10T00:00:00Z",
     )
     latest = store.get_latest_balance_adjustment(conn, account_id)
     assert latest.id == "adj2"
@@ -827,14 +1171,22 @@ def test_get_latest_balance_adjustment_returns_the_most_recent(conn, account_id)
 
 # --- CSV import (ticket vault-os-api#7) -------------------------------------------
 
+
 def test_column_mapping_missing_returns_none(conn, account_id):
     assert store.get_column_mapping(conn, account_id) is None
 
 
 def test_create_column_mapping_sets_it_and_points_the_account_at_it(conn, account_id):
     mapping = store.create_column_mapping(
-        conn, mapping_id="m1", account_id=account_id, source_date="Date", source_merchant="Description",
-        source_amount="Amount", source_debit=None, source_credit=None, amount_sign_convention="as_is",
+        conn,
+        mapping_id="m1",
+        account_id=account_id,
+        source_date="Date",
+        source_merchant="Description",
+        source_amount="Amount",
+        source_debit=None,
+        source_credit=None,
+        amount_sign_convention="as_is",
         confirmed_at="2026-08-18T00:00:00Z",
     )
     assert mapping.id == "m1"
@@ -842,20 +1194,36 @@ def test_create_column_mapping_sets_it_and_points_the_account_at_it(conn, accoun
     assert store.get_account(conn, account_id).mapping_id == "m1"
 
 
-def test_create_column_mapping_raises_a_typed_error_on_a_duplicate_for_the_same_account(conn, account_id):
+def test_create_column_mapping_raises_a_typed_error_on_a_duplicate_for_the_same_account(
+    conn, account_id
+):
     # Simulates the narrow race the API's check-then-act 409 can't close: two
     # concurrent first confirmations both calling the store function directly, bypassing
     # any prior account.mapping_id read. The DB-level unique index (migration 0006) is
     # the actual backstop.
     store.create_column_mapping(
-        conn, mapping_id="m1", account_id=account_id, source_date="Date", source_merchant="Description",
-        source_amount="Amount", source_debit=None, source_credit=None, amount_sign_convention="as_is",
+        conn,
+        mapping_id="m1",
+        account_id=account_id,
+        source_date="Date",
+        source_merchant="Description",
+        source_amount="Amount",
+        source_debit=None,
+        source_credit=None,
+        amount_sign_convention="as_is",
         confirmed_at="2026-08-18T00:00:00Z",
     )
     with pytest.raises(store.DuplicateColumnMappingError):
         store.create_column_mapping(
-            conn, mapping_id="m2", account_id=account_id, source_date="Transaction Date", source_merchant="Merchant",
-            source_amount="Amount", source_debit=None, source_credit=None, amount_sign_convention="as_is",
+            conn,
+            mapping_id="m2",
+            account_id=account_id,
+            source_date="Transaction Date",
+            source_merchant="Merchant",
+            source_amount="Amount",
+            source_debit=None,
+            source_credit=None,
+            amount_sign_convention="as_is",
             confirmed_at="2026-08-18T00:01:00Z",
         )
     # The first mapping is still the one of record.
@@ -868,18 +1236,35 @@ def test_existing_dedupe_hashes_is_empty_for_a_fresh_account(conn, account_id):
 
 def test_commit_import_writes_txns_and_an_import_record(conn, account_id):
     rows = [
-        {"date": "2026-03-01", "merchant_raw": "COMCAST", "amount_cents": -1000, "dedupe_hash": "h1"},
-        {"date": "2026-03-02", "merchant_raw": "PAYCHECK", "amount_cents": 200000, "dedupe_hash": "h2"},
+        {
+            "date": "2026-03-01",
+            "merchant_raw": "COMCAST",
+            "amount_cents": -1000,
+            "dedupe_hash": "h1",
+        },
+        {
+            "date": "2026-03-02",
+            "merchant_raw": "PAYCHECK",
+            "amount_cents": 200000,
+            "dedupe_hash": "h2",
+        },
     ]
     result = store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=rows, rows_skipped=3,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=rows,
+        rows_skipped=3,
     )
     assert result.rows_added == 2
     assert result.rows_skipped == 3
     assert store.existing_dedupe_hashes(conn, account_id) == {"h1", "h2"}
 
-    txns = conn.execute("SELECT * FROM txn WHERE account_id = ? ORDER BY date", (account_id,)).fetchall()
+    txns = conn.execute(
+        "SELECT * FROM txn WHERE account_id = ? ORDER BY date", (account_id,)
+    ).fetchall()
     assert len(txns) == 2
     assert txns[0]["merchant"] == "COMCAST"  # merchant defaults to merchant_raw on import
     assert txns[0]["merchant_raw"] == "COMCAST"
@@ -889,15 +1274,38 @@ def test_commit_import_writes_txns_and_an_import_record(conn, account_id):
 
 def test_commit_import_runs_the_auto_matching_engine_on_each_row(conn, account_id):
     store.create_plan_item(
-        conn, item_id="p1", name="Comcast", estimate_cents=-15000, plan_type="Utilities", payee=None,
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=["COMCAST"],
+        conn,
+        item_id="p1",
+        name="Comcast",
+        estimate_cents=-15000,
+        plan_type="Utilities",
+        payee=None,
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=["COMCAST"],
     )
-    rows = [{"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000, "dedupe_hash": "h1"}]
+    rows = [
+        {
+            "date": "2026-03-01",
+            "merchant_raw": "COMCAST CABLE",
+            "amount_cents": -1000,
+            "dedupe_hash": "h1",
+        }
+    ]
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=rows, rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=rows,
+        rows_skipped=0,
     )
     txn = conn.execute("SELECT * FROM txn WHERE dedupe_hash = 'h1'").fetchone()
     assert txn["plan_item_id"] == "p1"
@@ -906,56 +1314,125 @@ def test_commit_import_runs_the_auto_matching_engine_on_each_row(conn, account_i
     assert txn["category_source"] == "rule"
 
 
-def test_commit_import_attributes_a_matched_row_to_the_planned_posting_for_its_own_date(conn, account_id):
+def test_commit_import_attributes_a_matched_row_to_the_planned_posting_for_its_own_date(
+    conn, account_id
+):
     # ticket #21: an auto-matched import row doesn't just set plan_item_id -- it closes
     # the specific materialized Planned Posting for its own date's period, not merely
     # incrementing a count some later read has to re-pair against occurrences.
     store.create_plan_item(
-        conn, item_id="p1", name="Comcast", estimate_cents=-15000, plan_type="Utilities", payee=None,
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=["COMCAST"],
+        conn,
+        item_id="p1",
+        name="Comcast",
+        estimate_cents=-15000,
+        plan_type="Utilities",
+        payee=None,
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=["COMCAST"],
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-15000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-15000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    rows = [{"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000, "dedupe_hash": "h1"}]
+    rows = [
+        {
+            "date": "2026-03-01",
+            "merchant_raw": "COMCAST CABLE",
+            "amount_cents": -1000,
+            "dedupe_hash": "h1",
+        }
+    ]
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=rows, rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=rows,
+        rows_skipped=0,
     )
     txn = conn.execute("SELECT id FROM txn WHERE dedupe_hash = 'h1'").fetchone()
     pp = store.list_planned_postings_for_period(conn, "2026-03")[0]
     assert pp.matched_txn_id == txn["id"]
 
 
-def test_commit_import_pairs_rows_chronologically_even_when_the_csv_lists_them_newest_first(conn, account_id):
+def test_commit_import_pairs_rows_chronologically_even_when_the_csv_lists_them_newest_first(
+    conn, account_id
+):
     # A biweekly item has two open occurrences this period (Mar 6, Mar 20). The bank's
     # CSV export lists the Mar 20 transaction BEFORE the Mar 6 one (a common
     # newest-first export order) -- commit_import must still pair each transaction to
     # its own chronologically-correct occurrence, not process file order blindly.
     store.create_plan_item(
-        conn, item_id="p1", name="Paycheck", estimate_cents=200000, plan_type="Income", payee=None,
-        day_of_month=None, cadence="dated", cadence_unit="week", cadence_frequency=2,
-        anchor_period=None, anchor_date="2026-03-06", account_id=account_id,
-        verified=True, is_catch_all=False, match_text=["EMPLOYER"],
+        conn,
+        item_id="p1",
+        name="Paycheck",
+        estimate_cents=200000,
+        plan_type="Income",
+        payee=None,
+        day_of_month=None,
+        cadence="dated",
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_period=None,
+        anchor_date="2026-03-06",
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=["EMPLOYER"],
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-06", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-06",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
     rows = [
-        {"date": "2026-03-20", "merchant_raw": "EMPLOYER INC", "amount_cents": 200000, "dedupe_hash": "h20"},
-        {"date": "2026-03-06", "merchant_raw": "EMPLOYER INC", "amount_cents": 200000, "dedupe_hash": "h06"},
+        {
+            "date": "2026-03-20",
+            "merchant_raw": "EMPLOYER INC",
+            "amount_cents": 200000,
+            "dedupe_hash": "h20",
+        },
+        {
+            "date": "2026-03-06",
+            "merchant_raw": "EMPLOYER INC",
+            "amount_cents": 200000,
+            "dedupe_hash": "h06",
+        },
     ]
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=rows, rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=rows,
+        rows_skipped=0,
     )
     txn_06 = conn.execute("SELECT id FROM txn WHERE dedupe_hash = 'h06'").fetchone()["id"]
     txn_20 = conn.execute("SELECT id FROM txn WHERE dedupe_hash = 'h20'").fetchone()["id"]
@@ -964,37 +1441,79 @@ def test_commit_import_pairs_rows_chronologically_even_when_the_csv_lists_them_n
     assert by_id["pp2"].matched_txn_id == txn_20
 
 
-def test_commit_import_with_no_materialized_row_for_that_period_leaves_planned_posting_untouched(conn, account_id):
+def test_commit_import_with_no_materialized_row_for_that_period_leaves_planned_posting_untouched(
+    conn, account_id
+):
     # No planned_posting rows exist for this item/period (Month-End Close hasn't run
     # for it) -- attribution silently finds nothing to close, matching pre-#20/#21
     # behavior; a period with materialized rows elsewhere must not be affected either.
     store.create_plan_item(
-        conn, item_id="p1", name="Comcast", estimate_cents=-15000, plan_type="Utilities", payee=None,
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=["COMCAST"],
+        conn,
+        item_id="p1",
+        name="Comcast",
+        estimate_cents=-15000,
+        plan_type="Utilities",
+        payee=None,
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=["COMCAST"],
     )
-    rows = [{"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000, "dedupe_hash": "h1"}]
+    rows = [
+        {
+            "date": "2026-03-01",
+            "merchant_raw": "COMCAST CABLE",
+            "amount_cents": -1000,
+            "dedupe_hash": "h1",
+        }
+    ]
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=rows, rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=rows,
+        rows_skipped=0,
     )
     txn = conn.execute("SELECT plan_item_id FROM txn WHERE dedupe_hash = 'h1'").fetchone()
     assert txn["plan_item_id"] == "p1"  # the ordinary match still happened
     assert store.list_planned_postings_for_period(conn, "2026-03") == []  # nothing to attribute to
 
 
-def test_commit_import_treats_a_dedupe_hash_conflict_as_a_late_duplicate_not_a_crash(conn, account_id):
-    row = {"date": "2026-03-01", "merchant_raw": "COMCAST", "amount_cents": -1000, "dedupe_hash": "h1"}
+def test_commit_import_treats_a_dedupe_hash_conflict_as_a_late_duplicate_not_a_crash(
+    conn, account_id
+):
+    row = {
+        "date": "2026-03-01",
+        "merchant_raw": "COMCAST",
+        "amount_cents": -1000,
+        "dedupe_hash": "h1",
+    }
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="a.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=[row], rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="a.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=[row],
+        rows_skipped=0,
     )
     # Simulates the narrow preview/commit race: this row's hash was already written by
     # the first import, but a second commit is asked to write it again anyway.
     result = store.commit_import(
-        conn, import_id="imp2", account_id=account_id, filename="a.csv",
-        imported_at="2026-08-18T00:01:00Z", rows_to_add=[row], rows_skipped=0,
+        conn,
+        import_id="imp2",
+        account_id=account_id,
+        filename="a.csv",
+        imported_at="2026-08-18T00:01:00Z",
+        rows_to_add=[row],
+        rows_skipped=0,
     )
     assert result.rows_added == 0
     assert result.rows_skipped == 1
@@ -1002,12 +1521,22 @@ def test_commit_import_treats_a_dedupe_hash_conflict_as_a_late_duplicate_not_a_c
 
 def test_list_imports_for_account_returns_newest_first(conn, account_id):
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="first.csv",
-        imported_at="2026-08-01T00:00:00Z", rows_to_add=[], rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="first.csv",
+        imported_at="2026-08-01T00:00:00Z",
+        rows_to_add=[],
+        rows_skipped=0,
     )
     store.commit_import(
-        conn, import_id="imp2", account_id=account_id, filename="second.csv",
-        imported_at="2026-08-02T00:00:00Z", rows_to_add=[], rows_skipped=0,
+        conn,
+        import_id="imp2",
+        account_id=account_id,
+        filename="second.csv",
+        imported_at="2026-08-02T00:00:00Z",
+        rows_to_add=[],
+        rows_skipped=0,
     )
     imports = store.list_imports_for_account(conn, account_id)
     assert [i.id for i in imports] == ["imp2", "imp1"]
@@ -1015,20 +1544,36 @@ def test_list_imports_for_account_returns_newest_first(conn, account_id):
 
 # --- Ledger (ticket vault-os-api#8) -------------------------------------------------
 
+
 def _make_txn(conn, account_id, **over):
     defaults = dict(
-        txn_id="t1", date="2026-03-01", merchant_raw="COMCAST", merchant="COMCAST",
-        amount_cents=-1000, category=None, category_source=None, plan_item_id=None,
-        match_source=None, dedupe_hash="h1",
+        txn_id="t1",
+        date="2026-03-01",
+        merchant_raw="COMCAST",
+        merchant="COMCAST",
+        amount_cents=-1000,
+        category=None,
+        category_source=None,
+        plan_item_id=None,
+        match_source=None,
+        dedupe_hash="h1",
     )
     defaults.update(over)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, category, "
         "category_source, plan_item_id, match_source, dedupe_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            defaults["txn_id"], account_id, defaults["date"], defaults["merchant_raw"], defaults["merchant"],
-            defaults["amount_cents"], defaults["category"], defaults["category_source"],
-            defaults["plan_item_id"], defaults["match_source"], defaults["dedupe_hash"],
+            defaults["txn_id"],
+            account_id,
+            defaults["date"],
+            defaults["merchant_raw"],
+            defaults["merchant"],
+            defaults["amount_cents"],
+            defaults["category"],
+            defaults["category_source"],
+            defaults["plan_item_id"],
+            defaults["match_source"],
+            defaults["dedupe_hash"],
         ),
     )
     conn.commit()
@@ -1054,15 +1599,23 @@ def test_list_transactions_newest_first_across_accounts(conn, account_id):
 
 
 def test_list_transactions_filters_needs_review(conn, account_id):
-    _make_txn(conn, account_id, txn_id="t1", match_source="rule", plan_item_id="p1", dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2")
+    _make_txn(
+        conn, account_id, txn_id="t1", match_source="rule", plan_item_id="p1", dedupe_hash="h1"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2"
+    )
     txns = store.list_transactions(conn, "needs_review")
     assert [t.id for t in txns] == ["t2"]
 
 
-def test_list_transactions_needs_review_also_includes_never_reviewed_unmatched_rows(conn, account_id):
+def test_list_transactions_needs_review_also_includes_never_reviewed_unmatched_rows(
+    conn, account_id
+):
     _make_txn(conn, account_id, txn_id="t1", match_source=None, plan_item_id=None, dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2")
+    _make_txn(
+        conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2"
+    )
     txns = store.list_transactions(conn, "needs_review")
     assert {t.id for t in txns} == {"t1", "t2"}
 
@@ -1070,7 +1623,9 @@ def test_list_transactions_needs_review_also_includes_never_reviewed_unmatched_r
 def test_list_transactions_needs_review_excludes_a_user_confirmed_no_match(conn, account_id):
     # A human already looked at this and confirmed nothing matches -- distinct from
     # never having been reviewed at all, even though both are plan_item_id IS NULL.
-    _make_txn(conn, account_id, txn_id="t1", match_source="user", plan_item_id=None, dedupe_hash="h1")
+    _make_txn(
+        conn, account_id, txn_id="t1", match_source="user", plan_item_id=None, dedupe_hash="h1"
+    )
     txns = store.list_transactions(conn, "needs_review")
     assert txns == []
 
@@ -1095,8 +1650,12 @@ def test_list_transactions_rejects_an_unknown_filter(conn):
 
 
 def test_count_match_states(conn, account_id):
-    _make_txn(conn, account_id, txn_id="t1", match_source="rule", plan_item_id="p1", dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2")
+    _make_txn(
+        conn, account_id, txn_id="t1", match_source="rule", plan_item_id="p1", dedupe_hash="h1"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t2", match_source="auto", plan_item_id="p1", dedupe_hash="h2"
+    )
     _make_txn(conn, account_id, txn_id="t3", plan_item_id=None, dedupe_hash="h3")
     counts = store.count_match_states(conn)
     assert counts == {"guessed": 1, "unmatched": 1, "matched_by_rule": 1}
@@ -1124,7 +1683,12 @@ def test_update_transaction_can_explicitly_clear_plan_item_id_to_none(conn, acco
 def test_update_transaction_can_change_the_match_and_category_together(conn, account_id):
     _make_txn(conn, account_id)
     updated = store.update_transaction(
-        conn, "t1", plan_item_id="p2", match_source="user", category="Utilities", category_source="user"
+        conn,
+        "t1",
+        plan_item_id="p2",
+        match_source="user",
+        category="Utilities",
+        category_source="user",
     )
     assert updated.plan_item_id == "p2"
     assert updated.category == "Utilities"
@@ -1139,27 +1703,45 @@ def test_update_transaction_excluded_from_charts_toggle(conn, account_id):
     assert updated.excluded_from_charts is True
 
 
-def test_update_transaction_confirming_a_match_closes_the_planned_posting_for_its_own_date(conn, account_id):
+def test_update_transaction_confirming_a_match_closes_the_planned_posting_for_its_own_date(
+    conn, account_id
+):
     # ticket #21: a manual "confirm this match" (the ledger's own PATCH path) closes a
     # real Planned Posting occurrence exactly like an auto-matched import row does.
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id=None, match_source=None)
+    _make_txn(
+        conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id=None, match_source=None
+    )
     store.update_transaction(conn, "t1", plan_item_id="p1", match_source="user")
     pp = store.list_planned_postings_for_period(conn, "2026-03")[0]
     assert pp.matched_txn_id == "t1"
 
 
-def test_update_transaction_clearing_a_match_reopens_the_planned_posting_it_had_closed(conn, account_id):
+def test_update_transaction_clearing_a_match_reopens_the_planned_posting_it_had_closed(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule")
+    _make_txn(
+        conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule"
+    )
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-03-01", "t1")
 
     store.update_transaction(conn, "t1", plan_item_id=None, match_source="user")
@@ -1168,18 +1750,32 @@ def test_update_transaction_clearing_a_match_reopens_the_planned_posting_it_had_
     assert pp.matched_txn_id is None
 
 
-def test_update_transaction_changing_the_match_reopens_the_old_planned_posting_and_closes_the_new_one(conn, account_id):
+def test_update_transaction_changing_the_match_reopens_the_old_planned_posting_and_closes_the_new_one(
+    conn, account_id
+):
     _make_item(conn, account_id, item_id="p1", day_of_month=1)
     _make_item(conn, account_id, item_id="p2", name="Utility", day_of_month=5)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p2", period="2026-03",
-        expected_date="2026-03-05", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p2",
+        period="2026-03",
+        expected_date="2026-03-05",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule")
+    _make_txn(
+        conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule"
+    )
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-03-01", "t1")
 
     # The user decides this transaction actually belongs to a different item.
@@ -1191,13 +1787,22 @@ def test_update_transaction_changing_the_match_reopens_the_old_planned_posting_a
     assert p2_rows[0].matched_txn_id == "t1"  # newly closed
 
 
-def test_update_transaction_touching_unrelated_fields_leaves_an_existing_match_untouched(conn, account_id):
+def test_update_transaction_touching_unrelated_fields_leaves_an_existing_match_untouched(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule")
+    _make_txn(
+        conn, account_id, txn_id="t1", date="2026-03-01", plan_item_id="p1", match_source="rule"
+    )
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-03-01", "t1")
 
     store.update_transaction(conn, "t1", excluded_from_charts=True)  # plan_item_id untouched
@@ -1206,23 +1811,43 @@ def test_update_transaction_touching_unrelated_fields_leaves_an_existing_match_u
     assert pp.matched_txn_id == "t1"  # still closed -- unrelated edit didn't reopen it
 
 
-def test_update_transaction_resending_the_same_plan_item_id_does_not_reassign_the_match(conn, account_id):
+def test_update_transaction_resending_the_same_plan_item_id_does_not_reassign_the_match(
+    conn, account_id
+):
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-06",
     )
     # pp2 materializes and gets matched to x1 while pp1 doesn't exist yet -- so x1 lands
     # on pp2 (the only occurrence open at match time). pp1 (earlier by expected_date)
     # only shows up afterward, and stays open.
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="x1", date="2026-03-20", plan_item_id="p1", dedupe_hash="hx1")
+    _make_txn(
+        conn, account_id, txn_id="x1", date="2026-03-20", plan_item_id="p1", dedupe_hash="hx1"
+    )
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-03-20", "x1")
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-06", expected_amount_cents=200000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-06",
+        expected_amount_cents=200000,
+        created_at="2026-03-01T00:00:00Z",
     )
 
     # Re-send the SAME plan_item_id (e.g. alongside an unrelated category edit) -- must
@@ -1236,11 +1861,17 @@ def test_update_transaction_resending_the_same_plan_item_id_does_not_reassign_th
 
 # --- Planned Posting (ticket vault-os-api#20) ----------------------------------------
 
+
 def test_create_planned_posting_returns_the_new_row(conn, account_id):
     _make_item(conn, account_id)
     pp = store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     assert pp is not None
     assert pp.id == "pp1"
@@ -1256,12 +1887,22 @@ def test_create_planned_posting_is_idempotent_against_the_same_item_and_date(con
     # is silently ignored, returning None rather than raising or creating a duplicate.
     _make_item(conn, account_id)
     first = store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     second = store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-02T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-02T00:00:00Z",
     )
     assert first is not None
     assert second is None
@@ -1274,12 +1915,22 @@ def test_create_planned_posting_allows_the_same_item_on_a_different_date(conn, a
     # UNIQUE index is (plan_item_id, expected_date), not plan_item_id alone.
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     rows = store.list_planned_postings_for_period(conn, "2026-08")
     assert len(rows) == 2
@@ -1288,12 +1939,22 @@ def test_create_planned_posting_allows_the_same_item_on_a_different_date(conn, a
 def test_list_planned_postings_for_period_scopes_to_that_period_only(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-09",
-        expected_date="2026-09-01", expected_amount_cents=-150000, created_at="2026-09-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-09",
+        expected_date="2026-09-01",
+        expected_amount_cents=-150000,
+        created_at="2026-09-01T00:00:00Z",
     )
     august = store.list_planned_postings_for_period(conn, "2026-08")
     assert [p.id for p in august] == ["pp1"]
@@ -1302,12 +1963,22 @@ def test_list_planned_postings_for_period_scopes_to_that_period_only(conn, accou
 def test_list_planned_postings_for_period_orders_by_expected_date(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     rows = store.list_planned_postings_for_period(conn, "2026-08")
     assert [p.expected_date for p in rows] == ["2026-08-06", "2026-08-20"]
@@ -1317,12 +1988,22 @@ def test_list_planned_postings_for_item_period_scopes_to_that_item_only(conn, ac
     _make_item(conn, account_id, item_id="p1")
     _make_item(conn, account_id, item_id="p2", name="Utility", day_of_month=5)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p2", period="2026-08",
-        expected_date="2026-08-05", expected_amount_cents=-5000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p2",
+        period="2026-08",
+        expected_date="2026-08-05",
+        expected_amount_cents=-5000,
+        created_at="2026-08-01T00:00:00Z",
     )
     rows = store.list_planned_postings_for_item_period(conn, "p1", "2026-08")
     assert [p.id for p in rows] == ["pp1"]
@@ -1331,8 +2012,13 @@ def test_list_planned_postings_for_item_period_scopes_to_that_item_only(conn, ac
 def test_update_planned_posting_can_set_a_deferred_date(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     updated = store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-15"}, "2026-08")
     assert updated.deferred_date == "2026-08-15"
@@ -1345,8 +2031,13 @@ def test_update_planned_posting_can_change_a_deferred_date_repeatedly(conn, acco
     # period stays Open (defer to Friday, then a windfall lets it move to Wednesday).
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-21"}, "2026-08")
     updated = store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-19"}, "2026-08")
@@ -1356,8 +2047,13 @@ def test_update_planned_posting_can_change_a_deferred_date_repeatedly(conn, acco
 def test_update_planned_posting_can_clear_a_deferred_date(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-21"}, "2026-08")
     updated = store.update_planned_posting(conn, "pp1", {"deferred_date": None}, "2026-08")
@@ -1370,8 +2066,13 @@ def test_update_planned_posting_expected_date_is_immutable(conn, account_id):
     # (same "ignores unknown keys" behavior as any other unrecognized field).
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     updated = store.update_planned_posting(conn, "pp1", {"expected_date": "2026-08-15"}, "2026-08")
     assert updated.expected_date == "2026-08-01"
@@ -1380,59 +2081,101 @@ def test_update_planned_posting_expected_date_is_immutable(conn, account_id):
 def test_update_planned_posting_can_change_the_expected_amount(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
-    updated = store.update_planned_posting(conn, "pp1", {"expected_amount_cents": -175000}, "2026-08")
+    updated = store.update_planned_posting(
+        conn, "pp1", {"expected_amount_cents": -175000}, "2026-08"
+    )
     assert updated.expected_amount_cents == -175000
     assert updated.expected_date == "2026-08-01"  # untouched
 
 
 def test_update_planned_posting_missing_returns_none(conn):
-    assert store.update_planned_posting(conn, "nope", {"deferred_date": "2026-08-15"}, "2026-08") is None
+    assert (
+        store.update_planned_posting(conn, "nope", {"deferred_date": "2026-08-15"}, "2026-08")
+        is None
+    )
 
 
 def test_update_planned_posting_ignores_unknown_keys(conn, account_id):
     _make_item(conn, account_id)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
-    updated = store.update_planned_posting(conn, "pp1", {"bogus_field": "ignored", "deferred_date": "2026-08-02"}, "2026-08")
+    updated = store.update_planned_posting(
+        conn, "pp1", {"bogus_field": "ignored", "deferred_date": "2026-08-02"}, "2026-08"
+    )
     assert updated.deferred_date == "2026-08-02"
 
 
-def test_update_planned_posting_rejects_editing_a_row_whose_period_is_after_the_open_period(conn, account_id):
+def test_update_planned_posting_rejects_editing_a_row_whose_period_is_after_the_open_period(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-09",
-        expected_date="2026-09-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-09",
+        expected_date="2026-09-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     with pytest.raises(store.PeriodClosedError):
         store.update_planned_posting(conn, "pp1", {"expected_amount_cents": -175000}, "2026-08")
 
 
-def test_update_planned_posting_rejects_a_past_period_once_a_real_close_has_happened(conn, account_id):
+def test_update_planned_posting_rejects_a_past_period_once_a_real_close_has_happened(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-07",
-        expected_date="2026-07-01", expected_amount_cents=-150000, created_at="2026-07-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-07",
+        expected_date="2026-07-01",
+        expected_amount_cents=-150000,
+        created_at="2026-07-01T00:00:00Z",
     )
     with pytest.raises(store.PeriodClosedError):
         store.update_planned_posting(
-            conn, "pp1", {"deferred_date": "2026-07-15"}, "2026-08", last_closed_period="2026-07",
+            conn,
+            "pp1",
+            {"deferred_date": "2026-07-15"},
+            "2026-08",
+            last_closed_period="2026-07",
         )
 
 
-def test_update_planned_posting_deferring_across_a_month_boundary_leaves_period_untouched(conn, account_id):
+def test_update_planned_posting_deferring_across_a_month_boundary_leaves_period_untouched(
+    conn, account_id
+):
     # ticket #22: Deferred is explicitly single-period -- the row still belongs to
     # whichever period materialized it, regardless of which calendar month the deferred
     # date itself falls in (not a way to relocate an occurrence to a different period's
     # bucket).
     _make_item(conn, account_id, day_of_month=31)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-31", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-31",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     updated = store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-09-03"}, "2026-08")
     assert updated.deferred_date == "2026-09-03"
@@ -1442,18 +2185,35 @@ def test_update_planned_posting_deferring_across_a_month_boundary_leaves_period_
 
 # --- Reconciliation against Planned Posting (ticket vault-os-api#21) -----------------
 
+
 def test_attribute_transaction_links_the_earliest_unmatched_planned_posting(conn, account_id):
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-08-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-08-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-06", amount_cents=200000)
 
@@ -1469,40 +2229,78 @@ def test_attribute_transaction_pairs_by_effective_date_not_cadence_date(conn, ac
     # pp1 has been Deferred out to Aug 25 -- reconciliation must pair chronologically by
     # when the money will actually land, not the stale Cadence order.
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-08-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-08-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-25"}, "2026-08")
 
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-20", plan_item_id="p1")
     linked = store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-20", "t1")
 
-    assert linked.id == "pp2"  # the now-earliest EFFECTIVE date (Aug 20), not pp1 (deferred to Aug 25)
+    assert (
+        linked.id == "pp2"
+    )  # the now-earliest EFFECTIVE date (Aug 20), not pp1 (deferred to Aug 25)
 
 
 def test_attribute_transaction_skips_an_already_matched_occurrence(conn, account_id):
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-08-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-08-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
-    _make_txn(conn, account_id, txn_id="t1", date="2026-08-06", amount_cents=200000, dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", date="2026-08-20", amount_cents=200000, dedupe_hash="h2")
+    _make_txn(
+        conn, account_id, txn_id="t1", date="2026-08-06", amount_cents=200000, dedupe_hash="h1"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t2", date="2026-08-20", amount_cents=200000, dedupe_hash="h2"
+    )
 
     first = store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-06", "t1")
     second = store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-20", "t2")
@@ -1511,18 +2309,27 @@ def test_attribute_transaction_skips_an_already_matched_occurrence(conn, account
     assert second.id == "pp2"  # never re-matches pp1, even though it's still the "earliest" by date
 
 
-def test_attribute_transaction_returns_none_when_no_unmatched_planned_posting_exists(conn, account_id):
+def test_attribute_transaction_returns_none_when_no_unmatched_planned_posting_exists(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=14)
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-14")
     # No planned_posting rows materialized at all for this item/period.
     assert store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-14", "t1") is None
 
 
-def test_attribute_transaction_returns_none_when_every_occurrence_is_already_matched(conn, account_id):
+def test_attribute_transaction_returns_none_when_every_occurrence_is_already_matched(
+    conn, account_id
+):
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-14", dedupe_hash="h1")
     _make_txn(conn, account_id, txn_id="t2", date="2026-08-14", dedupe_hash="h2")
@@ -1533,8 +2340,13 @@ def test_attribute_transaction_returns_none_when_every_occurrence_is_already_mat
 def test_unattribute_transaction_clears_the_link(conn, account_id):
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-14")
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-14", "t1")
@@ -1548,8 +2360,13 @@ def test_unattribute_transaction_clears_the_link(conn, account_id):
 def test_unattribute_transaction_on_an_unlinked_txn_is_a_noop(conn, account_id):
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.unattribute_transaction_from_planned_posting(conn, "nope")  # must not raise
     rows = store.list_planned_postings_for_period(conn, "2026-08")
@@ -1559,8 +2376,13 @@ def test_unattribute_transaction_on_an_unlinked_txn_is_a_noop(conn, account_id):
 def test_reconcile_existing_transactions_links_a_pre_existing_matched_transaction(conn, account_id):
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-14", plan_item_id="p1")
 
@@ -1570,18 +2392,36 @@ def test_reconcile_existing_transactions_links_a_pre_existing_matched_transactio
     assert rows[0].matched_txn_id == "t1"
 
 
-def test_reconcile_existing_transactions_ignores_a_transaction_already_linked_elsewhere(conn, account_id):
+def test_reconcile_existing_transactions_ignores_a_transaction_already_linked_elsewhere(
+    conn, account_id
+):
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-08-06",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-08-06",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-06", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-06",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-20", expected_amount_cents=200000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-20",
+        expected_amount_cents=200000,
+        created_at="2026-08-01T00:00:00Z",
     )
     _make_txn(conn, account_id, txn_id="t1", date="2026-08-06", plan_item_id="p1", dedupe_hash="h1")
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-08-06", "t1")
@@ -1600,8 +2440,13 @@ def test_reconcile_existing_transactions_ignores_a_transaction_already_linked_el
 def test_reconcile_existing_transactions_with_no_matching_transactions_is_a_noop(conn, account_id):
     _make_item(conn, account_id, day_of_month=14)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-14", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-14",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.reconcile_existing_transactions_for_item_period(conn, "p1", "2026-08")  # must not raise
     rows = store.list_planned_postings_for_period(conn, "2026-08")
@@ -1616,8 +2461,13 @@ def test_reconcile_existing_transactions_with_no_matching_transactions_is_a_noop
 def test_list_unreconciled_planned_postings_excludes_a_matched_row(conn, account_id):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -1632,8 +2482,13 @@ def test_list_unreconciled_planned_postings_excludes_a_matched_row(conn, account
 def test_list_unreconciled_planned_postings_includes_an_unmatched_row(conn, account_id):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     rows = store.list_unreconciled_planned_postings_for_period(conn, "2026-08")
     assert [r.id for r in rows] == ["pp1"]
@@ -1646,8 +2501,13 @@ def test_list_unreconciled_planned_postings_excludes_a_manually_ticked_item(conn
     # done by hand" would get silently overridden and reappear as still-overdue.
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.set_ticked(conn, "p1", "2026-08", True, "2026-08-05T00:00:00Z", open_period="2026-08")
     assert store.list_unreconciled_planned_postings_for_period(conn, "2026-08") == []
@@ -1656,8 +2516,13 @@ def test_list_unreconciled_planned_postings_excludes_a_manually_ticked_item(conn
 def test_carry_forward_planned_postings_moves_the_period_column(conn, account_id):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     moved = store.carry_forward_planned_postings(conn, ["pp1"], "2026-09")
     assert [r.id for r in moved] == ["pp1"]
@@ -1671,8 +2536,13 @@ def test_carry_forward_planned_postings_moves_the_period_column(conn, account_id
 def test_carry_forward_planned_postings_preserves_a_deferred_date(conn, account_id):
     _make_item(conn, account_id, day_of_month=1)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-08",
-        expected_date="2026-08-01", expected_amount_cents=-150000, created_at="2026-08-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-08",
+        expected_date="2026-08-01",
+        expected_amount_cents=-150000,
+        created_at="2026-08-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-08-20"}, "2026-08")
     moved = store.carry_forward_planned_postings(conn, ["pp1"], "2026-09")

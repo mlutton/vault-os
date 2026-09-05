@@ -3,7 +3,15 @@ import pytest
 
 @pytest.fixture
 def account_id(client):
-    res = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True, "balance_cents": 100000})
+    res = client.post(
+        "/finance/accounts",
+        json={
+            "nickname": "Checking",
+            "type": "checking",
+            "is_primary": True,
+            "balance_cents": 100000,
+        },
+    )
     return res.json()["id"]
 
 
@@ -23,8 +31,14 @@ def test_get_cash_flow_with_a_real_plan(client, account_id):
     client.post(
         "/finance/plan-items",
         json={
-            "name": "Rent", "estimate_cents": -150000, "type": "Rent", "day_of_month": 20,
-            "cadence": "dated", "cadence_unit": "month", "cadence_frequency": 1, "account_id": account_id,
+            "name": "Rent",
+            "estimate_cents": -150000,
+            "type": "Rent",
+            "day_of_month": 20,
+            "cadence": "dated",
+            "cadence_unit": "month",
+            "cadence_frequency": 1,
+            "account_id": account_id,
         },
     )
     res = client.get("/finance/cash-flow")
@@ -57,7 +71,9 @@ def test_set_balance_with_no_primary_account_is_400(client):
     assert res.status_code == 400
 
 
-def test_set_balance_race_where_primary_account_disappears_between_reads_is_400_not_500(client, account_id, monkeypatch):
+def test_set_balance_race_where_primary_account_disappears_between_reads_is_400_not_500(
+    client, account_id, monkeypatch
+):
     # Simulates the narrow window a concurrent PATCH clearing is_primary could land
     # in: the route's own get_primary_account check passes, but
     # plan_predicted_for_primary_today re-reads the primary account itself and finds

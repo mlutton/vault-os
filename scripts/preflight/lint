@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+repo_root=$1
+ruff="$repo_root/api/.venv/bin/ruff"
+if [[ ! -x $ruff ]]; then
+  ruff=$(command -v ruff || true)
+fi
+if [[ -z $ruff ]]; then
+  echo "FAIL lint — ruff is not installed"
+  exit 1
+fi
+
+status=0
+"$ruff" check --no-cache "$repo_root/api" || status=1
+"$ruff" format --check --no-cache "$repo_root/api" || status=1
+if [[ $status -eq 0 ]]; then
+  echo "PASS lint"
+else
+  echo "FAIL lint"
+fi
+exit "$status"

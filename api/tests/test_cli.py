@@ -19,9 +19,9 @@ def test_reindex_refuses_when_spine_alive(tmp_vault, tmp_path):
 
 def test_reindex_rebuilds_db_from_files(tmp_vault, tmp_path):
     db_path = tmp_path / "vaultos.db"
-    (tmp_vault / "system" / "queue" / "a.json").write_text(json.dumps(
-        {"id": "a", "skill": "ai-wire", "args": {}, "ts": "t0", "source": "api"}
-    ))
+    (tmp_vault / "system" / "queue" / "a.json").write_text(
+        json.dumps({"id": "a", "skill": "ai-wire", "args": {}, "ts": "t0", "source": "api"})
+    )
 
     result = reindex(tmp_vault, db_path)
 
@@ -36,8 +36,13 @@ def test_reindex_wipes_stale_rows_not_present_in_files(tmp_vault, tmp_path):
     db_path = tmp_path / "vaultos.db"
     conn = connect(db_path)
     store.create_job(
-        conn, job_id="stale", skill="ai-wire", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="stale",
+        skill="ai-wire",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     conn.close()
 
@@ -52,8 +57,13 @@ def test_reindex_does_not_wipe_db_if_registry_fails_to_load(tmp_vault, tmp_path)
     db_path = tmp_path / "vaultos.db"
     conn = connect(db_path)
     store.create_job(
-        conn, job_id="preserve-me", skill="ai-wire", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="preserve-me",
+        skill="ai-wire",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     conn.close()
 

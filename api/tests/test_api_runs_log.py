@@ -1,6 +1,8 @@
 def test_run_log_returns_raw_markdown_body(client, tmp_vault):
     job_id = client.post("/jobs", json={"skill": "metrics-pull"}).json()["id"]
-    (tmp_vault / "system" / "runs" / f"{job_id}.md").write_text("# run transcript\n\nline one\nline two\n")
+    (tmp_vault / "system" / "runs" / f"{job_id}.md").write_text(
+        "# run transcript\n\nline one\nline two\n"
+    )
 
     res = client.get(f"/runs/{job_id}/log")
     assert res.status_code == 200

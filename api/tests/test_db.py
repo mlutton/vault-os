@@ -21,7 +21,9 @@ def test_connect_creates_schema_and_enables_wal(tmp_path):
 
     # ticket vault-os-api#18: NULL until first use -- store.get_open_period() lazily
     # establishes it, migration time never guesses "today".
-    open_period = conn.execute("SELECT open_period FROM finance_settings WHERE id = 1").fetchone()[0]
+    open_period = conn.execute("SELECT open_period FROM finance_settings WHERE id = 1").fetchone()[
+        0
+    ]
     assert open_period is None
 
     version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -47,6 +49,7 @@ def test_job_events_unique_constraint(tmp_path):
     )
     conn.commit()
     import sqlite3
+
     import pytest
 
     with pytest.raises(sqlite3.IntegrityError):
@@ -63,6 +66,7 @@ def test_jobs_chain_source_unique_constraint(tmp_path):
     )
     conn.commit()
     import sqlite3
+
     import pytest
 
     with pytest.raises(sqlite3.IntegrityError):
@@ -93,8 +97,17 @@ def test_migration_0003_backfills_colliding_legacy_chain_sources(tmp_path):
     conn.execute("DROP INDEX jobs_chain_source")
     # A real version-2 DB predates migrations 0004-0014 too -- drop what they
     # created so re-running migrate() below recreates them fresh instead of colliding.
-    for table in ("account", "column_mapping", "plan_item", "txn", "plan_period", "import",
-                  "finance_settings", "balance_adjustment", "planned_posting"):
+    for table in (
+        "account",
+        "column_mapping",
+        "plan_item",
+        "txn",
+        "plan_period",
+        "import",
+        "finance_settings",
+        "balance_adjustment",
+        "planned_posting",
+    ):
         conn.execute(f"DROP TABLE {table}")
     conn.executescript(
         """
@@ -203,7 +216,9 @@ def test_migration_0009_adds_open_period_as_null(tmp_path):
     migrate(conn)  # re-runs migrations 0009-0014 against a pre-existing finance_settings row
 
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 14
-    row = conn.execute("SELECT floor_cents, open_period FROM finance_settings WHERE id = 1").fetchone()
+    row = conn.execute(
+        "SELECT floor_cents, open_period FROM finance_settings WHERE id = 1"
+    ).fetchone()
     assert row["floor_cents"] == 350000
     assert row["open_period"] is None
 

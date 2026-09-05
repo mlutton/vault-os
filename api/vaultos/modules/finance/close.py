@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from . import money, plan, store
 
 
-def run_month_end_close(conn: sqlite3.Connection, open_period: str, created_at: str) -> list[store.PlannedPosting]:
+def run_month_end_close(
+    conn: sqlite3.Connection, open_period: str, created_at: str
+) -> list[store.PlannedPosting]:
     """Materializes one Planned Posting per Posting occurrence landing in `open_period`
     (ADR-0019 ticket #20) -- a week-unit Posting landing twice gets two independent
     rows, each freezing the item's own estimate_cents as its expected_amount_cents at
@@ -95,17 +97,23 @@ def close_month(conn: sqlite3.Connection, current_open_period: str, created_at: 
     out. Only step 5's period-advance itself needs (and has) an explicit guard."""
     safety_net = run_month_end_close(conn, current_open_period, created_at)
 
-    carry_candidates = store.list_unreconciled_planned_postings_for_period(conn, current_open_period)
+    carry_candidates = store.list_unreconciled_planned_postings_for_period(
+        conn, current_open_period
+    )
     new_period = money.next_period(current_open_period)
 
     materialized = safety_net + run_month_end_close(conn, new_period, created_at)
     carried_forward = store.carry_forward_planned_postings(
-        conn, [pp.id for pp in carry_candidates], new_period,
+        conn,
+        [pp.id for pp in carry_candidates],
+        new_period,
     )
 
     store.close_period(conn, closed_period=current_open_period, new_open_period=new_period)
 
     return CloseResult(
-        old_period=current_open_period, new_period=new_period,
-        materialized=materialized, carried_forward=carried_forward,
+        old_period=current_open_period,
+        new_period=new_period,
+        materialized=materialized,
+        carried_forward=carried_forward,
     )

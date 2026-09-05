@@ -19,7 +19,10 @@ class _SpreadCache:
         self._cache: dict[tuple, list[int]] = {}
 
     def amount_for(
-        self, estimate_cents: int, d: date, reset_period: str,
+        self,
+        estimate_cents: int,
+        d: date,
+        reset_period: str,
         adjustment: tuple[int, int, str] | None = None,
     ) -> int:
         """ticket #23: `adjustment`, when given (plan.active_budget_adjustment's own
@@ -29,12 +32,19 @@ class _SpreadCache:
         another week's days just because they share the same cache/call site."""
         window_start, day_count = money.spread_window(reset_period, d)
         applies = adjustment is not None and adjustment[2] == window_start.isoformat()
-        key = (estimate_cents, reset_period, window_start.isoformat(), adjustment if applies else None)
+        key = (
+            estimate_cents,
+            reset_period,
+            window_start.isoformat(),
+            adjustment if applies else None,
+        )
         distribution = self._cache.get(key)
         if distribution is None:
             if applies:
                 adjusted_target_cents, elapsed_days, _ = adjustment
-                distribution = money.adjusted_spread_daily_amounts(estimate_cents, day_count, elapsed_days, adjusted_target_cents)
+                distribution = money.adjusted_spread_daily_amounts(
+                    estimate_cents, day_count, elapsed_days, adjusted_target_cents
+                )
             else:
                 distribution = money.spread_daily_amounts(estimate_cents, day_count)
             self._cache[key] = distribution
@@ -66,7 +76,9 @@ def _spread_items(items: list[store.PlanItem]) -> list[store.PlanItem]:
     return [i for i in items if i.kind == "budget"]
 
 
-def _occurrences_in_range(items: list[store.PlanItem], start: date, end: date) -> list[tuple[date, store.PlanItem]]:
+def _occurrences_in_range(
+    items: list[store.PlanItem], start: date, end: date
+) -> list[tuple[date, store.PlanItem]]:
     """Every dated item's occurrence date(s) landing within [start, end] (both
     inclusive). "one-off" is still resolved per calendar period (its only occurrence is
     scoped to a single specific period); "dated" (Unit x Frequency, ADR-0018) is
@@ -88,8 +100,13 @@ def _occurrences_in_range(items: list[store.PlanItem], start: date, end: date) -
                     out.append((occ, item))
         elif item.cadence == "dated":
             for occ in money.dated_occurrences_in_range(
-                item.cadence_unit, item.cadence_frequency, item.day_of_month,
-                item.anchor_period, item.anchor_date, start, end,
+                item.cadence_unit,
+                item.cadence_frequency,
+                item.day_of_month,
+                item.anchor_period,
+                item.anchor_date,
+                start,
+                end,
             ):
                 out.append((occ, item))
     out.sort(key=lambda pair: pair[0])
@@ -97,8 +114,11 @@ def _occurrences_in_range(items: list[store.PlanItem], start: date, end: date) -
 
 
 def _month_opening_balance(
-    account_balance_cents: int, month_start: date, today: date,
-    txns: list[tuple[str, int]], adjustments: list[store.BalanceAdjustment],
+    account_balance_cents: int,
+    month_start: date,
+    today: date,
+    txns: list[tuple[str, int]],
+    adjustments: list[store.BalanceAdjustment],
 ) -> tuple[int, dict[date, int]]:
     """The balance at the start of `month_start`, plus the map of known anchor dates
     within [month_start, today] (every balance_adjustment in the window, plus `today`
@@ -115,7 +135,8 @@ def _month_opening_balance(
     approximation, not a guarantee, when no anchor exists further back to check against."""
     anchors: dict[date, int] = {
         date.fromisoformat(a.as_of_date): a.real_balance_cents
-        for a in adjustments if a.as_of_date <= today.isoformat()
+        for a in adjustments
+        if a.as_of_date <= today.isoformat()
     }
     anchors[today] = account_balance_cents
     earliest_date = min(anchors)
@@ -126,7 +147,10 @@ def _month_opening_balance(
 
 
 def _reconstruct_actual_series(
-    month_start: date, today: date, opening_balance: int, anchors: dict[date, int],
+    month_start: date,
+    today: date,
+    opening_balance: int,
+    anchors: dict[date, int],
     txns: list[tuple[str, int]],
 ) -> list[tuple[date, int]]:
     """Walks forward from month_start, applying each real transaction on its own date --
@@ -151,8 +175,12 @@ def _reconstruct_actual_series(
 
 def _planned_series(
     conn: sqlite3.Connection,
-    dated_in_month: list[tuple[date, store.PlanItem]], spread_items: list[store.PlanItem],
-    opening_balance_cents: int, month_start: date, today: date, spread_cache: _SpreadCache,
+    dated_in_month: list[tuple[date, store.PlanItem]],
+    spread_items: list[store.PlanItem],
+    opening_balance_cents: int,
+    month_start: date,
+    today: date,
+    spread_cache: _SpreadCache,
 ) -> list[tuple[date, int]]:
     """What the plan ALONE would say the balance is, for every day from month_start
     through today -- the same forward walk as _reconstruct_actual_series, but applying
@@ -182,7 +210,9 @@ def _planned_series(
                 running += item.estimate_cents
         for item in spread_items:
             adjustment = plan.active_budget_adjustment(conn, item, d)
-            running += spread_cache.amount_for(item.estimate_cents, d, item.reset_period, adjustment)
+            running += spread_cache.amount_for(
+                item.estimate_cents, d, item.reset_period, adjustment
+            )
         series.append((d, running))
         d += timedelta(days=1)
     return series
@@ -190,12 +220,18 @@ def _planned_series(
 
 def _planned_only_today(
     conn: sqlite3.Connection,
-    dated_in_month: list[tuple[date, store.PlanItem]], spread_items: list[store.PlanItem],
-    opening_balance_cents: int, month_start: date, today: date, spread_cache: _SpreadCache,
+    dated_in_month: list[tuple[date, store.PlanItem]],
+    spread_items: list[store.PlanItem],
+    opening_balance_cents: int,
+    month_start: date,
+    today: date,
+    spread_cache: _SpreadCache,
 ) -> int:
     """The single final value from _planned_series -- what plan_predicted_for_primary_today
     needs, without making that caller build (or care about) the full series."""
-    return _planned_series(conn, dated_in_month, spread_items, opening_balance_cents, month_start, today, spread_cache)[-1][1]
+    return _planned_series(
+        conn, dated_in_month, spread_items, opening_balance_cents, month_start, today, spread_cache
+    )[-1][1]
 
 
 def plan_predicted_for_primary_today(conn: sqlite3.Connection, today: date) -> int | None:
@@ -209,11 +245,19 @@ def plan_predicted_for_primary_today(conn: sqlite3.Connection, today: date) -> i
     items = store.list_plan_items(conn)
     dated = _dated_items(items)
     spread = _spread_items(items)
-    txns = store.transactions_for_account_between(conn, primary.id, month_start.isoformat(), today.isoformat())
-    adjustments = store.list_balance_adjustments_between(conn, primary.id, month_start.isoformat(), today.isoformat())
-    opening_balance_cents, _ = _month_opening_balance(primary.balance_cents, month_start, today, txns, adjustments)
+    txns = store.transactions_for_account_between(
+        conn, primary.id, month_start.isoformat(), today.isoformat()
+    )
+    adjustments = store.list_balance_adjustments_between(
+        conn, primary.id, month_start.isoformat(), today.isoformat()
+    )
+    opening_balance_cents, _ = _month_opening_balance(
+        primary.balance_cents, month_start, today, txns, adjustments
+    )
     dated_in_month = _occurrences_in_range(dated, month_start, today)
-    return _planned_only_today(conn, dated_in_month, spread, opening_balance_cents, month_start, today, _SpreadCache())
+    return _planned_only_today(
+        conn, dated_in_month, spread, opening_balance_cents, month_start, today, _SpreadCache()
+    )
 
 
 def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
@@ -235,15 +279,25 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
 
     # --- Hand-set balance markers -- fetched early so the actual-arc reconstruction can
     #     use them as anchors, not just for the chart's hollow squares. -----------------
-    adjustments = store.list_balance_adjustments_between(conn, primary.id, month_start.isoformat(), horizon_end.isoformat())
+    adjustments = store.list_balance_adjustments_between(
+        conn, primary.id, month_start.isoformat(), horizon_end.isoformat()
+    )
     latest_adjustment = store.get_latest_balance_adjustment(conn, primary.id)
 
     # --- Actual arc: month_start -> today, from real transactions -----------------
-    txns = store.transactions_for_account_between(conn, primary.id, month_start.isoformat(), today.isoformat())
-    opening_balance_cents, anchors = _month_opening_balance(
-        primary.balance_cents, month_start, today, txns, [a for a in adjustments if a.as_of_date <= today.isoformat()]
+    txns = store.transactions_for_account_between(
+        conn, primary.id, month_start.isoformat(), today.isoformat()
     )
-    actual_series = _reconstruct_actual_series(month_start, today, opening_balance_cents, anchors, txns)
+    opening_balance_cents, anchors = _month_opening_balance(
+        primary.balance_cents,
+        month_start,
+        today,
+        txns,
+        [a for a in adjustments if a.as_of_date <= today.isoformat()],
+    )
+    actual_series = _reconstruct_actual_series(
+        month_start, today, opening_balance_cents, anchors, txns
+    )
 
     # Fetched once, up front, for the carry-forward section further down
     # (ticked/matched state, Posting-only, always scoped correctly to today_period's
@@ -258,7 +312,13 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
     # and the final "today" value the Plan Offset headline needs -- no duplicate walk.
     dated_in_month = _occurrences_in_range(dated, month_start, today)
     plan_predicted_series = _planned_series(
-        conn, dated_in_month, spread, opening_balance_cents, month_start, today, spread_cache,
+        conn,
+        dated_in_month,
+        spread,
+        opening_balance_cents,
+        month_start,
+        today,
+        spread_cache,
     )
     planned_today_cents = plan_predicted_series[-1][1]
     plan_offset_cents = primary.balance_cents - planned_today_cents
@@ -339,7 +399,8 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
     forward_occurrences.sort(key=lambda row: row[0])
 
     carried_rows = [
-        (occ, item, status, amt) for occ, item, status, amt in dated_in_month_with_status
+        (occ, item, status, amt)
+        for occ, item, status, amt in dated_in_month_with_status
         if status in ("overdue", "due_today")
     ]
 
@@ -348,7 +409,9 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
 
     projected_series = [(today, primary.balance_cents)]
     if carried_rows:
-        projected_series.append((today, today_after_step_cents))  # the step -- a real second point, not an overwrite
+        projected_series.append(
+            (today, today_after_step_cents)
+        )  # the step -- a real second point, not an overwrite
 
     # Each carried-forward row's running balance is cumulative in date order (occ is
     # always == today here, so this is really cumulative in the order they're listed
@@ -357,7 +420,15 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
     event_rows = []
     for occ, item, status, amt in sorted(carried_rows, key=lambda r: r[0]):
         running += amt
-        event_rows.append({"date": occ, "item": item, "status": status, "balance_cents": running, "estimate_cents": amt})
+        event_rows.append(
+            {
+                "date": occ,
+                "item": item,
+                "status": status,
+                "balance_cents": running,
+                "estimate_cents": amt,
+            }
+        )
 
     running = today_after_step_cents
     d = today + timedelta(days=1)
@@ -367,13 +438,23 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
     while d <= horizon_end:
         for item, amt in occ_by_date.get(d, []):
             running += amt
-            event_rows.append({"date": d, "item": item, "status": "upcoming", "balance_cents": running, "estimate_cents": amt})
+            event_rows.append(
+                {
+                    "date": d,
+                    "item": item,
+                    "status": "upcoming",
+                    "balance_cents": running,
+                    "estimate_cents": amt,
+                }
+            )
         for item in spread:
             # ticket #23: resolved fresh per day -- a Weekly Budget's window changes
             # mid-walk, and an Adjusted override only ever applies to the one window it
             # was set for (see _SpreadCache.amount_for's own docstring).
             adjustment = plan.active_budget_adjustment(conn, item, d)
-            running += spread_cache.amount_for(item.estimate_cents, d, item.reset_period, adjustment)
+            running += spread_cache.amount_for(
+                item.estimate_cents, d, item.reset_period, adjustment
+            )
         projected_series.append((d, running))
         d += timedelta(days=1)
 
@@ -412,14 +493,20 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
         return today if row["status"] in ("overdue", "due_today") else row["date"]
 
     lowest_series_point = min(deduped_series, key=lambda p: p[1])
-    lowest_event_row = next((r for r in event_rows if _effective_date(r) == lowest_series_point[0]), None)
+    lowest_event_row = next(
+        (r for r in event_rows if _effective_date(r) == lowest_series_point[0]), None
+    )
     lowest_point = {
         "balance_cents": lowest_series_point[1],
         "date": lowest_series_point[0].isoformat(),
         "after_item": lowest_event_row["item"].name if lowest_event_row else None,
     }
     days_below_floor = sum(1 for _, bal in deduped_series if bal < floor_cents)
-    breach_points = [{"date": d.isoformat(), "balance_cents": bal} for d, bal in deduped_series if bal < floor_cents]
+    breach_points = [
+        {"date": d.isoformat(), "balance_cents": bal}
+        for d, bal in deduped_series
+        if bal < floor_cents
+    ]
 
     # --- "What the plan expects next" section header -- three distinct phrasings,
     #     matching the reference prototype's own branching exactly (the prose spec only
@@ -427,7 +514,9 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
     #     from reading the prototype's actual logic). Built here as a ready-to-display
     #     string, same as plan.py's previous_month_note, not left as raw counts for the
     #     client to reassemble into a sentence. -----------------------------------------
-    processed_count = sum(1 for _, _, status, _ in dated_in_month_with_status if status == "processed")
+    processed_count = sum(
+        1 for _, _, status, _ in dated_in_month_with_status if status == "processed"
+    )
     overdue_count = sum(1 for r in event_rows if r["status"] == "overdue")
     due_today_count = sum(1 for r in event_rows if r["status"] == "due_today")
     still_to_clear_cents = abs(step_delta_cents)
@@ -456,13 +545,21 @@ def build_cash_flow(conn: sqlite3.Connection, today: date) -> dict:
         # prototype's own actualPath/projPath split. projected_series starts AT today
         # (and includes the step's second point when anything carried forward), so the
         # two arrays share that one x-position by design, not by accident.
-        "actual_series": [{"date": d.isoformat(), "balance_cents": bal} for d, bal in actual_series],
-        "projected_series": [{"date": d.isoformat(), "balance_cents": bal} for d, bal in projected_series],
+        "actual_series": [
+            {"date": d.isoformat(), "balance_cents": bal} for d, bal in actual_series
+        ],
+        "projected_series": [
+            {"date": d.isoformat(), "balance_cents": bal} for d, bal in projected_series
+        ],
         # Offset line (fable-os-web#69): what the plan alone predicts, month_start
         # through today. Anchor-free by design -- see _planned_series's own docstring.
-        "plan_predicted_series": [{"date": d.isoformat(), "balance_cents": bal} for d, bal in plan_predicted_series],
+        "plan_predicted_series": [
+            {"date": d.isoformat(), "balance_cents": bal} for d, bal in plan_predicted_series
+        ],
         "breach_points": breach_points,
-        "adjustment_markers": [{"date": a.as_of_date, "balance_cents": a.real_balance_cents} for a in adjustments],
+        "adjustment_markers": [
+            {"date": a.as_of_date, "balance_cents": a.real_balance_cents} for a in adjustments
+        ],
         "latest_adjustment": (
             {"date": latest_adjustment.as_of_date} if latest_adjustment else None
         ),

@@ -26,7 +26,9 @@ class BalanceAdjustmentCreate(BaseModel):
 
 
 @router.post("/finance/balance-adjustments", status_code=201)
-def create_balance_adjustment(body: BalanceAdjustmentCreate, conn=Depends(get_conn), settings=Depends(get_settings)):
+def create_balance_adjustment(
+    body: BalanceAdjustmentCreate, conn=Depends(get_conn), settings=Depends(get_settings)
+):
     # Scoped to the primary account only -- "set today's balance" (README) exists to
     # re-anchor THE PROJECTION, and only the primary account's balance feeds that.
     # Correcting a non-primary account's balance is just ordinary Account editing

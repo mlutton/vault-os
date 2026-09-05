@@ -39,8 +39,12 @@ def test_read_metrics_csv_parses_rows(tmp_path):
     samples = read_metrics_csv(tmp_path)
     assert len(samples) == 2
     assert samples[0] == MetricSample(
-        timestamp="2026-08-09T08:40:01Z", source="vault", metric="new_files_24h",
-        value=52.0, status="ok", error="",
+        timestamp="2026-08-09T08:40:01Z",
+        source="vault",
+        metric="new_files_24h",
+        value=52.0,
+        status="ok",
+        error="",
     )
 
 
@@ -185,5 +189,3 @@ def test_read_last_pull_parses_per_source_status(tmp_path):
     assert result["vault"].status == "ok"
     assert result["vault"].ts == "2026-08-09T08:40:01Z"
     assert result["vault"].error == ""
-
-

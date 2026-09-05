@@ -32,9 +32,10 @@ checkout to establish a known-good baseline before starting.
 4. As a maintainer, I want the privacy scrub to catch home paths for
    any user, tilde-home paths, IP literals, and secret-key shapes, so
    that a broader class of leaks fails before merge.
-5. As a maintainer, I want internal component names reported but not
-   failed, so that historical documents that legitimately mention them
-   don't turn the tree red on day one.
+5. As a maintainer, I want tilde paths, IP literals, and internal
+   component names reported but not failed, so that historical
+   documents that legitimately contain them don't turn the tree red —
+   and so that no gate is ever tempted to rewrite them.
 6. As a maintainer, I want CI to call the same entrypoint, so that the
    gate set has exactly one definition.
 7. As an agent about to work, I want to run preflight on the untouched
@@ -66,11 +67,16 @@ checkout to establish a known-good baseline before starting.
   minimal configuration; trivial findings fixed in-parcel, anything
   non-trivial gets a targeted, commented ignore rather than a rewrite.
 - **Suite**: the existing test command.
-- **Privacy scrub**: **hard-fail** set — absolute home paths for any
-  user, tilde-home paths, private IPv4 literals, common secret-key
-  shapes; **warn-only** set — internal component names (reported,
-  never failing). Patterns assembled at runtime so the scrub can't
-  match its own definition.
+- **Privacy scrub**: **hard-fail** set — absolute home paths that carry
+  a username (`/home/<user>/…`, `/Users/<user>/…`) and common
+  secret-key shapes. **Warn-only** set — tilde-home paths (generic, no
+  username, and legitimate in prose), private IPv4 literals, and
+  internal component names: reported, never failing. Patterns assembled
+  at runtime so the scrub can't match its own definition.
+  **The scrub never rewrites files, and no gate may mass-edit existing
+  content to satisfy itself**: pre-existing violations are reported for
+  a human to judge — historical documents (ADRs, shipped specs) are
+  records, not lint targets.
 - **Docs consistency**: parse the READMEs' stated test and test-file
   counts and compare with the collected suite (`pytest --collect-only`)
   and the test-file count; any mismatch fails and prints the expected

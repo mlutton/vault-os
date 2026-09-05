@@ -1,3 +1,11 @@
 # working directories used by driver-orchestrated agent runs — never committed
 .dispatch/
 .reference/
+
+# web dependencies, generated output, and local environment
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/*.tsbuildinfo
+/web/.env*
+!/web/.env.example

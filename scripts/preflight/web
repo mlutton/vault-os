@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+repo_root="${1:?repository root is required}"
+
+if command -v npm >/dev/null 2>&1; then
+  npm_command=(npm)
+elif command -v corepack >/dev/null 2>&1; then
+  npm_command=(corepack npm)
+else
+  echo "FAIL web — npm is not installed"
+  exit 1
+fi
+
+for check in typecheck lint test build; do
+  if ! "${npm_command[@]}" --prefix "$repo_root/web" run "$check"; then
+    echo "FAIL web — $check"
+    exit 1
+  fi
+done
+
+echo "PASS web — typecheck, lint, test, build"

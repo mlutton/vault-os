@@ -14,8 +14,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install API
         run: pip install -e "api[dev]"
+      - name: Install web
+        run: npm ci --prefix web
       - name: Preflight
         run: ./preflight
 

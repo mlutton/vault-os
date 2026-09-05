@@ -11,7 +11,7 @@ point at whatever endpoint you're allowed to use.
 | | | |
 |---|---|---|
 | [`api/`](api/) | the spine | FastAPI + SQLite. Job execution as an auditable record, module contract (ADR-0022), a personal-finance module as the first worked example. **This is the built part.** |
-| `web/` | the surface | planned — a web frontend over the spine's read-models, with its own store for web-native state |
+| [`web/`](web/) | the surface | scaffolded — a thin web frontend over the spine's read-models; the operations cockpit is the next build stage |
 | `plugin/` | the door | planned — an Obsidian plugin: the knowledge vault asks the spine for work and persists the results; how the work happens stays hidden |
 
 The architecture in one sentence: a **brain** (your markdown vault — the
@@ -43,6 +43,17 @@ Run `./preflight` from the repository root before submitting a change. It runs
 lint and formatting checks, the API suite, privacy and documentation checks,
 and instruction-surface validation; use `./preflight --only <gate>` to iterate
 on one gate.
+
+### Web quickstart
+
+The web component uses its own npm toolchain and runs on port 3110:
+
+```bash
+npm install --prefix web
+npm run dev --prefix web
+```
+
+Run its complete local gate with `./preflight --only web`.
 
 ## Start here
 

@@ -13,18 +13,19 @@ config's own `prompt` template -- the no-builder passthrough, tested in
 test_runner_prompts.py). This package never imports `vaultos.modules` --
 same infrastructure-only rule as the rest of `vaultos.runner`.
 
-Batch 1 (this ticket) ships the operational/simple skills; batch 2 (ticket
-#26) will add the heavy pipeline set (acquire, daily-topic-digest,
-article-refiner, research-persona-fanout, deep-research) the same way --
-extend `PROMPT_BUILDER_REGISTRY` with a new `batch2.py`'s own builders dict,
-mirroring `batch1.py` below.
+Batch 1 (ticket #25) shipped the operational/simple skills. Batch 2 (this
+ticket, #26) adds the heavy pipeline set -- acquire, daily-topic-digest,
+article-refiner, research-persona-fanout, deep-research -- the same way, in
+its own `batch2.py`, built up one skill per commit.
 """
 
-from .base import AUTONOMOUS_PREFIX, BuilderContext, BuiltPrompt, PromptBuilder, id8, now_time, today_date, tomorrow_date
+from .base import AUTONOMOUS_PREFIX, BuilderContext, BuiltPrompt, PromptBuilder, id8, now_time, slugify, today_date, tomorrow_date
 from .batch1 import BATCH1_BUILDERS
+from .batch2 import BATCH2_BUILDERS
 
 PROMPT_BUILDER_REGISTRY: dict[str, PromptBuilder] = {
     **BATCH1_BUILDERS,
+    **BATCH2_BUILDERS,
 }
 
 
@@ -46,6 +47,7 @@ __all__ = [
     "get_builder",
     "id8",
     "now_time",
+    "slugify",
     "today_date",
     "tomorrow_date",
 ]

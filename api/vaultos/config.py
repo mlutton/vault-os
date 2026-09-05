@@ -50,6 +50,42 @@ class Settings:
         self.wiki_ingest_skill_doc_hint = os.environ.get(
             "WIKI_INGEST_SKILL_DOC_HINT", "the wiki-ingest skill's own SKILL.md"
         )
+        # Batch 2 (ticket #26), added incrementally per skill: the heavy
+        # research/writing pipeline prompts shell out to a handful of helper
+        # scripts and one Workflow script by absolute path in the legacy
+        # daemon -- same "configuration does the scrubbing" treatment as
+        # wiki_ingest_skill_doc_hint above: each lifts to its own Settings
+        # field, env var, and PATH-FREE default (a plain description of the
+        # script's role), read at prompt-build time. A deployment that wants
+        # the prompt to literally name a real script path sets the matching
+        # env var. This slice is what `acquire` needs; more fields land
+        # alongside the skills that need them.
+        # No Windows branch here (legacy daemon defaulted to "python" on
+        # win32, "python3" elsewhere) -- this backend is Linux-only, so that
+        # fork was deliberately dropped rather than ported.
+        self.python_bin = os.environ.get("PYTHON_BIN", "python3")
+        self.rss_poll_script = os.environ.get("RSS_POLL_SCRIPT", "the RSS poll script")
+        self.websearch_cached_fetch_workflow = os.environ.get(
+            "WEBSEARCH_CACHED_FETCH_WORKFLOW", "the websearch-cached-fetch workflow script"
+        )
+        self.assemble_acquire_report_cli = os.environ.get(
+            "ASSEMBLE_ACQUIRE_REPORT_CLI", "the assemble-acquire-report CLI script"
+        )
+        self.yt_search_script = os.environ.get("YT_SEARCH_SCRIPT", "the yt-search script")
+        # Same doc-pointer pattern as wiki_ingest_skill_doc_hint -- the
+        # legacy article-refiner prompt hardcoded its own home-relative
+        # SKILL.md pointer.
+        self.article_refiner_skill_doc_hint = os.environ.get(
+            "ARTICLE_REFINER_SKILL_DOC_HINT", "the article-refiner skill's own SKILL.md"
+        )
+        self.cache_cli = os.environ.get("CACHE_CLI", "the cache CLI script")
+        self.assemble_review_script = os.environ.get(
+            "ASSEMBLE_REVIEW_SCRIPT", "the assemble-review script"
+        )
+        self.research_persona_fanout_skill_doc_hint = os.environ.get(
+            "RESEARCH_PERSONA_FANOUT_SKILL_DOC_HINT",
+            "the research-persona-fanout skill's own SKILL.md",
+        )
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

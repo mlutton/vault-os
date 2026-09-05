@@ -5,16 +5,25 @@ on load-bearing phrases and interpolated job args/settings, plus the
 deliverable path's exact shape -- never a full-string golden.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire` and `daily-topic-digest`. The shared
-registry-boundary tests (batch-2 fully registered, excluded set unchanged)
-live in `test_runner_prompts.py` and are updated once all five batch-2
-skills land.
+this file currently covers `acquire`, `daily-topic-digest`, and
+`deep-research`. The shared registry-boundary tests (batch-2 fully
+registered, excluded set unchanged) live in `test_runner_prompts.py` and
+are updated once all five batch-2 skills land.
 """
+
+import json
 
 import pytest
 
 from vaultos.config import Settings
-from vaultos.runner.prompts import AUTONOMOUS_PREFIX, PROMPT_BUILDER_REGISTRY, BuilderContext, get_builder, today_date
+from vaultos.runner.prompts import (
+    AUTONOMOUS_PREFIX,
+    PROMPT_BUILDER_REGISTRY,
+    BuilderContext,
+    get_builder,
+    slugify,
+    today_date,
+)
 
 
 @pytest.fixture
@@ -95,3 +104,77 @@ def test_daily_topic_digest(ctx):
 def test_daily_topic_digest_ignores_args_no_required_arg_gate(ctx):
     built = PROMPT_BUILDER_REGISTRY["daily-topic-digest"]({"unexpected": "value"}, ctx)
     assert built is not None
+
+
+def test_get_builder_returns_a_callable_for_deep_research():
+    assert callable(get_builder("deep-research"))
+
+
+def test_deep_research_requires_topic(ctx):
+    assert PROMPT_BUILDER_REGISTRY["deep-research"]({}, ctx) is None
+    assert PROMPT_BUILDER_REGISTRY["deep-research"]({"topic": "   "}, ctx) is None
+    # A topic that's nothing BUT quotes/backticks/control chars strips down
+    # to empty after sanitization -- same reject as a blank topic.
+    assert PROMPT_BUILDER_REGISTRY["deep-research"]({"topic": '"`"`'}, ctx) is None
+
+
+def test_deep_research_no_draft_slug(ctx):
+    topic = "AI agent orchestration"
+    built = PROMPT_BUILDER_REGISTRY["deep-research"]({"topic": topic}, ctx)
+    assert built is not None
+    date = today_date(ctx.settings)
+    assert built.deliverable_path == f"inbox/deep-research/{date}-{slugify(topic)}-deep-research.md"
+    assert AUTONOMOUS_PREFIX in built.prompt
+    assert f'"{topic}"' in built.prompt  # safe_topic == topic here (no unsafe chars)
+    assert ctx.settings.python_bin in built.prompt
+    assert ctx.settings.yt_search_script in built.prompt
+    assert "## Key Takeaways" in built.prompt
+    assert "## GitHub Activity" in built.prompt
+    assert f"topic: {json.dumps(topic)}" in built.prompt
+    assert "draft_slug:" not in built.prompt
+    assert f"SAVED {built.deliverable_path}" in built.prompt
+
+
+def test_deep_research_with_valid_draft_slug(ctx):
+    built = PROMPT_BUILDER_REGISTRY["deep-research"](
+        {"topic": "payments infra", "draft_slug": "my-great-article"}, ctx
+    )
+    assert built is not None
+    assert built.deliverable_path == "inbox/deep-research/my-great-article-deep-research.md"
+    assert 'draft_slug: "my-great-article"' in built.prompt
+
+
+def test_deep_research_invalid_draft_slug_falls_back_to_topic_slug(ctx):
+    # Uppercase / invalid-shape draft_slug is rejected, same as the legacy
+    # regex validation -- falls back to the topic-based filename, and the
+    # frontmatter omits draft_slug entirely (never claims the unsafe value).
+    topic = "payments infra"
+    built = PROMPT_BUILDER_REGISTRY["deep-research"](
+        {"topic": topic, "draft_slug": "Not Valid!"}, ctx
+    )
+    assert built is not None
+    date = today_date(ctx.settings)
+    assert built.deliverable_path == f"inbox/deep-research/{date}-{slugify(topic)}-deep-research.md"
+    assert "draft_slug:" not in built.prompt
+
+
+def test_deep_research_sanitizes_unsafe_topic_chars_in_body(ctx):
+    # Quotes/backticks/control chars are stripped from the prompt BODY
+    # (search queries, filename-adjacent text), but the frontmatter's own
+    # `topic:` field still carries the ORIGINAL topic via json.dumps --
+    # matches the legacy split between safeTopic (body) and topic (record).
+    topic = 'weird "topic" with `backticks`'
+    built = PROMPT_BUILDER_REGISTRY["deep-research"]({"topic": topic}, ctx)
+    assert built is not None
+    assert '"`' not in built.prompt.split("YAML frontmatter")[0]
+    assert f"topic: {json.dumps(topic)}" in built.prompt
+
+
+def test_deep_research_topic_context_appended_when_present(ctx):
+    built_without = PROMPT_BUILDER_REGISTRY["deep-research"]({"topic": "x"}, ctx)
+    built_with = PROMPT_BUILDER_REGISTRY["deep-research"](
+        {"topic": "x", "topic_context": "some prior evidence"}, ctx
+    )
+    assert "Context already gathered" not in built_without.prompt
+    assert "Context already gathered" in built_with.prompt
+    assert "some prior evidence" in built_with.prompt

@@ -22,11 +22,15 @@ Built incrementally, one skill (and its own test file additions) per commit
 five-skill set across the ticket's remaining commits.
 """
 
+import json
+import re
+
 from .base import (
     AUTONOMOUS_PREFIX,
     BuilderContext,
     BuiltPrompt,
     PromptBuilder,
+    slugify,
     today_date,
 )
 
@@ -49,9 +53,69 @@ def daily_topic_digest(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
     return BuiltPrompt(prompt=prompt, deliverable_path=deliverable)
 
 
+def deep_research(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
+    topic = (args.get("topic") or "").strip()
+    if not topic:
+        return None
+    # Defense in depth, matching the legacy source's own comment: the API
+    # layer already sanitizes args.topic before it reaches the queue, but
+    # this prompt must stay self-contained and shouldn't blindly trust the
+    # caller -- strip quote/backtick/control chars (incl. newlines, which
+    # could inject fresh instructions into this headless prompt) and cap
+    # length so a hostile topic can't break the shell quoting on the
+    # yt-search command line below.
+    safe_topic = re.sub(r'["`\x00-\x1f\x7f]', "", topic)[:200].strip()
+    if not safe_topic:
+        return None
+    date = today_date(ctx.settings)
+    draft_slug = (args.get("draft_slug") or "").strip()
+    # Only accept a slug matching the vault's own lowercase-hyphen convention
+    # (also closes a path-traversal vector) -- an unsafe/invalid draft_slug
+    # falls back to the topic-based filename below, exactly like the legacy
+    # deliverablePathFor()/buildPrompt() cases both do independently.
+    safe_draft_slug = draft_slug if re.match(r"^[a-z0-9]+(-[a-z0-9]+)*$", draft_slug) else ""
+    if safe_draft_slug:
+        # Auto-fired path (content-flow design's Review Topics -> Create
+        # Draft -> auto deep-research checkbox): deterministic, slug-keyed
+        # filename, no date, overwritten on rerun -- so research-into-draft
+        # (chained with zero args) can find this report purely by matching
+        # the draft's own slug.
+        deliverable = f"inbox/deep-research/{safe_draft_slug}-deep-research.md"
+    else:
+        # NOTE: the legacy deliverablePathFor() case slugifies the RAW
+        # trimmed topic here, not the sanitized safe_topic used in the
+        # prompt body below -- buildPrompt() computes its own safeTopic
+        # independently and never feeds it back into the deliverable path,
+        # so this mirrors that split exactly.
+        deliverable = f"inbox/deep-research/{date}-{slugify(topic)}-deep-research.md"
+
+    # topic_context is NEVER interpolated into search queries or the
+    # filename (only safe_topic is) -- it's evidence text from a topic note,
+    # not something safe to hand to yt-search's shell command line or treat
+    # as a trusted search string. Strip control chars only (incl. newlines)
+    # and cap length; used purely to enrich the synthesis instructions.
+    topic_context = re.sub(r"[\x00-\x1f\x7f]", "", args.get("topic_context") or "")[:3000].strip()
+    context_block = (
+        f"\n\nContext already gathered before this research was requested (from the topic "
+        f"note this run was fired against) — use it to inform the synthesis and avoid "
+        f"re-discovering what's already known, but do not treat it as a citable source or "
+        f"search target:\n{topic_context}"
+        if topic_context
+        else ""
+    )
+    draft_slug_frontmatter = (
+        f", `draft_slug: {json.dumps(safe_draft_slug)}`" if safe_draft_slug else ""
+    )
+    prompt = (
+        f"""{AUTONOMOUS_PREFIX}\n\nTask: produce a multi-source research brief on "{safe_topic}" and save it at exactly {deliverable}.\n\nFan out across four sources on this specific topic:\n\n1. YouTube — run this command and use its output for the YouTube section:\n"{ctx.settings.python_bin}" "{ctx.settings.yt_search_script}" "{safe_topic}" --count 10 --months 6\n2. Web — WebSearch "{safe_topic} 2026" (broad) and "{safe_topic} tutorial OR guide OR announcement" (targeted).\n3. X/Twitter — WebSearch "{safe_topic}" site:x.com and "{safe_topic}" site:twitter.com.\n4. GitHub — WebSearch "{safe_topic}" site:github.com and "{safe_topic} github repo OR library OR tool".\n\nDo NOT create a NotebookLM notebook or run any notebooklm CLI commands — this is a fast unattended scan, not the full interactive deep-research pipeline; keep it to WebSearch and the yt-search script above.\n\nSynthesize, don't just stack sections — look for: patterns across sources (the same point made independently on YouTube AND Twitter AND a blog is a strong signal), contradictions (one source says X is great, another says it's broken), gaps (an angle covered on one platform but not another), and velocity (is this rising or fading — compare dates and engagement).{context_block}\n\nStructure the note exactly, in this order:\n"# Deep Research: {safe_topic}" then "**Date:** {date}"\n"## Key Takeaways" — 3-5 bullets, the synthesized cross-source findings, not a per-source recap.\n"## YouTube Landscape" — markdown table "| Video | Creator | Views | Date |", plus key creators covering this topic and any content gaps.\n"## Web / Articles" — bullet per article with a 1-2 line summary and link.\n"## X / Twitter Pulse" — overall sentiment, notable voices, common questions, key threads with links.\n"## GitHub Activity" — bullet per notable repo (stars, what it does) plus overall community activity level.\n"## Content Opportunities" — gaps or angles worth pursuing, based on the cross-source synthesis above.\n\nYAML frontmatter: `date: {date}`, `skill: deep-research`, `topic: {json.dumps(topic)}`{draft_slug_frontmatter}, `tags: [research]`.\n\nEnd your reply with: SAVED {deliverable}"""
+    )
+    return BuiltPrompt(prompt=prompt, deliverable_path=deliverable)
+
+
 # skill id -> builder, merged into vaultos.runner.prompts.PROMPT_BUILDER_REGISTRY
 # (see prompts/__init__.py) -- mirrors batch1.py's own BATCH1_BUILDERS.
 BATCH2_BUILDERS: dict[str, PromptBuilder] = {
     "acquire": acquire,
     "daily-topic-digest": daily_topic_digest,
+    "deep-research": deep_research,
 }

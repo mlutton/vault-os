@@ -13,6 +13,7 @@ sibling `batch1.py`) is infrastructure like the rest of `vaultos.runner` --
 it never imports `vaultos.modules`.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -148,3 +149,19 @@ def id8(job_id: str) -> str:
     `job_id` is always a real uuid4 string in this codebase (never falsy),
     so the "x" fallback is kept only for parity, never actually hit."""
     return (job_id or "x")[:8]
+
+
+def slugify(s: str | None, max_len: int = 48) -> str:
+    """Matches the legacy daemon's `slugify(s, max = 48)` exactly: lowercase,
+    strip anything outside `[a-z0-9\\s-]`, trim, collapse whitespace runs to
+    single hyphens, truncate to `max_len`, and fall back to "untitled" if
+    that leaves nothing. Needed by batch 2's `deep-research` builder for its
+    no-draft-slug deliverable filename (ticket #26) -- kept here alongside
+    `id8` rather than in `batch2.py` since it's the same category of shared,
+    legacy-parity helper, not skill-specific logic."""
+    text = (s or "").lower()
+    text = re.sub(r"[^a-z0-9\s-]", "", text)
+    text = text.strip()
+    text = re.sub(r"\s+", "-", text)
+    text = text[:max_len]
+    return text or "untitled"

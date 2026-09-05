@@ -68,6 +68,7 @@ class Settings:
         self.assemble_acquire_report_cli = os.environ.get(
             "ASSEMBLE_ACQUIRE_REPORT_CLI", "the assemble-acquire-report CLI script"
         )
+        self.yt_search_script = os.environ.get("YT_SEARCH_SCRIPT", "the yt-search script")
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

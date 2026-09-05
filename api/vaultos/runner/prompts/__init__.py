@@ -19,7 +19,7 @@ article-refiner, research-persona-fanout, deep-research -- the same way, in
 its own `batch2.py`, built up one skill per commit.
 """
 
-from .base import AUTONOMOUS_PREFIX, BuilderContext, BuiltPrompt, PromptBuilder, id8, now_time, today_date, tomorrow_date
+from .base import AUTONOMOUS_PREFIX, BuilderContext, BuiltPrompt, PromptBuilder, id8, now_time, slugify, today_date, tomorrow_date
 from .batch1 import BATCH1_BUILDERS
 from .batch2 import BATCH2_BUILDERS
 
@@ -47,6 +47,7 @@ __all__ = [
     "get_builder",
     "id8",
     "now_time",
+    "slugify",
     "today_date",
     "tomorrow_date",
 ]

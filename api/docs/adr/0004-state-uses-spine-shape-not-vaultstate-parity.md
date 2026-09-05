@@ -1,8 +1,16 @@
 # `GET /state` uses the spine's own snake_case shape, not byte-for-byte `VaultState` parity
 
-The design spec (§5) frames `/state` as existing purely "so the HUD's cutover in sub-project 2 is a one-URL swap" — implying its JSON should match `Fable-Os-Web/lib/vault.ts`'s `VaultState` interface exactly (camelCase field names like `latestVideo`, `laneBriefs`, `isToday`). Every other spine endpoint uses snake_case throughout, so matching `VaultState` verbatim would make `/state` the one inconsistent endpoint in the API.
+**Status:** Accepted (historical) · **Date:** 2026-08-09
 
-Decided: `/state` follows the spine's normal snake_case convention, same as every other endpoint. It does not attempt to mirror `VaultState`'s exact field names or nesting. The "one-URL swap" becomes "one-URL swap plus a shape-translation layer," and that translation is sub-project 2's responsibility (most likely in Next.js's `/api/state` route, alongside where `laneHighlights` already gets merged in per the carve-out in §5) — not built as part of this stage.
+> The web HUD that consumed this endpoint is retired. `GET /state` is still served, in the shape this decision gave it, and the rule it set (one convention across every endpoint, even a temporary one) still applies.
+
+## Context
+
+The design spec (§5) frames `/state` as existing purely "so the HUD's cutover in sub-project 2 is a one-URL swap" — implying its JSON should match the legacy web HUD's `VaultState` interface exactly (camelCase field names like `latestVideo`, `laneBriefs`, `isToday`). Every other spine endpoint uses snake_case throughout, so matching `VaultState` verbatim would make `/state` the one inconsistent endpoint in the API.
+
+## Decided
+
+`/state` follows the spine's normal snake_case convention, same as every other endpoint. It does not attempt to mirror `VaultState`'s exact field names or nesting. The "one-URL swap" becomes "one-URL swap plus a shape-translation layer," and that translation is sub-project 2's responsibility (most likely in Next.js's `/api/state` route, alongside where `laneHighlights` already gets merged in per the carve-out in §5) — not built as part of this stage.
 
 ## Considered Options
 

@@ -1,8 +1,12 @@
 # Surface Policy — the Web is a Thin Client
 
+**Status:** Accepted · **Date:** 2026-09-05
+
+## Context
+
 The Web v1 surface is the first public HTTP client of the API spine. It establishes the pattern for what a surface can be: no domain logic, no data ownership, reads and writes only through published endpoints. This ADR locks that pattern so that future surfaces (and any third-party integrations) know the boundary.
 
-The Web v1 spec (see [docs/specs/2026-09-04-web-v1-design.md](../specs/2026-09-04-web-v1-design.md)) was grilled against this policy before build was dispatched. It is committed to writing because Web v1 is the first actual surface built under these constraints, and the constraints need to be visible as they ship.
+The Web v1 spec (see [docs/specs/2026-09-04-web-v1-design.md](../../../docs/specs/2026-09-04-web-v1-design.md)) was grilled against this policy before build was dispatched. It is committed to writing because Web v1 is the first actual surface built under these constraints, and the constraints need to be visible as they ship.
 
 ## Decided
 

@@ -1,12 +1,18 @@
 # Jobs can auto-dispatch a follow-up job on completion, via a small explicit CHAIN_MAP
 
+**Status:** Accepted · **Date:** 2026-08-11 · **Amended:** 2026-08-12
+
+## Context
+
 `acquire`'s headless prompt used to end its Step 4 by having the same Claude session read `daily-topic-digest`'s SKILL.md and keep going — one continuous session, one job record, one `system/runs/*.json` entry covering both stages. That kept `daily-topic-digest`'s analysis genuinely free (no re-reading `inbox/research/`/`sources/`/`topics/` from scratch, since the evidence was already in context) but meant the digest half of the work had no history entry, no run record, and no way to launch on its own — the 2026-08-11 UI pass wanted `daily-topic-digest` to have its own dashboard button and show up in Documents/Review Next independently of whether it happened to run inside an `acquire` session.
 
-The spine already has everything needed to create a job from inside another code path: `dispatch_skill(conn, registry, vault_root, skill_id, args, source)` (`vaultos/api/jobs.py`) is a plain function — validates against the registry, writes the queue intent file, creates the DB row — already shared between `POST /jobs` and the voice router's `/route`. `post_job_event()` (the endpoint that records a job's completion) already has `conn`/`registry`/`vault_root` in scope and already knows the job's final `status`/`skill` from `apply_event()`'s return value. The only missing piece was actually calling one from the other.
+The spine already has everything needed to create a job from inside another code path: `dispatch_skill(conn, registry, vault_root, skill_id, args, source)` (`vaultos/api/jobs.py`) is a plain function — validates against the registry, writes the queue intent file, creates the DB row — already shared between `POST /jobs` and the voice router that existed at the time (since removed from this tree). `post_job_event()` (the endpoint that records a job's completion) already has `conn`/`registry`/`vault_root` in scope and already knows the job's final `status`/`skill` from `apply_event()`'s return value. The only missing piece was actually calling one from the other.
 
-Decided: `post_job_event()` checks a small explicit `CHAIN_MAP = {"acquire": "daily-topic-digest"}` after recording a completion — if the completed job's `skill` is a key and `status == "ok"`, it calls `dispatch_skill()` directly with `source=f"chain:{job.skill}"`. No new endpoint, no new DB schema, no generic "chain configuration" system — one dict, one `if`. Only fires on success (a failed `acquire` run has nothing worth analyzing); only ever one hop (the map's values are never themselves keys, so there's no loop to guard against beyond that structural fact).
+## Decided
 
-`acquire`'s headless prompt (`runner.js`) dropped its old Step 4 same-session chaining entirely once this landed — the spine now owns the hand-off. The *interactive* `acquire` skill (direct chat invocation, `~/.claude/skills/acquire/SKILL.md`) keeps its inline chaining unchanged, since that path has no job/event system to hook into at all; this decision only applies to jobs dispatched through the spine.
+`post_job_event()` checks a small explicit `CHAIN_MAP = {"acquire": "daily-topic-digest"}` after recording a completion — if the completed job's `skill` is a key and `status == "ok"`, it calls `dispatch_skill()` directly with `source=f"chain:{job.skill}"`. No new endpoint, no new DB schema, no generic "chain configuration" system — one dict, one `if`. Only fires on success (a failed `acquire` run has nothing worth analyzing); only ever one hop (the map's values are never themselves keys, so there's no loop to guard against beyond that structural fact).
+
+`acquire`'s headless prompt (then in the legacy runner daemon, since ported to `vaultos/runner/prompts/`) dropped its old Step 4 same-session chaining entirely once this landed — the spine now owns the hand-off. The *interactive* `acquire` skill (direct chat invocation via its own SKILL.md) keeps its inline chaining unchanged, since that path has no job/event system to hook into at all; this decision only applies to jobs dispatched through the spine.
 
 ## Considered Options
 

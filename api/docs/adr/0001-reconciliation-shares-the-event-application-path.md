@@ -1,6 +1,14 @@
 # Reconciliation shares the live-event application path
 
-Stage 2 needs three mechanisms to keep the `jobs` table consistent with the vault's files: startup Backfill, the operator-triggered `reindex` CLI command, and periodic Orphan Detection. Rather than writing a dedicated bulk-reconciliation algorithm, all three funnel through one `reconcile_from_files(vault_root, conn)` function that walks `system/queue/` + `system/runs/` and applies each file's state via `apply_event()` — the exact same monotonic status-transition logic that live runner-posted events already use. Backfill calls it non-destructively against whatever DB state already exists; `reindex` truncates `jobs`/`job_events` first and then calls it against an empty DB; Orphan Detection's periodic sweep also applies its findings through `apply_event()` rather than a direct `UPDATE`.
+**Status:** Accepted · **Date:** 2026-08-09
+
+## Context
+
+Stage 2 needs three mechanisms to keep the `jobs` table consistent with the vault's files: startup Backfill, the operator-triggered `reindex` CLI command, and periodic Orphan Detection.
+
+## Decided
+
+Rather than writing a dedicated bulk-reconciliation algorithm, all three funnel through one `reconcile_from_files(vault_root, conn)` function that walks `system/queue/` + `system/runs/` and applies each file's state via `apply_event()` — the exact same monotonic status-transition logic that live runner-posted events already use. Backfill calls it non-destructively against whatever DB state already exists; `reindex` truncates `jobs`/`job_events` first and then calls it against an empty DB; Orphan Detection's periodic sweep also applies its findings through `apply_event()` rather than a direct `UPDATE`.
 
 This was chosen because the spec requires `reindex`'s output to be byte-identical to the incrementally-built database for the same inputs — achievable without drift only if reconciliation and live event handling are the same code, not two implementations of the same status-transition rules kept in sync by hand. Reconciliation also inherits `apply_event()`'s existing guarantees for free: idempotent replay, order-independence, and the `orphaned → {ok,error}` supersession rule.
 

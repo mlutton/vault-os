@@ -1,6 +1,14 @@
 # Token Burn is a local approximation, not an authoritative API reading
 
-`GET /metrics/token-burn` needed a source for `tokens_5h`/`cost_5h_usd`. This account authenticates via OAuth (a Claude Pro/Max subscription), and Anthropic's Admin/Cost API — the only programmatic source for authoritative usage/cost data — is available to API-key-billed organizations only, not subscription accounts. Claude Code also never persists Anthropic's rate-limit response headers to disk, so no window-boundary or reset-time information exists anywhere in this pipeline. The sibling `metrics-pull` skill already worked around this by scanning local Claude Code session transcript logs (`~/.claude/projects/*/*.jsonl`) and reconstructing cost via published per-model pricing, calibrated against a real `/usage` reading — the same approach community tools like `ccusage` use. The spine treats this as real usage data (it's derived from actual session activity, not synthesized), but explicitly not authoritative: the "trailing five hours" is recomputed fresh at each pull (`now - 5h`) with no tie to whatever window Anthropic actually enforces server-side. `projection` is therefore a linear extrapolation of the observed trend, not a countdown to a real window reset.
+**Status:** Accepted · **Date:** 2026-08-09
+
+## Context
+
+`GET /metrics/token-burn` needed a source for `tokens_5h`/`cost_5h_usd`. The operator's account authenticates via OAuth (a consumer subscription), and Anthropic's Admin/Cost API — the only programmatic source for authoritative usage/cost data — is available to API-key-billed organizations only, not subscription accounts. Claude Code also never persists Anthropic's rate-limit response headers to disk, so no window-boundary or reset-time information exists anywhere in this pipeline. The sibling `metrics-pull` skill already worked around this by scanning Claude Code's local session transcript logs and reconstructing cost via published per-model pricing, calibrated against a real `/usage` reading — the same approach community tools like `ccusage` use.
+
+## Decided
+
+The spine treats this as real usage data (it's derived from actual session activity, not synthesized), but explicitly not authoritative: the "trailing five hours" is recomputed fresh at each pull (`now - 5h`) with no tie to whatever window Anthropic actually enforces server-side. `projection` is therefore a linear extrapolation of the observed trend, not a countdown to a real window reset.
 
 ## Considered Options
 

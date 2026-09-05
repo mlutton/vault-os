@@ -12,6 +12,15 @@ else
   exit 1
 fi
 
+# Dependencies must be installed before any check can mean anything. Without
+# this guard the first check fails with a bare "tsc: not found", which reads as
+# a type error rather than a setup step -- and preflight is every parcel's
+# baseline, so the message has to be actionable on a fresh clone.
+if [ ! -d "$repo_root/web/node_modules" ]; then
+  echo "FAIL web — dependencies not installed; run: npm ci --prefix web"
+  exit 1
+fi
+
 for check in typecheck lint test build; do
   if ! "${npm_command[@]}" --prefix "$repo_root/web" run "$check"; then
     echo "FAIL web — $check"

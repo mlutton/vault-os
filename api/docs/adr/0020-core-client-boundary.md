@@ -1,8 +1,12 @@
 # The Core/Client Boundary
 
+**Status:** Accepted · **Date:** 2026-09-05
+
+## Context
+
 The platform consists of two layers: a **core** (the API spine) that owns all durable state and domain logic, and **clients** (web surfaces, integrations, scripts) that drive the core through published endpoints. The boundary between them is not a formality—it shapes what each layer is allowed to own, what each can mutate, and how state crosses between them.
 
-This decision was settled by the architecture of the system itself (documented in the [backend spine design](../specs/2026-09-04-backend-spine-design.md) and the Web v1 planning) and reflects what the platform has already built: a stateless API and surfaces that consume it. It is committed to writing as the Web v1 surface ships, so the boundary is explicit for every future surface and module arrival.
+This decision was settled by the architecture of the system itself (documented in the [backend spine design](../specs/2026-08-09-backend-spine-design.md) and the Web v1 planning) and reflects what the platform has already built: a stateless API and surfaces that consume it. It is committed to writing as the Web v1 surface ships, so the boundary is explicit for every future surface and module arrival.
 
 ## Decided
 

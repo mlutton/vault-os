@@ -1,12 +1,16 @@
 # Plan Items split into Postings and Budgets, materialized through Month-End Close
 
+**Status:** Accepted · **Date:** 2026-08-19
+
+## Context
+
 The Plan is meant to be a stable forecast template — but real life doesn't always
 cooperate with it: a bill gets paid late on purpose to avoid going negative, or a
 discretionary budget gets trimmed for a month to free up cash for something else.
 Neither of those is a change to *what the item normally is* — the next period should
 still forecast from the unedited Plan Item, not from whatever happened to be true last
-time. Grilled out in conversation (2026-08-19) from a live case: Rocket Mortgage's
-August payment slipped, and the user's own practice — confirmed as standard accounting
+time. Grilled out in conversation (2026-08-19) from a live case: a mortgage
+payment slipped, and the operator's own practice — confirmed as standard accounting
 practice, not an invented workaround — is to defer a struggling bill's expected date to
 align with an upcoming paycheck rather than let the projection lie about when the money
 will actually leave.
@@ -22,7 +26,7 @@ real account balance has already absorbed whatever actually happened. Modeling b
 one "Plan Item + Cadence" shape (the old `spread *` cadences) fit badly enough that it's
 worth the larger design below instead.
 
-## The model
+## Decided — the model
 
 **Plan Item splits into two Kinds**, not one shape with a type flag:
 

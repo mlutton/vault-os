@@ -132,19 +132,14 @@ here requires a network call to start, and nothing phones home.
 ### ADR index
 
 Read these before proposing a change — most "why isn't this simpler" questions
-are answered in one of them. Numbering has gaps — those slots were decisions about private-only features, removed from the public tree.
-
-**Platform & contracts** — [0022 module contract](docs/adr/0022-modules-are-packages-with-a-registration-contract.md)
-
-**Core & client boundary** — [0020 core/client boundary](docs/adr/0020-core-client-boundary.md) · [0021 surface policy](docs/adr/0021-surface-policy.md)
-
-**Jobs & reconciliation** — [0001 shared event-application path](docs/adr/0001-reconciliation-shares-the-event-application-path.md) · [0015 review-next is job documents only](docs/adr/0015-review-next-is-job-document-items-only.md) · [0016 auto-chaining via CHAIN_MAP](docs/adr/0016-jobs-can-auto-chain-a-followup-via-chain-map.md)
-
-**Finance** — [0017 finance data lives in the spine](docs/adr/0017-finance-data-lives-in-the-spine.md) · [0018 cadence is unit × frequency](docs/adr/0018-cadence-is-unit-times-frequency.md) · [0019 plan items split into postings and budgets](docs/adr/0019-plan-items-split-into-postings-and-budgets.md)
-
-**Metrics & integrations** — [0002 token burn is an approximation](docs/adr/0002-token-burn-is-a-local-approximation.md) · [0003 one uniform staleness threshold](docs/adr/0003-integrations-use-one-uniform-staleness-threshold.md) · [0009 calendar via periodic puller](docs/adr/0009-calendar-data-via-periodic-puller-not-live-fetch.md)
-
-**Surface boundary** — [0004 state uses spine shape](docs/adr/0004-state-uses-spine-shape-not-vaultstate-parity.md) · [0005 lane highlights stay in Next.js](docs/adr/0005-lanehighlights-stays-in-nextjs-deferred-past-hud-wiring.md) · [0007 the HUD hard-fails, no dual-source fallback](docs/adr/0007-hud-hard-fails-on-spine-unreachable-no-dual-source-fallback.md) · [0008 dashboard sunset before full parity](docs/adr/0008-agenticos-dashboard-sunset-before-full-parity.md) · [0010 document links use an in-app overlay](docs/adr/0010-hud-document-links-use-in-app-overlay-not-native-deep-links.md) · [0014 inbox brief parsed without a YAML library](docs/adr/0014-inbox-brief-frontmatter-parsed-without-a-yaml-library.md)
+are answered in one of them. The full index with a reading order and the
+patterns that recur across decisions is [`docs/adr/README.md`](docs/adr/README.md).
+Start with the three that define the platform:
+[0022 module contract](docs/adr/0022-modules-are-packages-with-a-registration-contract.md) ·
+[0020 core/client boundary](docs/adr/0020-core-client-boundary.md) ·
+[0021 surface policy](docs/adr/0021-surface-policy.md).
+Numbering is chronological and has gaps — those slots were decisions about
+private-only features, removed from the public tree.
 
 Design specs live in [`docs/specs/`](docs/specs/); the
 domain glossary is [`CONTEXT.md`](CONTEXT.md).
@@ -190,8 +185,10 @@ finds a match. Lifted values so far:
 
 ## Conventions
 
-- **ADRs** are Context / Decided / Considered options / Consequences. Anything
-  a future reader would ask "why on earth" about gets one.
+- **ADRs** are Context / Decided / Considered options / Consequences, with a
+  status and date line under the title. Anything a future reader would ask
+  "why on earth" about gets one; the reading order lives in
+  [`docs/adr/README.md`](docs/adr/README.md).
 - **`CONTEXT.md`** is the domain glossary, including explicit `_Avoid_:` notes
   for terms that get conflated.
 - **Tests** are `pytest`, hermetic, and never spend API credit.

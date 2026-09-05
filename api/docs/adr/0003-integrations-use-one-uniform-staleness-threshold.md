@@ -1,6 +1,12 @@
 # Integrations use one uniform staleness threshold for v1, not per-source cadence
 
+**Status:** Accepted · **Date:** 2026-08-09
+
+## Context
+
 `system/metrics/last-pull.json` only carries whatever sources happened to run in the most recent `metrics-pull` cycle — a source that's gone dark simply disappears from it rather than showing as broken. `GET /integrations` needed a definition of both "the full list of sources" and "when is a source stale."
+
+## Decided
 
 The endpoint's source list is the full historical union of sources ever observed (from `system/metrics/metrics.csv`'s `source` column, cross-referenced with the skills registry), not `last-pull.json`'s current keys — so a source that stops reporting shows up as Stale instead of vanishing. Staleness uses one fixed threshold (15 minutes) applied uniformly to every source, derived from the tightest known pull cadence: `metrics-pull`'s cron runs every 5 minutes (confirmed via `crontab -l`), so 15 minutes is three missed cycles — enough buffer to not flag a single skipped run, tight enough to catch a source that's actually broken.
 

@@ -1,8 +1,18 @@
 # `laneHighlights` stays in Next.js, deferred past sub-project 2
 
+**Status:** Accepted (historical) · **Date:** 2026-08-09
+
+> The web HUD is retired and this feature retired with it. The constraint the decision rested on, that the spine never calls a model itself, is superseded by ADR-0022, which makes model calls infrastructure the spine owns and injects.
+
+## Context
+
 The backend spine design (§5, §11) explicitly carried the question of `laneHighlights`'s
-permanent home forward to sub-project 2 ("HUD wiring") to decide. Decided: it stays exactly
-where it is today — an in-process Haiku call in `Fable-Os-Web/lib/laneHighlights.ts`,
+permanent home forward to sub-project 2 ("HUD wiring") to decide.
+
+## Decided
+
+It stays exactly
+where it is today — an in-process model call in the legacy web HUD's `lib/laneHighlights.ts`,
 triggered from `app/api/state/route.ts` after fetching the spine's data, never touching the
 spine itself. Sub-project 2 does not move it or drop it.
 

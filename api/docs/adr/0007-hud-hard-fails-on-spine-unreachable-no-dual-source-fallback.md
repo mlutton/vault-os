@@ -1,8 +1,18 @@
 # The HUD hard-fails when the spine is unreachable — no dual-source fallback
 
+**Status:** Accepted (historical) · **Date:** 2026-08-09
+
+> The web HUD is retired. The principle carries forward unchanged into ADR-0021: a surface fails loudly rather than keeping a second, silently divergent source of truth.
+
+## Context
+
 Today "the vault is unreachable" isn't a state the HUD can be in — its reads are local
 filesystem access. Wiring `app/api/state/route.ts` to the spine over HTTP introduces
-spine-down as a genuine new failure mode. Decided: on spine failure, the HUD surfaces a hard
+spine-down as a genuine new failure mode.
+
+## Decided
+
+On spine failure, the HUD surfaces a hard
 error / stale-data state. It does not fall back to reading vault files directly.
 
 ## Considered Options

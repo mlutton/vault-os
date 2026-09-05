@@ -1,8 +1,16 @@
 # Cadence is Unit × Frequency for dated Plan Items
 
+**Status:** Accepted · **Date:** 2026-08-18
+
+## Context
+
 Adding bi-weekly support surfaced that `monthly`/`quarterly`/`semiannual`/`annual` were
 already four separate hardcoded cases of the same formula — a Unit (`week` or `month`)
-times a Frequency (an interval: quarterly is month×3, annual is month×12). Rather than
+times a Frequency (an interval: quarterly is month×3, annual is month×12).
+
+## Decided
+
+Rather than
 bolt "every 2 weeks" on as a fifth flat cadence string, all four existing dated cadences
 plus the new weekly/biweekly ones are unified onto `cadence_unit` + `cadence_frequency`
 columns, with `occurrence_date()` computing every occurrence from one formula instead of
@@ -18,7 +26,7 @@ path is untouched by this change. The API computes a human label (`"Every 2 week
 `"Quarterly"`, ...) from `(cadence_unit, cadence_frequency)` server-side for display,
 rather than the `cadence` column doubling as both discriminator and label the way it used
 to. The value is deliberately `"dated"`, not `"recurring"` — `vaultos/finance/recurring.py`
-(ticket #10, Recurring Charges, still unbuilt) already owns "recurring" as a distinct
+(Recurring Charges, still unbuilt) already owns "recurring" as a distinct
 domain term for a detected pattern in Ledger history, not a deliberate Plan entry; reusing
 the word for this would collide two unrelated concepts in every log line and API payload.
 

@@ -1,10 +1,16 @@
 # Modules are in-process packages behind a registration contract, not services
 
-ADR-0017 put finance's data, migrations, and matching engine in this repo, and finance has since grown to dominate it: 22 of 45 endpoints, 11 of 14 migrations, and a 1,537-line `finance/store.py`. Nothing about that growth was wrong, but it happened without a stated contract, so "what a module is allowed to own" has never been written down. Meanwhile the platform direction (see the core-and-client boundary ADR) commits to more domains arriving — commitment tracking next, and the finance skeleton is explicitly the template — and to modules eventually being installable as separate packages so the platform can be adopted without adopting one operator's finance schema.
+**Status:** Accepted · **Date:** 2026-09-04
+
+## Context
+
+ADR-0017 put finance's data, migrations, and matching engine in this repo, and finance has since grown to dominate it: 22 of 45 endpoints, 11 of 14 migrations, and a 1,537-line `finance/store.py`. Nothing about that growth was wrong, but it happened without a stated contract, so "what a module is allowed to own" has never been written down. Meanwhile the platform direction (see [ADR-0020](0020-core-client-boundary.md)) commits to more domains arriving — commitment tracking next, and the finance skeleton is explicitly the template — and to modules eventually being installable as separate packages so the platform can be adopted without adopting one operator's finance schema.
 
 Two facts make this urgent rather than tidy. First, `finance/` currently reaches into the same connection, the same global migration sequence, and the same `vaultos/api/` namespace as everything else, with no boundary a reviewer could point at. Second, the registry's `engine` field is already a warning shot: it carries real values (`claude` on 15 skills, `script` on one) and is faithfully stored on the job row and echoed by `GET /skills` and `GET /jobs` — but nothing in this repo ever branches on it. The runner does have a genuine two-engine branch; it keys off its own local `SCRIPT_SKILLS` constant instead. So we already have one contract-shaped field that duplicates a dispatch decision rather than driving it, and no rule that would have caught it.
 
-Decided: a **module** is a Python package under `vaultos/modules/<name>/` that exposes exactly one entry point, `register(app, ctx)`, and owns four things and no others:
+## Decided
+
+A **module** is a Python package under `vaultos/modules/<name>/` that exposes exactly one entry point, `register(app, ctx)`, and owns four things and no others:
 
 1. **Its endpoints.** It builds its own `APIRouter` and returns it from `register()`. `main.py` stops naming modules individually; it discovers them.
 2. **Its schemas.** Every table a module creates is prefixed with the module name (`finance_txn`, not `txn`). A module never writes to another module's tables — it reads through that module's Python interface or not at all.
@@ -21,7 +27,7 @@ The contract is enforced by a test, not by good intentions: a conformance test a
 
 - **Leave the current structure and just split `api/finance.py` into a package.** This is the file-level cleanup already recommended on its own merits, and it is strictly less work. Rejected as the whole answer: it reorganizes one module's files without creating a boundary any second module could be held to, which means commitment tracking would arrive and make the same undocumented choices finance made. The split still happens — it is now the first step *of* this contract rather than a substitute for it.
 
-- **Separate services per domain, communicating over HTTP.** Genuinely enforces the boundary; nothing can reach into another module's tables because there are no shared tables. Rejected for the same reason ADR-0011 rejected a standalone router service: it buys isolation at the cost of a network hop, a second deployment, and cross-process transactions, on a single-operator system running on one box — and the portability thesis wants *fewer* moving parts on a locked-down laptop, not more. In-process with a strict interface gets most of the boundary at none of the operational cost.
+- **Separate services per domain, communicating over HTTP.** Genuinely enforces the boundary; nothing can reach into another module's tables because there are no shared tables. Rejected for the same reason ADR-0011 (a private-only decision, withheld from this tree) rejected a standalone router service: it buys isolation at the cost of a network hop, a second deployment, and cross-process transactions, on a single-operator system running on one box — and the portability thesis wants *fewer* moving parts on a locked-down laptop, not more. In-process with a strict interface gets most of the boundary at none of the operational cost.
 
 - **A plugin architecture from the start — `vaultos.modules` entry points, modules pip-installable today.** This is the eventual goal and the publishability plan names it. Rejected as the starting point: there is exactly one module, so any interface designed now would be fitted to finance's peculiarities and would need breaking twice — once when commitment tracking reveals what is actually common, once when a third domain does. This ADR deliberately builds the *shape* an entry-point group needs (self-registration, owned migrations, no cross-module imports) without paying for the indirection yet. Adopting entry points later becomes a change to discovery only.
 

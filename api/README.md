@@ -8,7 +8,7 @@ landed on disk, and serves read-models to whatever surface you point at it.
 Today it also carries a personal-finance module — the first real application
 built on it.
 
-**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 925
+**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 957
 tests, and its interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not as something to depend on yet.
 
@@ -43,7 +43,7 @@ is the seam currently being built. That gap is known, named, and being closed
 |---|---|
 | **42 endpoints** | 11 platform routers in `vaultos/api/` + the finance module |
 | **22 of them** | the finance module |
-| **925 tests** | `pytest`, 73 files, no network, no API spend |
+| **957 tests** | `pytest`, 75 files, no network, no API spend |
 | **16 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
 | **14 migrations** | plain SQL, `PRAGMA user_version` (`vaultos/db/migrations/`) |
 | **Dependencies** | FastAPI, uvicorn, python-multipart, httpx, icalendar, recurring-ical-events. That's the list. |
@@ -89,7 +89,7 @@ inventing a default vault. Optional: `VAULTOS_DB` (default `data/vaultos.db`),
 `VAULTOS_PORT`, `HUD_TZ` and `CALENDAR_ICAL_URL`.
 
 ```bash
-pytest                                   # 925 tests, ~30s, no network
+pytest                                   # 957 tests, ~30s, no network
 vaultos reindex                          # rebuild the DB from vault files
 ```
 

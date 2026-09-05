@@ -77,6 +77,15 @@ def test_acquire(ctx):
     assert '{"todayDate": "' in built.prompt
     assert "{lane, candidates, kept}" in built.prompt
     assert "{{" not in built.prompt and "}}" not in built.prompt
+    # Fix round 1 (operator decision): the legacy parenthetical named a
+    # private-repo internal ("Vault-Os-Api's jobs.py CHAIN_MAP") -- replaced
+    # with a generic equivalent, keeping the "don't chain into it yourself"
+    # instruction. Assert the neutral wording landed and the private name
+    # didn't survive.
+    assert "queued automatically once you finish -- see the platform's own job chaining" in built.prompt
+    assert "don't chain into it yourself here" in built.prompt
+    assert "Vault-Os-Api" not in built.prompt
+    assert "CHAIN_MAP" not in built.prompt
     assert f"SAVED {built.deliverable_path}" in built.prompt
 
 
@@ -85,6 +94,23 @@ def test_acquire_ignores_args_no_required_arg_gate(ctx):
     # garbage) still produces a built prompt.
     built = PROMPT_BUILDER_REGISTRY["acquire"]({"unexpected": "value"}, ctx)
     assert built is not None
+
+
+def test_env_var_override_of_a_batch2_setting_reaches_the_built_prompt(monkeypatch, tmp_path):
+    # Fix round 1: nothing proved the env-var -> Settings -> prompt path
+    # actually works end to end for a batch-2 field, only that the
+    # PATH-FREE *default* shows up. Set a real-looking override and confirm
+    # it's what lands in the built prompt, not the default.
+    monkeypatch.setenv("VAULT_ROOT", str(tmp_path))
+    monkeypatch.setenv("RSS_POLL_SCRIPT", "/opt/deploy/rss-feed-poll/poll.py")
+    settings = Settings()
+    ctx = BuilderContext(vault_root=tmp_path, settings=settings, job_id="0123456789abcdef")
+
+    built = PROMPT_BUILDER_REGISTRY["acquire"]({}, ctx)
+
+    assert built is not None
+    assert "/opt/deploy/rss-feed-poll/poll.py" in built.prompt
+    assert "the RSS poll script" not in built.prompt  # the default, not the override
 
 
 def test_get_builder_returns_a_callable_for_daily_topic_digest():
@@ -98,7 +124,14 @@ def test_daily_topic_digest(ctx):
     assert built.deliverable_path == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "Step 1 -- gather everything not yet attached to a topic" in built.prompt
+    # Fix round 1: Steps 2/3/5/6 were unasserted -- a validator proved this
+    # hollow by deleting them from the built prompt with every existing
+    # assertion still green. One load-bearing marker per step now.
+    assert "Step 2 -- look for genuine signal, not just volume" in built.prompt
+    assert "Step 3 -- dedup against existing topics by meaning, not filename" in built.prompt
     assert "Step 4 -- check persona fit, inline, no fan-out" in built.prompt
+    assert "Step 5 -- write topic notes" in built.prompt
+    assert "Step 6 -- write the report at exactly" in built.prompt
     assert "Step 7 -- your final reply must present the ranked list conversationally" in built.prompt
     assert f"first_seen: {date}" in built.prompt
     assert f"date: {date}" in built.prompt
@@ -135,6 +168,14 @@ def test_deep_research_no_draft_slug(ctx):
     assert f'"{topic}"' in built.prompt  # safe_topic == topic here (no unsafe chars)
     assert ctx.settings.python_bin in built.prompt
     assert ctx.settings.yt_search_script in built.prompt
+    # Fix round 1: the WebSearch fan-out sources (web/X/GitHub) were
+    # unasserted -- only the YouTube leg (via yt_search_script) and section
+    # headings were covered. One marker per fan-out source now.
+    assert "2. Web — WebSearch" in built.prompt
+    assert "3. X/Twitter — WebSearch" in built.prompt
+    assert "4. GitHub — WebSearch" in built.prompt
+    assert "site:x.com" in built.prompt
+    assert "site:github.com" in built.prompt
     assert "## Key Takeaways" in built.prompt
     assert "## GitHub Activity" in built.prompt
     assert f"topic: {json.dumps(topic)}" in built.prompt
@@ -235,6 +276,13 @@ def test_research_persona_fanout(ctx):
     assert 'test -f "inbox/deep-research/my-piece-deep-research.md" && echo EXISTS || echo MISSING' in built.prompt
     assert ctx.settings.cache_cli in built.prompt
     assert ctx.settings.assemble_review_script in built.prompt
+    # Fix round 1: Step 3 (load active personas) was never asserted -- this
+    # step has real incident history (see Step 1's own 2026-08-15 note in
+    # the prompt), so it needs a marker like every other step.
+    assert "Step 3 -- load active personas" in built.prompt
+    assert "writing/personas/" in built.prompt
+    assert "`active: true`" in built.prompt
+    assert "don't invent personas" in built.prompt
     run_stamp = f"{date} {now_time(ctx.settings)}"
     assert f"### Research Persona Review ({run_stamp})" in built.prompt
     # Literal-brace JSON example (Part 2's persist payload) -- confirms the

@@ -231,3 +231,26 @@ def test_research_persona_fanout_missing_article_path_fails_fast(client, tmp_vau
         "/jobs", json={"skill": "research-persona-fanout", "args": {"article_path": ""}}
     )
     assert res.status_code == 400
+
+
+def test_deep_research_blank_after_sanitization_topic_errors_via_runner(client, tmp_vault, monkeypatch):
+    # Fix round 1: distinct from the missing-arg 400 path above. A topic
+    # that's non-empty (passes the API's own `required and not value` gate,
+    # so job creation succeeds) but sanitizes down to nothing at the
+    # BUILDER level (quotes/backticks stripped) must still surface as a
+    # terminal job error via the runner -- not a silently-accepted job with
+    # a garbage prompt, and not a 400 (the API layer has no way to know the
+    # builder will reject it).
+    res = client.post("/jobs", json={"skill": "deep-research", "args": {"topic": '"`"`'}})
+    assert res.status_code == 201, res.text
+    job_id = res.json()["id"]
+
+    from vaultos.main import app
+
+    runner = Runner(app.state.conn, app.state.registry, app.state.settings)
+    assert runner.run_once() is True
+    detail = client.get(f"/jobs/{job_id}").json()
+
+    assert detail["status"] == "error"
+    assert "deep-research" in detail["summary"]
+    assert "prompt builder rejected" in detail["summary"]

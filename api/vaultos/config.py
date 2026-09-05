@@ -60,6 +60,9 @@ class Settings:
         # the prompt to literally name a real script path sets the matching
         # env var. This slice is what `acquire` needs; more fields land
         # alongside the skills that need them.
+        # No Windows branch here (legacy daemon defaulted to "python" on
+        # win32, "python3" elsewhere) -- this backend is Linux-only, so that
+        # fork was deliberately dropped rather than ported.
         self.python_bin = os.environ.get("PYTHON_BIN", "python3")
         self.rss_poll_script = os.environ.get("RSS_POLL_SCRIPT", "the RSS poll script")
         self.websearch_cached_fetch_workflow = os.environ.get(

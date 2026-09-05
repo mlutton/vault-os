@@ -22,6 +22,7 @@ from vaultos.runner.prompts import (
     get_builder,
     id8,
     now_time,
+    slugify,
     today_date,
     tomorrow_date,
 )
@@ -127,6 +128,36 @@ def test_id8_truncates_to_eight_chars():
     assert id8("0123456789abcdef") == "01234567"
     assert id8("") == "x"
     assert id8(None) == "x"
+
+
+# -- slugify (fix round 1, ticket #26 -- added alongside deep-research, ----
+# -- gets its own direct coverage here since it lives in base.py) ---------
+
+
+def test_slugify_empty_falls_back_to_untitled():
+    assert slugify("") == "untitled"
+    assert slugify(None) == "untitled"
+    assert slugify("   ") == "untitled"
+
+
+def test_slugify_punctuation_only_falls_back_to_untitled():
+    # Nothing left after stripping [^a-z0-9\s-] -- same "untitled" fallback
+    # as an empty input.
+    assert slugify("!!!???...") == "untitled"
+
+
+def test_slugify_lowercases_and_collapses_whitespace_to_hyphens():
+    assert slugify("AI Agent   Orchestration") == "ai-agent-orchestration"
+
+
+def test_slugify_truncates_to_max_len():
+    long_title = "a" * 60
+    result = slugify(long_title)
+    assert len(result) == 48
+    assert result == "a" * 48
+
+    result_custom = slugify(long_title, max_len=10)
+    assert result_custom == "a" * 10
 
 
 # -- timezone correctness (fix round 1, 2026-09-05) -----------------------

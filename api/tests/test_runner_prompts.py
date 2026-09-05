@@ -38,6 +38,17 @@ BATCH1_SKILL_IDS = [
     "draft-persona-fanout",
 ]
 
+# Batch 2 (ticket #26), now fully registered -- its own per-skill marker
+# tests live in test_runner_prompts_batch2.py; this list exists here only
+# for the registry-boundary checks below (full-enumeration + excluded-set).
+BATCH2_SKILL_IDS = [
+    "acquire",
+    "daily-topic-digest",
+    "deep-research",
+    "article-refiner",
+    "research-persona-fanout",
+]
+
 
 @pytest.fixture
 def settings(monkeypatch, tmp_path):
@@ -69,19 +80,26 @@ def test_get_builder_returns_none_for_a_skill_with_no_builder():
     assert get_builder("some-future-skill-not-yet-ported") is None
 
 
-def test_registry_keys_match_the_batch1_enumeration():
-    assert set(PROMPT_BUILDER_REGISTRY.keys()) == set(BATCH1_SKILL_IDS)
+def test_registry_keys_match_the_batch1_plus_batch2_enumeration():
+    # Batch 2 (ticket #26) is now fully registered alongside batch 1 --
+    # updated from the batch-1-only exact-match this test started as, now
+    # that both batches ship in this repo.
+    assert set(PROMPT_BUILDER_REGISTRY.keys()) == set(BATCH1_SKILL_IDS) | set(BATCH2_SKILL_IDS)
 
 
-def test_batch2_and_excluded_skills_have_no_builder():
-    # Explicit negative coverage for the enumeration boundary: batch 2 (a
-    # separate ticket, #26) and the never-ported/no-prompt skills must NOT
-    # show up here just because someone adds a case to the wrong batch file.
-    for skill_id in [
-        "acquire", "daily-topic-digest", "article-refiner",
-        "research-persona-fanout", "deep-research", "daily-digest",
-        "voice-ask", "rss-feed-poll",
-    ]:
+def test_get_builder_returns_a_callable_for_every_batch2_skill():
+    for skill_id in BATCH2_SKILL_IDS:
+        assert callable(get_builder(skill_id)), skill_id
+
+
+def test_excluded_skills_have_no_builder():
+    # Explicit negative coverage for the enumeration boundary: the
+    # never-ported/no-prompt skills must NOT show up here just because
+    # someone adds a case to the wrong batch file. Batch 2's own five skills
+    # moved OUT of this negative list once they were registered above --
+    # see test_registry_keys_match_the_batch1_plus_batch2_enumeration and
+    # test_get_builder_returns_a_callable_for_every_batch2_skill instead.
+    for skill_id in ["daily-digest", "voice-ask", "rss-feed-poll"]:
         assert get_builder(skill_id) is None, skill_id
 
 

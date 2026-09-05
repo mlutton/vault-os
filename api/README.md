@@ -157,23 +157,34 @@ registry** (`vaultos/runner/prompts/`) instead of `engine_config`: skill id →
 `builder(job_args, BuilderContext) -> BuiltPrompt | None`. This is how the
 legacy Node daemon's (`Fable-Os-Web/runner/runner.js`, a private repo) inline
 per-skill prompts move into this codebase — ported verbatim, wording and
-guard rails unchanged, batch by batch (batch 1: `plan-today`,
+guard rails unchanged, batch by batch. Batch 1: `plan-today`,
 `plan-tomorrow`, `vault-cleanup`, `inbox-brief`, `metrics-pull`,
 `research-into-draft`, `wiki-ingest`, `visual-asset-proposal`,
-`draft-persona-fanout` — the operational/simple set; batch 2, the heavy
-research/writing pipeline, is a separate ticket). A skill with no registered
-builder keeps prompting from `engine_config`'s own template or the job's
-`prompt` arg, unchanged.
+`draft-persona-fanout` — the operational/simple set. Batch 2: `acquire`,
+`daily-topic-digest`, `deep-research`, `article-refiner`,
+`research-persona-fanout` — the heavy research/writing pipeline. Fourteen
+skills total now come from the registry; a skill with no registered builder
+keeps prompting from `engine_config`'s own template or the job's `prompt`
+arg, unchanged.
 
 Every absolute path a ported prompt embedded lifts into `Settings` at build
 time, so committed prompt strings carry no personal paths — enforced
 repo-wide by CI's `scrub-gate` job (`.github/workflows/ci.yml`), which greps
 the whole tree for the operator's home directory and fails the build if it
-finds a match. Batch 1 lifted exactly one such value:
+finds a match. Lifted values so far:
 
 | Setting | Env var | Default | What it was |
 |---|---|---|---|
 | `Settings.wiki_ingest_skill_doc_hint` | `WIKI_INGEST_SKILL_DOC_HINT` | `"the wiki-ingest skill's own SKILL.md"` | The legacy `wiki-ingest` prompt's hardcoded `~/.claude/skills/wiki-ingest/SKILL.md` doc pointer — a real, personal, home-relative path. The default is a path-free description; set the env var if a deployment wants the prompt to name a real path. |
+| `Settings.python_bin` | `PYTHON_BIN` | `"python3"` | The interpreter the legacy daemon shelled out to its helper scripts with (RSS poll, yt-search, assemble-acquire-report, cache CLI, assemble-review) — not itself a personal path, lifted for the same env-var-configurability the legacy source already gave it. |
+| `Settings.rss_poll_script` | `RSS_POLL_SCRIPT` | `"the RSS poll script"` | `acquire`'s Step 1 fetch, the legacy daemon's absolute path to `rss-feed-poll`'s `poll.py`. |
+| `Settings.websearch_cached_fetch_workflow` | `WEBSEARCH_CACHED_FETCH_WORKFLOW` | `"the websearch-cached-fetch workflow script"` | `acquire`'s per-lane fetch+synthesize Workflow dispatch, the legacy daemon's absolute path to `acquisition-cache`'s `websearch-cached-fetch.workflow.js`. |
+| `Settings.assemble_acquire_report_cli` | `ASSEMBLE_ACQUIRE_REPORT_CLI` | `"the assemble-acquire-report CLI script"` | `acquire`'s Step 2 report assembly, the legacy daemon's absolute path to `acquisition-cache`'s `assemble_acquire_report_cli.py`. |
+| `Settings.yt_search_script` | `YT_SEARCH_SCRIPT` | `"the yt-search script"` | `deep-research`'s YouTube fan-out, the legacy daemon's absolute path to `yt-search`'s `search.py`. |
+| `Settings.article_refiner_skill_doc_hint` | `ARTICLE_REFINER_SKILL_DOC_HINT` | `"the article-refiner skill's own SKILL.md"` | Same doc-pointer pattern as `wiki_ingest_skill_doc_hint` — the legacy `article-refiner` prompt's hardcoded `~/.claude/skills/article-refiner/SKILL.md`. |
+| `Settings.cache_cli` | `CACHE_CLI` | `"the cache CLI script"` | `research-persona-fanout`'s per-persona cache check/persist calls, the legacy daemon's absolute path to `acquisition-cache`'s `cache_cli.py`. |
+| `Settings.assemble_review_script` | `ASSEMBLE_REVIEW_SCRIPT` | `"the assemble-review script"` | `research-persona-fanout`'s Step 5 verdict assembly, the legacy daemon's absolute path to `research-persona-fanout`'s own `assemble_review.py`. |
+| `Settings.research_persona_fanout_skill_doc_hint` | `RESEARCH_PERSONA_FANOUT_SKILL_DOC_HINT` | `"the research-persona-fanout skill's own SKILL.md"` | Same doc-pointer pattern as `wiki_ingest_skill_doc_hint` — the legacy `research-persona-fanout` prompt's hardcoded `~/.claude/skills/research-persona-fanout/SKILL.md`. |
 
 ## Conventions
 

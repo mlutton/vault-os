@@ -41,7 +41,7 @@
           "engines",
           "vendors"
         ],
-        "note": "Per-skill engine routing with exit-0 verification \u2014 the model behind a skill is a one-line change."
+        "note": "Per-skill engine routing with exit-0 verification — the model behind a skill is a one-line change."
       }
     ]
   },
@@ -64,7 +64,7 @@
       "id": "brain",
       "type": "database",
       "label": "The Brain",
-      "sublabel": "Obsidian \u00b7 markdown",
+      "sublabel": "Obsidian · markdown",
       "pos": [
         190,
         330
@@ -78,7 +78,7 @@
       "id": "plugin",
       "type": "frontend",
       "label": "Obsidian Plugin",
-      "sublabel": "the brain's door \u2014 planned",
+      "sublabel": "the brain's door — planned",
       "pos": [
         460,
         330
@@ -92,7 +92,7 @@
       "id": "web",
       "type": "frontend",
       "label": "Web Surface",
-      "sublabel": "read-models \u2014 planned",
+      "sublabel": "read-models — planned",
       "pos": [
         460,
         150
@@ -106,7 +106,7 @@
       "id": "api",
       "type": "backend",
       "label": "Spine API",
-      "sublabel": "FastAPI + modules \u2014 built",
+      "sublabel": "FastAPI + modules — built",
       "pos": [
         740,
         330
@@ -134,7 +134,7 @@
       "id": "state",
       "type": "database",
       "label": "State Root",
-      "sublabel": "registry \u00b7 runs \u00b7 metrics",
+      "sublabel": "registry · runs · metrics",
       "pos": [
         740,
         520
@@ -148,7 +148,7 @@
       "id": "runner",
       "type": "backend",
       "label": "vaultos.runner",
-      "sublabel": "planned \u2014 check + retry",
+      "sublabel": "core built · script engine",
       "pos": [
         1030,
         330
@@ -162,7 +162,7 @@
       "id": "engines",
       "type": "messagebus",
       "label": "Engine Registry",
-      "sublabel": "claude-cli \u00b7 script \u00b7 cursor-cli",
+      "sublabel": "claude-cli · script · cursor-cli",
       "pos": [
         1000,
         520
@@ -190,7 +190,7 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "One box, local-first \u2014 all state on local disk",
+      "label": "One box, local-first — all state on local disk",
       "wraps": [
         "brain",
         "plugin",
@@ -250,7 +250,7 @@
       "id": "api-runner",
       "from": "api",
       "to": "runner",
-      "label": "jobs \u2014 service-canonical",
+      "label": "jobs — service-canonical",
       "variant": "emphasis"
     },
     {
@@ -273,7 +273,7 @@
       "id": "api-brain-seam",
       "from": "api",
       "to": "brain",
-      "label": "vault seam \u2014 briefs in, workflows read",
+      "label": "vault seam — briefs in, workflows read",
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "bottom"
@@ -282,7 +282,7 @@
       "id": "api-vendors",
       "from": "api",
       "to": "vendors",
-      "label": "ctx.llm \u2014 structured output",
+      "label": "ctx.llm — structured output",
       "variant": "dashed",
       "fromSide": "top",
       "toSide": "left"
@@ -291,7 +291,7 @@
       "id": "engines-vendors",
       "from": "engines",
       "to": "vendors",
-      "label": "vendor CLIs \u2014 subscription auth",
+      "label": "vendor CLIs — subscription auth",
       "fromSide": "right",
       "toSide": "bottom"
     }
@@ -301,7 +301,7 @@
       "dot": "cyan",
       "title": "The thesis",
       "items": [
-        "The infrastructure is the portable asset \u2014 the data stays where it lives",
+        "The infrastructure is the portable asset — the data stays where it lives",
         "Plain markdown is the system of record; SQLite can be thrown away and rebuilt",
         "No personal-login credential paths: API keys via env, CLIs the operator installs"
       ]
@@ -310,16 +310,15 @@
       "dot": "emerald",
       "title": "Built vs planned",
       "items": [
-        "Built: the spine \u2014 jobs, module contract (ADR-0022), finance module, 791 tests",
-        "Building: the LLM provider seam (ctx.llm)",
-        "Planned: runner + engine registry, Obsidian plugin, web surface"
+        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core, 827 tests",
+        "Planned: claude/cursor engines + check-retry, Obsidian plugin, web surface"
       ]
     },
     {
       "dot": "violet",
       "title": "Execution model",
       "items": [
-        "Per-skill engine routing \u2014 the model behind a skill is a one-line change",
+        "Per-skill engine routing — the model behind a skill is a one-line change",
         "Workers' success claims are ignored: a check command's exit 0 decides, one retry with failure context",
         "Every attempt emits eval events: engine, duration, outcome"
       ]

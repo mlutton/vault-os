@@ -1,12 +1,12 @@
-# CLAUDE.md — api/
+# AGENTS.md — api/
 
-Instructions for Claude Code working inside `api/`.
+Instructions for coding-agent CLIs working inside `api/` that discover
+repository instructions via `AGENTS.md`.
 
-@../docs/agents/shared.md
-
-The import above pulls in this repository's actual instructions — its
-`## api/` section covers this component specifically. The block below is
-repeated directly so it is visible even if the import above is ever skipped.
+This repository's actual instructions live in `docs/agents/shared.md` (one
+level up from this directory) — its `## api/` section covers this component
+specifically. This file exists only so vendors that read `AGENTS.md` find
+them.
 
 <!-- shared-invariants:start -->
 This block is the minimum every coding agent must read, even if nothing else in this repository is read.

@@ -44,6 +44,7 @@ worked example of the architecture, not something to depend on yet.
 - [`api/README.md`](api/README.md) — what's actually built, quickstart, the ADR index.
 - [`api/docs/adr/`](api/docs/adr/) — every non-obvious decision.
 - [`api/docs/specs/`](api/docs/specs/) — the design specs the code was built from.
+- [`docs/agents/shared.md`](docs/agents/shared.md) — the instructions every coding agent reads before working in this repository.
 - [`docs/architecture/vaultos-architecture.html`](https://mlutton.github.io/vault-os/architecture/vaultos-architecture.html) — the interactive system diagram, with [`vaultos-job-execution.html`](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html) covering the job-execution flow (source specs sit beside them in the repo).
 
 ## License

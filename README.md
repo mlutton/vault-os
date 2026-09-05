@@ -28,9 +28,10 @@ views, theme toggle, and exports (open the HTML raw in a browser).
 
 [![VaultOS job execution](docs/architecture/img/job-execution-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
 
-The project also builds itself through a multi-runtime agent process —
-dispatch packets, executor lanes, a verification ladder, and a
-human-held merge:
+The third shows what you'll actually see in this repo as it grows: issues
+stating intent, PRs carrying their own evidence, CI gates, agent review
+comments, and a human holding the merge — the agent coordination behind
+it stays off-stage by design:
 
 [![VaultOS dev orchestration](docs/architecture/img/dev-orchestration-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-dev-orchestration.html)
 

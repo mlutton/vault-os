@@ -2,222 +2,224 @@
   "schema_version": 2,
   "diagram_type": "workflow",
   "meta": {
-    "title": "VaultOS Dev Orchestration",
+    "title": "How VaultOS Gets Built",
     "output": "vaultos-dev-orchestration.html",
     "quality_profile": "showcase",
     "views": [
       {
-        "id": "full-cycle",
-        "label": "One build cycle",
-        "focus": ["ticket", "claim", "build", "triage", "pr", "val", "merge", "close"],
-        "note": "A ticket from the frontier to a merged PR and a mirrored decision record."
+        "id": "visitor",
+        "label": "What you can see",
+        "focus": ["issue", "branch", "pr", "ci", "review", "merge", "closing"],
+        "note": "Every artifact on this path is public: the issue, the branch, the PR's evidence table, the checks, the review comments, the merge."
       },
       {
-        "id": "ladder",
-        "label": "The verification ladder",
-        "focus": ["triage", "pr", "val"],
-        "note": "Cheapest layer first: deterministic CI, then a cheap-model smoke pass, then the full independent audit."
+        "id": "gates",
+        "label": "The gates",
+        "focus": ["ci", "review", "merge"],
+        "note": "Deterministic checks first, an independent agent audit second, a human merge last — nothing lands on green vibes."
       },
       {
-        "id": "two-trackers",
-        "label": "Two trackers, two jobs",
-        "focus": ["ticket", "claim", "pr", "merge", "close"],
-        "note": "Candid orchestration stays private; the public repo carries only curated evidence. Links run private to public, never back."
+        "id": "curtain",
+        "label": "Behind the curtain",
+        "focus": ["dispatch", "agents"],
+        "note": "Agent lanes are briefed and coordinated on a private tracker — by design, only curated evidence reaches this repo."
       }
     ]
   },
   "lanes": [
-    { "id": "private", "label": "Private orchestration" },
-    { "id": "exec", "label": "Executor lane" },
-    { "id": "verify", "label": "Verification agents", "variant": "exception" },
-    { "id": "public", "label": "Public repo" }
+    { "id": "issues", "label": "Issue tracker" },
+    { "id": "prlane", "label": "Pull request" },
+    { "id": "repo", "label": "Repository" },
+    { "id": "curtain", "label": "Behind the curtain", "variant": "exception" }
   ],
   "phases": [
-    { "id": "dispatch", "label": "Dispatch", "fromCol": 0, "toCol": 1 },
-    { "id": "buildphase", "label": "Build", "fromCol": 2, "toCol": 2 },
-    { "id": "verifyphase", "label": "Verify", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "intent", "label": "Intent", "fromCol": 0, "toCol": 0 },
+    { "id": "buildphase", "label": "Build", "fromCol": 1, "toCol": 2 },
+    { "id": "gates", "label": "Gates", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
     { "id": "land", "label": "Land", "fromCol": 5, "toCol": 5 }
   ],
-  "groups": [
-    {
-      "id": "curated",
-      "label": "Outsider-safe surface",
-      "lane": "public",
-      "fromCol": 4,
-      "toCol": 5,
-      "variant": "security"
-    }
-  ],
-  "mainPath": ["ticket", "claim", "build", "triage", "pr", "val", "merge", "close"],
+  "groups": [],
+  "mainPath": ["issue", "branch", "pr", "ci", "review", "merge", "closing"],
   "semanticChecks": {
-    "allowedRoots": ["ticket"],
-    "allowedTerminals": ["close"],
+    "allowedRoots": ["issue", "dispatch"],
+    "allowedTerminals": ["closing"],
     "requiredPaths": [
-      { "from": "ticket", "to": "close" },
-      { "from": "val", "to": "build" }
+      { "from": "issue", "to": "closing" },
+      { "from": "review", "to": "branch" }
     ]
   },
   "nodes": [
     {
-      "id": "ticket",
-      "lane": "private",
+      "id": "issue",
+      "lane": "issues",
       "col": 0,
       "type": "external",
-      "label": "Frontier Ticket",
-      "sublabel": "unblocked · ready",
-      "width": 135
+      "label": "Ledger Issue",
+      "sublabel": "what · why · spec link",
+      "width": 145
     },
     {
-      "id": "claim",
-      "lane": "private",
+      "id": "branch",
+      "lane": "repo",
       "col": 1,
       "type": "backend",
-      "label": "Handoff Packet",
-      "sublabel": "resources · done-means",
-      "width": 150
-    },
-    {
-      "id": "build",
-      "lane": "exec",
-      "col": 2,
-      "type": "backend",
-      "label": "Executor Build",
-      "sublabel": "branch · handback",
-      "width": 145
-    },
-    {
-      "id": "triage",
-      "lane": "verify",
-      "col": 3,
-      "type": "security",
-      "label": "Smoke Triage",
-      "sublabel": "cheap model · optional",
-      "width": 145
+      "label": "Branch",
+      "sublabel": "commits with tests",
+      "width": 140
     },
     {
       "id": "pr",
-      "lane": "public",
-      "col": 4,
+      "lane": "prlane",
+      "col": 2,
       "type": "frontend",
       "label": "Pull Request",
-      "sublabel": "evidence · CI gates",
+      "sublabel": "criteria→proof table",
+      "width": 150
+    },
+    {
+      "id": "ci",
+      "lane": "prlane",
+      "col": 3,
+      "type": "security",
+      "label": "CI Checks",
+      "sublabel": "tests · scrub · shape",
       "width": 145
     },
     {
-      "id": "val",
-      "lane": "verify",
+      "id": "review",
+      "lane": "prlane",
       "col": 4,
       "type": "security",
-      "label": "VAL Audit",
-      "sublabel": "comments on the PR",
-      "width": 140
+      "label": "Agent Review",
+      "sublabel": "public PR comments",
+      "width": 145
     },
     {
       "id": "merge",
-      "lane": "public",
+      "lane": "prlane",
       "col": 5,
       "type": "external",
-      "label": "Operator Merge",
-      "sublabel": "human authority",
+      "label": "Human Merge",
+      "sublabel": "operator authority",
       "width": 140
     },
     {
-      "id": "close",
-      "lane": "private",
+      "id": "closing",
+      "lane": "issues",
       "col": 5,
       "type": "database",
-      "label": "Close + Mirror",
-      "sublabel": "receipts · decision note",
+      "label": "Closing Comment",
+      "sublabel": "result → intent link",
       "width": 150
+    },
+    {
+      "id": "dispatch",
+      "lane": "curtain",
+      "col": 0,
+      "type": "messagebus",
+      "label": "Private Dispatch",
+      "sublabel": "brief · resources",
+      "width": 145
+    },
+    {
+      "id": "agents",
+      "lane": "curtain",
+      "col": 1,
+      "type": "backend",
+      "label": "Agent Lanes",
+      "sublabel": "Claude · Cursor",
+      "width": 135
     }
   ],
   "edges": [
     {
-      "id": "ticket-claim",
-      "from": "ticket",
-      "to": "claim",
-      "label": "assign · in-flight",
+      "id": "issue-branch",
+      "from": "issue",
+      "to": "branch",
+      "label": "work starts",
       "variant": "emphasis"
     },
     {
-      "id": "claim-build",
-      "from": "claim",
-      "to": "build",
-      "label": "closed discovery",
-      "variant": "emphasis"
+      "id": "dispatch-agents",
+      "from": "dispatch",
+      "to": "agents",
+      "label": "handoff packet",
+      "variant": "dashed",
+      "role": "branch"
     },
     {
-      "id": "build-triage",
-      "from": "build",
-      "to": "triage",
-      "label": "handback packet"
+      "id": "agents-branch",
+      "from": "agents",
+      "to": "branch",
+      "label": "push commits",
+      "variant": "dashed",
+      "role": "branch"
     },
     {
-      "id": "triage-build",
-      "from": "triage",
-      "to": "build",
-      "label": "implausible — bounce",
-      "variant": "security",
-      "role": "error"
-    },
-    {
-      "id": "triage-pr",
-      "from": "triage",
+      "id": "branch-pr",
+      "from": "branch",
       "to": "pr",
-      "label": "open PR",
+      "label": "opened on template",
       "variant": "emphasis"
     },
     {
-      "id": "pr-val",
+      "id": "pr-ci",
       "from": "pr",
-      "to": "val",
-      "label": "CI green"
+      "to": "ci",
+      "label": "on open"
     },
     {
-      "id": "val-build",
-      "from": "val",
-      "to": "build",
+      "id": "ci-review",
+      "from": "ci",
+      "to": "review",
+      "label": "green",
+      "variant": "emphasis"
+    },
+    {
+      "id": "review-branch",
+      "from": "review",
+      "to": "branch",
       "label": "changes — new commits",
       "variant": "security",
       "role": "error"
     },
     {
-      "id": "val-merge",
-      "from": "val",
+      "id": "review-merge",
+      "from": "review",
       "to": "merge",
-      "label": "validated",
+      "label": "approved",
       "variant": "emphasis"
     },
     {
-      "id": "merge-close",
+      "id": "merge-closing",
       "from": "merge",
-      "to": "close",
-      "label": "PR link · ledger comment"
+      "to": "closing",
+      "label": "PR link"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "Two trackers, two jobs",
+      "title": "What you can inspect",
       "items": [
-        "Orchestration stays on a private tracker — candid by construction",
-        "The public repo gets curated evidence; links run private → public only"
+        "Every PR carries its evidence: test delta, commands run, criteria→proof",
+        "CI is green on every merge — tests, privacy scrub, PR shape"
       ]
     },
     {
       "dot": "violet",
-      "title": "The verification ladder",
+      "title": "Who does the work",
       "items": [
-        "Deterministic CI first: tests · scrub · PR shape — never LLM-checked",
-        "Cheap-model triage bounces bad handbacks; VAL audits what CI can't"
+        "Agent lanes (Claude, Cursor) build on branches; an independent agent audits",
+        "The audit is public — it lands as ordinary review comments on the PR"
       ]
     },
     {
       "dot": "rose",
-      "title": "Human holds the merge",
+      "title": "Who decides",
       "items": [
-        "The operator reviews the criteria→proof table and merges — agents never",
-        "Every receipt names the exact model that did the work"
+        "A human holds merge authority — agents never merge",
+        "Coordination happens privately, by design: only curated evidence lands here"
       ]
     }
   ]

@@ -105,3 +105,34 @@ that trail.
   ticket + two screen parcels.
 - Each stage lands with its tests and a validation pass before the
   corresponding legacy screen retires.
+
+## Decisions: the v1.0 P1 parcel (2026-09-05, pre-build)
+
+The first build slice of v1.0, sized for one executor run:
+
+- **Scope of P1**: the `web/` scaffold (Next.js + TypeScript, own
+  toolchain, static-export-friendly), the shell (navigation + page
+  frame) re-expressed from the reference bundle, and the skill deck —
+  list registered skills and dispatch a job — working end to end
+  against the API's `/skills` and `/jobs` endpoints. P2 (live status,
+  run history, metrics strip) follows in its own parcel.
+- **Reference bundle**: the maintainer assembles cleared prior UI work
+  into a gitignored `web/.reference/` directory before dispatch; the
+  executor reads only that bundle as design reference and never the
+  retired surface itself. Re-expression, not transplant.
+- **API in tests is stubbed**: component and route tests run against
+  fixture responses shaped like the real endpoints; the executor never
+  contacts a running API. The maintainer smokes the built surface
+  against the live API after merge.
+- **ADR-0020 and ADR-0021 are written in this parcel** (their content
+  is settled by this spec's earlier sections and the core/client
+  boundary decision), filling the reserved numbering slots.
+- **Preflight grows a `web/` leg**: typecheck, lint, tests, build — so
+  the repository's single gate entrypoint covers the new component from
+  its first commit, and CI runs it.
+- **Docs-currency**: root README gains the web quickstart; the
+  architecture diagram's built/planned annotations move the web
+  surface's cockpit to "in progress".
+- **Testing**: external behavior only — a rendered deck shows the
+  stubbed skills; dispatching posts the expected job payload; the shell
+  renders its navigation; typecheck passes; no snapshot goldens.

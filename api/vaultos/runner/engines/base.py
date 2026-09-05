@@ -1,10 +1,11 @@
 """The engine adapter interface (ADR: runner + engine registry spec).
 
 An engine is anything that can take a claimed job and its skill definition
-and run it to completion. v1 shipped `script` (`script.py`); ticket #23 adds
-`claude-cli` (`claude_cli.py`). `cursor-cli` remains named by the spec but
-not built -- adding it later is "one adapter plus one registry row" against
-this same interface, per the spec's contributor story.
+and run it to completion. v1 shipped `script` (`script.py`), ticket #23 added
+`claude-cli` (`claude_cli.py`), and ticket #24 added `cursor-cli`
+(`cursor_cli.py`) -- the spec's full v1 engine set, each "one adapter plus
+one registry row" against this same interface, per the spec's contributor
+story.
 """
 
 from dataclasses import dataclass

@@ -53,11 +53,21 @@ def _patterns() -> tuple[list[tuple[str, re.Pattern[str]]], list[tuple[str, re.P
 
 def _files(root: Path):
     excluded = {".git", ".venv", ".dispatch", ".reference", "__pycache__", ".pytest_cache"}
+    generated_web_roots = {
+        Path("web/.next"),
+        Path("web/node_modules"),
+        Path("web/out"),
+    }
     for path in root.rglob("*"):
+        relative = path.relative_to(root)
         if (
             path.is_file()
             and not path.is_symlink()
-            and not any(part in excluded for part in path.relative_to(root).parts)
+            and not any(part in excluded for part in relative.parts)
+            and not any(
+                directory == relative or directory in relative.parents
+                for directory in generated_web_roots
+            )
         ):
             yield path
 

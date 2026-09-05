@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate documented API test counts against the collected suite."""
+"""Validate documented API test counts against the collected API suite.
+
+Web tests are intentionally excluded: the README count describes the API, while
+the independent web toolchain is collected and run by the dedicated web gate.
+"""
 
 from __future__ import annotations
 

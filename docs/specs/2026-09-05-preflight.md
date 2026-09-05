@@ -29,9 +29,9 @@ checkout to establish a known-good baseline before starting.
    drift is caught mechanically, not in review.
 3. As a maintainer, I want README counts (tests, test files) checked
    against reality, so that documentation can't silently go stale.
-4. As a maintainer, I want the privacy scrub to catch home paths for
-   any user, tilde-home paths, IP literals, and secret-key shapes, so
-   that a broader class of leaks fails before merge.
+4. As a maintainer, I want the privacy scrub to fail on username-bearing
+   home paths and secret-key shapes, so that the leaks that actually
+   matter never reach a merge.
 5. As a maintainer, I want tilde paths, IP literals, and internal
    component names reported but not failed, so that historical
    documents that legitimately contain them don't turn the tree red —

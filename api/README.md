@@ -43,7 +43,7 @@ is the seam currently being built. That gap is known, named, and being closed
 |---|---|
 | **42 endpoints** | 11 platform routers in `vaultos/api/` + the finance module |
 | **22 of them** | the finance module |
-| **872 tests** | `pytest`, 60 files, no network, no API spend |
+| **872 tests** | `pytest`, 69 files, no network, no API spend |
 | **16 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
 | **14 migrations** | plain SQL, `PRAGMA user_version` (`vaultos/db/migrations/`) |
 | **Dependencies** | FastAPI, uvicorn, python-multipart, httpx, icalendar, recurring-ical-events. That's the list. |

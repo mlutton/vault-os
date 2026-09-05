@@ -3,15 +3,24 @@ import pytest
 
 @pytest.fixture
 def account_id(client):
-    res = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True})
+    res = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}
+    )
     return res.json()["id"]
 
 
 def _make_item(client, account_id, **over):
     body = {
-        "name": "Rent", "estimate_cents": -150000, "type": "Rent", "payee": "Landlord",
-        "day_of_month": 1, "cadence": "dated", "cadence_unit": "month", "cadence_frequency": 1,
-        "account_id": account_id, "verified": True,
+        "name": "Rent",
+        "estimate_cents": -150000,
+        "type": "Rent",
+        "payee": "Landlord",
+        "day_of_month": 1,
+        "cadence": "dated",
+        "cadence_unit": "month",
+        "cadence_frequency": 1,
+        "account_id": account_id,
+        "verified": True,
         "match_text": ["COMCAST"],
     }
     body.update(over)
@@ -21,7 +30,12 @@ def _make_item(client, account_id, **over):
 def _import_csv(client, account_id, csv_bytes):
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     return client.post(
         f"/finance/accounts/{account_id}/import",
@@ -101,7 +115,9 @@ def test_patch_transaction_merchant_only(client, account_id):
     assert res.json()["merchant"] == "Grocery Co"
 
 
-def test_patch_transaction_confirm_a_match_sets_user_source_and_inherits_category(client, account_id):
+def test_patch_transaction_confirm_a_match_sets_user_source_and_inherits_category(
+    client, account_id
+):
     item_id = _make_item(client, account_id)
     _import_csv(client, account_id, CSV)
     rows = client.get("/finance/ledger").json()["rows"]
@@ -164,7 +180,9 @@ def test_patch_transaction_remember_appends_to_the_plan_items_match_text(client,
     rows = client.get("/finance/ledger").json()["rows"]
     unmatched = next(r for r in rows if r["merchant_raw"] == "RANDOM GROCERY STORE")
 
-    client.patch(f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True})
+    client.patch(
+        f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True}
+    )
 
     item = client.get("/finance/plan-items").json()
     updated = next(p for p in item if p["id"] == item_id)
@@ -178,14 +196,24 @@ def test_patch_transaction_remember_against_a_budget_kind_item_does_not_500(clie
     # real UI -- the match itself must still succeed even though there's no match rule
     # to remember for a Budget.
     item_id = _make_item(
-        client, account_id, name="Lunch", kind="budget", reset_period="weekly",
-        cadence=None, day_of_month=None, cadence_unit=None, cadence_frequency=None, match_text=[],
+        client,
+        account_id,
+        name="Lunch",
+        kind="budget",
+        reset_period="weekly",
+        cadence=None,
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        match_text=[],
     )
     _import_csv(client, account_id, CSV)
     rows = client.get("/finance/ledger").json()["rows"]
     unmatched = next(r for r in rows if r["merchant_raw"] == "RANDOM GROCERY STORE")
 
-    res = client.patch(f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True})
+    res = client.patch(
+        f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True}
+    )
 
     assert res.status_code == 200
     assert res.json()["plan_item_id"] == item_id
@@ -193,15 +221,21 @@ def test_patch_transaction_remember_against_a_budget_kind_item_does_not_500(clie
     assert updated["match_text"] == []
 
 
-def test_a_second_import_of_the_same_merchant_now_matches_by_rule_after_remember(client, account_id):
+def test_a_second_import_of_the_same_merchant_now_matches_by_rule_after_remember(
+    client, account_id
+):
     item_id = _make_item(client, account_id, match_text=[])
     _import_csv(client, account_id, CSV)
     rows = client.get("/finance/ledger").json()["rows"]
     unmatched = next(r for r in rows if r["merchant_raw"] == "RANDOM GROCERY STORE")
-    client.patch(f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True})
+    client.patch(
+        f"/finance/transactions/{unmatched['id']}", json={"plan_item_id": item_id, "remember": True}
+    )
 
     # A later, different transaction from the same merchant now matches automatically.
-    _import_csv(client, account_id, b"Date,Description,Amount\n2026-03-09,RANDOM GROCERY STORE,-11.00\n")
+    _import_csv(
+        client, account_id, b"Date,Description,Amount\n2026-03-09,RANDOM GROCERY STORE,-11.00\n"
+    )
     rows = client.get("/finance/ledger").json()["rows"]
     fresh = next(r for r in rows if r["date"] == "2026-03-09")
     assert fresh["plan_item_id"] == item_id

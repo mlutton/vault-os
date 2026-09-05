@@ -4,7 +4,12 @@ from vaultos.modules.finance.recurring import detect_recurring
 
 
 def _txn(date, amount_cents, merchant="Netflix", excluded_from_charts=False):
-    return SimpleNamespace(date=date, amount_cents=amount_cents, merchant=merchant, excluded_from_charts=excluded_from_charts)
+    return SimpleNamespace(
+        date=date,
+        amount_cents=amount_cents,
+        merchant=merchant,
+        excluded_from_charts=excluded_from_charts,
+    )
 
 
 def test_three_monthly_charges_within_tolerance_are_detected():

@@ -66,9 +66,7 @@ def metric_history(
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     samples = read_metrics_csv(settings.vault_root)
     matching = [
-        (parse_ts(s.timestamp), s)
-        for s in samples
-        if s.source == source and s.metric == metric
+        (parse_ts(s.timestamp), s) for s in samples if s.source == source and s.metric == metric
     ]
     matching = [(ts, s) for ts, s in matching if ts is not None and ts >= cutoff]
     matching.sort(key=lambda item: item[0])

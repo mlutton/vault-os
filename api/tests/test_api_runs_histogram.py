@@ -11,7 +11,12 @@ def _complete_job_on(client, skill, days_ago, exit_code=0):
     client.post(f"/jobs/{job_id}/events", json={"status": "running", "ts": "2020-01-01T00:00:00Z"})
     client.post(
         f"/jobs/{job_id}/events",
-        json={"status": "ok" if exit_code == 0 else "error", "ts": ts_completed, "exit_code": exit_code, "summary": "x"},
+        json={
+            "status": "ok" if exit_code == 0 else "error",
+            "ts": ts_completed,
+            "exit_code": exit_code,
+            "summary": "x",
+        },
     )
     return job_id
 

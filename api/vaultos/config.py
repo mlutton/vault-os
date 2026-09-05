@@ -22,9 +22,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     def __init__(self) -> None:
         self.vault_root = Path(_require("VAULT_ROOT"))
-        self.db_path = Path(
-            os.environ.get("VAULTOS_DB", str(_REPO_ROOT / "data" / "vaultos.db"))
-        )
+        self.db_path = Path(os.environ.get("VAULTOS_DB", str(_REPO_ROOT / "data" / "vaultos.db")))
         self.port = int(os.environ.get("VAULTOS_PORT", "3109"))
         self.token_budget_5h_usd = float(os.environ.get("TOKEN_BUDGET_5H_USD", "100"))
         self.hud_tz = os.environ.get("HUD_TZ", "America/Chicago")

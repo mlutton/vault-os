@@ -63,5 +63,10 @@ def test_token_burn_no_data_returns_nulls_but_keeps_budget(client):
 def test_token_burn_response_shape(client):
     res = client.get("/metrics/token-burn")
     assert set(res.json().keys()) == {
-        "tokens_5h", "cost_5h_usd", "budget", "pct", "projection", "freshness_s",
+        "tokens_5h",
+        "cost_5h_usd",
+        "budget",
+        "pct",
+        "projection",
+        "freshness_s",
     }

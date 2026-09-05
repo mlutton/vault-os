@@ -7,9 +7,21 @@ from fastapi.testclient import TestClient
 REGISTRY_FIXTURE = {
     "version": 1,
     "skills": [
-        {"id": "metrics-pull", "label": "Pull Metrics", "deck": True, "engine": "claude", "args": []},
+        {
+            "id": "metrics-pull",
+            "label": "Pull Metrics",
+            "deck": True,
+            "engine": "claude",
+            "args": [],
+        },
         {"id": "acquire", "label": "Acquire", "deck": True, "engine": "claude", "args": []},
-        {"id": "daily-topic-digest", "label": "Topic Digest", "deck": True, "engine": "claude", "args": []},
+        {
+            "id": "daily-topic-digest",
+            "label": "Topic Digest",
+            "deck": True,
+            "engine": "claude",
+            "args": [],
+        },
         {
             "id": "deep-research",
             "label": "Deep Research",

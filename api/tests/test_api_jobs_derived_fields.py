@@ -10,7 +10,9 @@ def test_deliverable_link_reads_frontmatter_link_field(tmp_path):
     vault_root = tmp_path
     inbox = vault_root / "inbox"
     inbox.mkdir()
-    (inbox / "x.md").write_text('---\ndate: 2026-08-09\nlink: "https://example.com/draft"\n---\nbody\n')
+    (inbox / "x.md").write_text(
+        '---\ndate: 2026-08-09\nlink: "https://example.com/draft"\n---\nbody\n'
+    )
     assert deliverable_link(vault_root, "inbox/x.md") == "https://example.com/draft"
 
 

@@ -16,11 +16,18 @@ def conn(tmp_path):
 
 def _make_running_job(conn, job_id, runner_pid):
     store.create_job(
-        conn, job_id=job_id, skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id=job_id,
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     now = datetime.now(timezone.utc).isoformat()
-    store.apply_event(conn, job_id=job_id, status="running", ts="t1", received_at=now, pid=runner_pid)
+    store.apply_event(
+        conn, job_id=job_id, status="running", ts="t1", received_at=now, pid=runner_pid
+    )
 
 
 def test_detect_orphans_marks_missing_heartbeat_as_orphaned(conn):
@@ -65,12 +72,25 @@ def test_detect_orphans_leaves_healthy_running_job_alone(conn):
 
 def test_detect_orphans_ignores_non_running_jobs(conn):
     store.create_job(
-        conn, job_id="queued-job", skill="ai-wire", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="queued-job",
+        skill="ai-wire",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     _make_running_job(conn, "running-job", runner_pid=100)
     now = datetime.now(timezone.utc).isoformat()
-    store.apply_event(conn, job_id="running-job", status="ok", ts="t2", received_at=now, exit_code=0, summary="done")
+    store.apply_event(
+        conn,
+        job_id="running-job",
+        status="ok",
+        ts="t2",
+        received_at=now,
+        exit_code=0,
+        summary="done",
+    )
     # "running-job" is actually terminal now -- re-fetch to be explicit about scope.
 
     _make_running_job(conn, "still-running", runner_pid=100)
@@ -103,6 +123,14 @@ def test_a_later_ok_event_still_supersedes_an_orphaned_job(conn):
     assert store.get_job(conn, "j1").status == "orphaned"
 
     now = datetime.now(timezone.utc).isoformat()
-    store.apply_event(conn, job_id="j1", status="ok", ts="t2", received_at=now, exit_code=0, summary="actually finished")
+    store.apply_event(
+        conn,
+        job_id="j1",
+        status="ok",
+        ts="t2",
+        received_at=now,
+        exit_code=0,
+        summary="actually finished",
+    )
 
     assert store.get_job(conn, "j1").status == "ok"

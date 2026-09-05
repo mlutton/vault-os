@@ -7,7 +7,13 @@ from vaultos.registry import RegistryError, SubmissionError, load_registry, vali
 REGISTRY_JSON = {
     "version": 1,
     "skills": [
-        {"id": "metrics-pull", "label": "Pull Metrics", "deck": True, "engine": "claude", "args": []},
+        {
+            "id": "metrics-pull",
+            "label": "Pull Metrics",
+            "deck": True,
+            "engine": "claude",
+            "args": [],
+        },
         {
             "id": "deep-research",
             "label": "Deep Research",

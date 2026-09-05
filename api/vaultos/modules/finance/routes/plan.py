@@ -173,7 +173,9 @@ def get_open_period(conn=Depends(get_conn), settings=Depends(get_settings)):
 
 
 @router.post("/finance/plan-items/{item_id}/tick")
-def tick_plan_item(item_id: str, body: PlanItemTick, conn=Depends(get_conn), settings=Depends(get_settings)):
+def tick_plan_item(
+    item_id: str, body: PlanItemTick, conn=Depends(get_conn), settings=Depends(get_settings)
+):
     validate_period(body.period)
     if store.get_plan_item(conn, item_id) is None:
         raise HTTPException(404, detail="plan item not found")
@@ -182,7 +184,9 @@ def tick_plan_item(item_id: str, body: PlanItemTick, conn=Depends(get_conn), set
     last_closed_period = store.get_last_closed_period(conn)
     ticked_at = utcnow_z() if body.ticked else None
     try:
-        plan_period = store.set_ticked(conn, item_id, body.period, body.ticked, ticked_at, open_period, last_closed_period)
+        plan_period = store.set_ticked(
+            conn, item_id, body.period, body.ticked, ticked_at, open_period, last_closed_period
+        )
     except store.PeriodClosedError as exc:
         raise HTTPException(409, detail=exc.message)
     return {
@@ -198,7 +202,9 @@ class BudgetAdjustment(BaseModel):
 
 
 @router.post("/finance/plan-items/{item_id}/adjust")
-def adjust_budget(item_id: str, body: BudgetAdjustment, conn=Depends(get_conn), settings=Depends(get_settings)):
+def adjust_budget(
+    item_id: str, body: BudgetAdjustment, conn=Depends(get_conn), settings=Depends(get_settings)
+):
     # ADR-0019 ticket #23: Adjusted -- a manual, single-Reset-Period override changing a
     # Budget's target amount, forward-only from the moment it's set. Unlike tick (which
     # takes an explicit `period` so a client can catch up on a prior month), this always
@@ -246,7 +252,12 @@ def adjust_budget(item_id: str, body: BudgetAdjustment, conn=Depends(get_conn), 
     window_start, _ = money.spread_window(item.reset_period, today)
     try:
         plan_period = store.set_adjusted(
-            conn, item_id, today_period, body.target_cents, window_start.isoformat(), utcnow_z(),
+            conn,
+            item_id,
+            today_period,
+            body.target_cents,
+            window_start.isoformat(),
+            utcnow_z(),
             effective_open_period,
         )
     except store.PeriodClosedError as exc:
@@ -275,7 +286,10 @@ class PlannedPostingUpdate(BaseModel):
 
 @router.patch("/finance/planned-postings/{posting_id}")
 def update_planned_posting(
-    posting_id: str, body: PlannedPostingUpdate, conn=Depends(get_conn), settings=Depends(get_settings),
+    posting_id: str,
+    body: PlannedPostingUpdate,
+    conn=Depends(get_conn),
+    settings=Depends(get_settings),
 ):
     # ticket #22: Deferred -- moves a Planned Posting's expected date away from its
     # Posting's Cadence-derived reference, which stays put and unreachable through this
@@ -286,7 +300,9 @@ def update_planned_posting(
         try:
             date.fromisoformat(body.deferred_date)
         except ValueError:
-            raise HTTPException(400, detail=f"deferred_date must be 'YYYY-MM-DD', got {body.deferred_date!r}")
+            raise HTTPException(
+                400, detail=f"deferred_date must be 'YYYY-MM-DD', got {body.deferred_date!r}"
+            )
     # expected_amount_cents has no "clear" concept (planned_posting.expected_amount_cents
     # is NOT NULL, migration 0010) -- unlike deferred_date, an explicit null here isn't a
     # meaningful request, just a malformed one. Without this check it reached the store
@@ -299,7 +315,9 @@ def update_planned_posting(
     open_period = store.get_open_period(conn, today_period)
     last_closed_period = store.get_last_closed_period(conn)
     try:
-        updated = store.update_planned_posting(conn, posting_id, changes, open_period, last_closed_period)
+        updated = store.update_planned_posting(
+            conn, posting_id, changes, open_period, last_closed_period
+        )
     except store.PeriodClosedError as exc:
         raise HTTPException(409, detail=exc.message)
     if updated is None:

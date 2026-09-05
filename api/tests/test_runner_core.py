@@ -13,7 +13,6 @@ from vaultos.state import resolve_state_root
 from vaultos.vault.intents import write_intent
 from vaultos.vault.runner import read_heartbeat
 
-
 SCRIPT_REGISTRY = {
     "version": 1,
     "skills": [
@@ -24,7 +23,11 @@ SCRIPT_REGISTRY = {
             "engine": "script",
             "args": [{"name": "who", "required": False, "type": "string"}],
             "engine_config": {
-                "argv": ["{script_path}", "{who}", "{vault_root}/inbox/reports/hello-script/{job_id}.md"],
+                "argv": [
+                    "{script_path}",
+                    "{who}",
+                    "{vault_root}/inbox/reports/hello-script/{job_id}.md",
+                ],
                 "deliverable": "inbox/reports/hello-script/{job_id}.md",
             },
         },
@@ -35,7 +38,13 @@ SCRIPT_REGISTRY = {
             "engine": "nonexistent-engine",
             "args": [],
         },
-        {"id": "chained-target", "label": "Chained Target", "deck": True, "engine": "script", "args": []},
+        {
+            "id": "chained-target",
+            "label": "Chained Target",
+            "deck": True,
+            "engine": "script",
+            "args": [],
+        },
     ],
 }
 
@@ -83,8 +92,13 @@ def _enqueue(conn, vault, registry, skill_id, args=None, ts="2026-09-04T00:00:00
         # to supply one.
         args = {"who": "world"} if skill_id == "hello-script" else {}
     job = store.create_job(
-        conn, job_id=f"{skill_id}-{ts}", skill=skill_id, args=args, source="api",
-        engine=registry.get(skill_id).engine, ts_queued=ts,
+        conn,
+        job_id=f"{skill_id}-{ts}",
+        skill=skill_id,
+        args=args,
+        source="api",
+        engine=registry.get(skill_id).engine,
+        ts_queued=ts,
     )
     write_intent(vault, job_id=job.id, skill=skill_id, args=args, ts=ts, source="api")
     return job
@@ -135,7 +149,9 @@ def test_run_once_missing_engine_config_fails_job_not_runner(conn, registry, set
     assert store.get_job(conn, second.id).status == "ok"
 
 
-def test_chain_map_fires_through_runner_terminal_event(conn, registry, settings, vault, monkeypatch):
+def test_chain_map_fires_through_runner_terminal_event(
+    conn, registry, settings, vault, monkeypatch
+):
     import vaultos.api.jobs as jobs_module
 
     monkeypatch.setattr(jobs_module, "CHAIN_MAP", {"hello-script": "chained-target"})
@@ -146,7 +162,9 @@ def test_chain_map_fires_through_runner_terminal_event(conn, registry, settings,
 
     assert store.get_job(conn, job.id).status == "ok"
     chained = store.list_jobs(conn, statuses=["queued", "running"])
-    assert any(j.skill == "chained-target" and j.source == f"chain:hello-script:{job.id}" for j in chained)
+    assert any(
+        j.skill == "chained-target" and j.source == f"chain:hello-script:{job.id}" for j in chained
+    )
 
 
 def test_heartbeat_written_and_served_fresh(conn, registry, settings, vault):
@@ -222,7 +240,9 @@ def test_shutdown_does_not_release_a_job_actively_executing(conn, registry, sett
     assert runner._shutdown_event.is_set()
 
 
-def test_run_forever_installs_signal_handlers_that_trigger_shutdown(conn, registry, settings, monkeypatch):
+def test_run_forever_installs_signal_handlers_that_trigger_shutdown(
+    conn, registry, settings, monkeypatch
+):
     runner = Runner(conn, registry, settings)
     captured = {}
     monkeypatch.setattr(signal, "signal", lambda sig, handler: captured.__setitem__(sig, handler))

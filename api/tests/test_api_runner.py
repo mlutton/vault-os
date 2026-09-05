@@ -54,8 +54,15 @@ def test_get_runner_response_has_exactly_nine_fields(client, tmp_vault):
     res = client.get("/runner")
     body = res.json()
     assert set(body.keys()) == {
-        "ts", "pid", "active", "pending", "alive",
-        "version", "busy", "max_concurrent", "heartbeat_age_s",
+        "ts",
+        "pid",
+        "active",
+        "pending",
+        "alive",
+        "version",
+        "busy",
+        "max_concurrent",
+        "heartbeat_age_s",
     }
 
 

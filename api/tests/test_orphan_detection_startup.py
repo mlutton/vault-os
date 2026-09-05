@@ -12,10 +12,18 @@ def test_stuck_job_gets_orphaned_shortly_after_startup(tmp_vault, tmp_path, monk
     # after startup, without waiting for the full 60s period.
     job_id = "stuck-job"
     record = {
-        "id": job_id, "skill": "ai-wire", "args": {}, "source": "api",
-        "ts_queued": "2026-08-09T00:00:00Z", "ts_started": "2026-08-09T00:00:01Z",
-        "ts_completed": None, "status": "running", "exit_code": None, "summary": None,
-        "md_path": f"system/runs/{job_id}.md", "log_path": f"system/runs/{job_id}.md",
+        "id": job_id,
+        "skill": "ai-wire",
+        "args": {},
+        "source": "api",
+        "ts_queued": "2026-08-09T00:00:00Z",
+        "ts_started": "2026-08-09T00:00:01Z",
+        "ts_completed": None,
+        "status": "running",
+        "exit_code": None,
+        "summary": None,
+        "md_path": f"system/runs/{job_id}.md",
+        "log_path": f"system/runs/{job_id}.md",
         "deliverable_path": None,
     }
     (tmp_vault / "system" / "runs" / f"{job_id}.json").write_text(json.dumps(record))

@@ -16,17 +16,34 @@ def conn(tmp_path):
 
 def _make_primary_account(conn, balance_cents=812000):
     return store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=balance_cents, is_primary=True, created_at="2026-01-01T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=balance_cents,
+        is_primary=True,
+        created_at="2026-01-01T00:00:00Z",
     ).id
 
 
 def _make_item(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Rent", estimate_cents=-150000, plan_type="Rent", payee="Landlord",
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=[],
+        item_id="p1",
+        name="Rent",
+        estimate_cents=-150000,
+        plan_type="Rent",
+        payee="Landlord",
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=[],
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -65,7 +82,8 @@ def test_actual_series_reconstruction_ends_exactly_at_the_real_balance(conn):
     _make_item(conn, account_id, day_of_month=20)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'X', 'X', -25000, 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'X', 'X', -25000, 'h1')",
+        (account_id,),
     )
     conn.commit()
     result = build_cash_flow(conn, TODAY)
@@ -110,7 +128,10 @@ def test_clean_state_names_the_processed_count(conn):
     _make_item(conn, account_id, day_of_month=5)
     store.set_ticked(conn, "p1", "2026-03", True, "2026-03-05T00:00:00Z", open_period="2026-03")
     result = build_cash_flow(conn, TODAY)
-    assert result["expected_next"]["recon_note"] == "1 of this month's items already in today's balance"
+    assert (
+        result["expected_next"]["recon_note"]
+        == "1 of this month's items already in today's balance"
+    )
     # March's occurrence is processed and gone, but a monthly item recurs -- April 5th
     # is still 22 days inside the 30-day horizon and legitimately still upcoming.
     assert [r["date"] for r in result["expected_next"]["rows"]] == ["2026-04-05"]
@@ -122,7 +143,8 @@ def test_a_matched_transaction_processes_the_item_without_ticking(conn):
     _make_item(conn, account_id, day_of_month=5)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -150000, 'p1', 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -150000, 'p1', 'h1')",
+        (account_id,),
     )
     conn.commit()
     result = build_cash_flow(conn, TODAY)
@@ -135,8 +157,15 @@ def test_a_matched_transaction_processes_the_item_without_ticking(conn):
 def test_spread_items_contribute_to_totals_but_never_appear_as_event_rows(conn):
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-31000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-31000,
     )
     result = build_cash_flow(conn, TODAY)
     assert result["expected_next"]["rows"] == []
@@ -153,29 +182,46 @@ def test_plan_offset_reflects_a_budgets_active_adjustment(conn):
     # own tests already prove correct in isolation.
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-15000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-15000,
     )
-    store.set_adjusted(conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03"
+    )
 
     result = build_cash_flow(conn, TODAY)
     # cash_on_hand (100000) - planned_today (100000 + -5692) = 5692
     assert result["plan_offset_cents"] == 5692
 
 
-def test_materialized_matched_occurrence_drops_out_of_the_projection_via_its_own_matched_txn_id(conn):
+def test_materialized_matched_occurrence_drops_out_of_the_projection_via_its_own_matched_txn_id(
+    conn,
+):
     # ticket #21: once materialized, cash-flow must source "processed" from the row's
     # own matched_txn_id too (not just plan.py's Plan screen) -- the two screens must
     # never disagree about which occurrence dropped out of the carried-forward step.
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=5)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-05", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-05",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -150000, 'p1', 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -150000, 'p1', 'h1')",
+        (account_id,),
     )
     conn.commit()
     store.attribute_transaction_to_planned_posting(conn, "p1", "2026-03-05", "t1")
@@ -185,22 +231,40 @@ def test_materialized_matched_occurrence_drops_out_of_the_projection_via_its_own
     assert "already in today's balance" in result["expected_next"]["recon_note"]
 
 
-def test_materialized_unmatching_one_occurrence_never_flips_a_different_occurrences_status_in_cashflow(conn):
+def test_materialized_unmatching_one_occurrence_never_flips_a_different_occurrences_status_in_cashflow(
+    conn,
+):
     # Same core fix as plan.py's own test of this scenario: each occurrence's matched
     # state is tracked independently, so clearing one transaction's match never
     # accidentally flips a DIFFERENT occurrence's Processed/Overdue status.
     account_id = _make_primary_account(conn, balance_cents=500000)
     _make_item(
-        conn, account_id, name="Weekly gig", estimate_cents=10000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=1, anchor_date="2026-03-01",
+        conn,
+        account_id,
+        name="Weekly gig",
+        estimate_cents=10000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=1,
+        anchor_date="2026-03-01",
     )
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-01", expected_amount_cents=10000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-01",
+        expected_amount_cents=10000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.create_planned_posting(
-        conn, posting_id="pp2", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-08", expected_amount_cents=10000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp2",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-08",
+        expected_amount_cents=10000,
+        created_at="2026-03-01T00:00:00Z",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
@@ -236,8 +300,13 @@ def test_materialized_edited_amount_is_honored_not_the_items_live_estimate_cents
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=5)  # overdue -- carried forward
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-05", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-05",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"expected_amount_cents": -175000}, "2026-03")
 
@@ -258,8 +327,13 @@ def test_materialized_deferred_date_within_the_period_does_not_double_count_or_v
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=20)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-20", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-20",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-03-05"}, "2026-03")
 
@@ -273,7 +347,9 @@ def test_materialized_deferred_date_within_the_period_does_not_double_count_or_v
     assert today_points[1]["balance_cents"] == -50000  # 100000 - 150000, counted exactly once
 
 
-def test_materialized_deferred_date_across_a_month_boundary_does_not_vanish_from_the_projection(conn):
+def test_materialized_deferred_date_across_a_month_boundary_does_not_vanish_from_the_projection(
+    conn,
+):
     # ticket #22: Deferred is explicitly allowed to push a date into the next real
     # calendar month (e.g. "align with an upcoming paycheck" landing just after
     # month-end) while the row's own period stays put (single-period override) --
@@ -283,8 +359,13 @@ def test_materialized_deferred_date_across_a_month_boundary_does_not_vanish_from
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=25)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-25", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-25",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-04-01"}, "2026-03")
 
@@ -304,8 +385,13 @@ def test_materialized_deferred_date_before_month_start_does_not_vanish_from_the_
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=5)
     store.create_planned_posting(
-        conn, posting_id="pp1", plan_item_id="p1", period="2026-03",
-        expected_date="2026-03-05", expected_amount_cents=-150000, created_at="2026-03-01T00:00:00Z",
+        conn,
+        posting_id="pp1",
+        plan_item_id="p1",
+        period="2026-03",
+        expected_date="2026-03-05",
+        expected_amount_cents=-150000,
+        created_at="2026-03-01T00:00:00Z",
     )
     store.update_planned_posting(conn, "pp1", {"deferred_date": "2026-02-25"}, "2026-03")
 
@@ -329,10 +415,19 @@ def test_plan_predicted_uses_a_weekly_budgets_own_reset_period_not_always_monthl
     # (does the item's real reset_period reach the spread cache), not the formula.
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="weekly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-7000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="weekly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-7000,
     )
-    predicted = plan_predicted_for_primary_today(conn, TODAY)  # TODAY = 2026-03-14, month_start = 2026-03-01
+    predicted = plan_predicted_for_primary_today(
+        conn, TODAY
+    )  # TODAY = 2026-03-14, month_start = 2026-03-01
     expected_spread_total = sum(
         money.spread_amount_for_date(-7000, date(2026, 3, d), "weekly") for d in range(1, 15)
     )
@@ -350,8 +445,15 @@ def test_plan_predicted_monthly_budget_reset_period_still_matches_the_old_behavi
     # match what plain calendar-month spreading always computed.
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-31000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-31000,
     )
     predicted = plan_predicted_for_primary_today(conn, TODAY)
     expected_spread_total = sum(
@@ -386,12 +488,19 @@ def test_lowest_point_attributes_to_an_overdue_item_even_though_its_own_date_is_
     # horizon (2026-04-05) and becomes the actual lowest point there instead, which
     # would test the forward-walk case this fix already handled, not the overdue case.
     _make_item(
-        conn, account_id, name="Overdue Bill", estimate_cents=-90000, day_of_month=5,
-        cadence="one-off", anchor_period="2026-03",
+        conn,
+        account_id,
+        name="Overdue Bill",
+        estimate_cents=-90000,
+        day_of_month=5,
+        cadence="one-off",
+        anchor_period="2026-03",
     )  # 2026-03-05, 9 days overdue
     result = build_cash_flow(conn, TODAY)
     assert result["lowest_point"]["after_item"] == "Overdue Bill"
-    assert result["lowest_point"]["balance_cents"] == 10000  # 100000 - 90000, the post-step balance today
+    assert (
+        result["lowest_point"]["balance_cents"] == 10000
+    )  # 100000 - 90000, the post-step balance today
     assert result["lowest_point"]["date"] == "2026-03-14"  # today, not 2026-03-05
 
 
@@ -404,9 +513,16 @@ def test_days_below_floor_does_not_double_count_todays_two_projected_series_poin
     # above it (a same-day income item recovers the balance from day+1 onward), so the
     # correct count is exactly 1, not 2.
     account_id = _make_primary_account(conn, balance_cents=140000)
-    _make_item(conn, account_id, name="Overdue Bill", estimate_cents=-50000, day_of_month=5)  # 2026-03-05, overdue
     _make_item(
-        conn, account_id, item_id="p2", name="Paycheck", estimate_cents=200000, day_of_month=15,
+        conn, account_id, name="Overdue Bill", estimate_cents=-50000, day_of_month=5
+    )  # 2026-03-05, overdue
+    _make_item(
+        conn,
+        account_id,
+        item_id="p2",
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=15,
         payee=None,
     )  # 2026-03-15, tomorrow -- recovers the balance from day+1 onward
     store.set_floor_cents(conn, 150000)
@@ -414,7 +530,9 @@ def test_days_below_floor_does_not_double_count_todays_two_projected_series_poin
     assert result["days_below_floor"] == 1
     assert len(result["breach_points"]) == 1
     assert result["breach_points"][0]["date"] == "2026-03-14"
-    assert result["breach_points"][0]["balance_cents"] == 90000  # 140000 - 50000, the post-step (lower) value
+    assert (
+        result["breach_points"][0]["balance_cents"] == 90000
+    )  # 140000 - 50000, the post-step (lower) value
 
 
 def test_floor_breach_driven_purely_by_a_spread_item_is_still_counted(conn):
@@ -424,8 +542,16 @@ def test_floor_breach_driven_purely_by_a_spread_item_is_still_counted(conn):
     still plainly visible on the chart (code review finding, 2026-08-17)."""
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, name="Daily burn", kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-120000,
+        conn,
+        account_id,
+        name="Daily burn",
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-120000,
     )
     store.set_floor_cents(conn, 50000)
     result = build_cash_flow(conn, TODAY)
@@ -438,8 +564,15 @@ def test_floor_breach_driven_purely_by_a_spread_item_is_still_counted(conn):
 def test_lowest_point_falls_back_to_horizon_end_when_no_dated_items_exist(conn):
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-3000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-3000,
     )
     result = build_cash_flow(conn, TODAY)
     assert result["lowest_point"]["after_item"] is None
@@ -453,7 +586,8 @@ def test_plan_offset_reflects_drift_between_actual_and_plan_only_projection(conn
     # drift the offset headline should surface.
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')",
+        (account_id,),
     )
     conn.commit()
     result = build_cash_flow(conn, TODAY)
@@ -475,8 +609,13 @@ def test_adjustment_markers_reflect_real_records_in_window(conn):
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(conn, account_id, day_of_month=20)
     store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-10",
-        real_balance_cents=95000, plan_predicted_cents=100000, created_at="2026-03-10T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-10",
+        real_balance_cents=95000,
+        plan_predicted_cents=100000,
+        created_at="2026-03-10T00:00:00Z",
     )
     result = build_cash_flow(conn, TODAY)
     assert result["adjustment_markers"] == [{"date": "2026-03-10", "balance_cents": 95000}]
@@ -501,12 +640,22 @@ def test_actual_series_steps_at_a_correction_instead_of_flattening_the_whole_mon
     account_id = _make_primary_account(conn, balance_cents=85000)
     _make_item(conn, account_id, day_of_month=25)  # no occurrence in [month_start, today]
     store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-05",
-        real_balance_cents=90000, plan_predicted_cents=100000, created_at="2026-03-05T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-05",
+        real_balance_cents=90000,
+        plan_predicted_cents=100000,
+        created_at="2026-03-05T00:00:00Z",
     )
     store.create_balance_adjustment(
-        conn, adjustment_id="adj2", account_id=account_id, as_of_date="2026-03-10",
-        real_balance_cents=85000, plan_predicted_cents=90000, created_at="2026-03-10T00:00:00Z",
+        conn,
+        adjustment_id="adj2",
+        account_id=account_id,
+        as_of_date="2026-03-10",
+        real_balance_cents=85000,
+        plan_predicted_cents=90000,
+        created_at="2026-03-10T00:00:00Z",
     )
     result = build_cash_flow(conn, TODAY)
     by_date = {row["date"]: row["balance_cents"] for row in result["actual_series"]}
@@ -536,7 +685,8 @@ def test_plan_predicted_series_last_point_matches_the_plan_offset_relationship(c
     _make_item(conn, account_id, day_of_month=5, estimate_cents=-15000)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')",
+        (account_id,),
     )
     conn.commit()
     result = build_cash_flow(conn, TODAY)
@@ -556,10 +706,19 @@ def test_plan_predicted_series_reflects_a_budgets_active_adjustment_day_by_day(c
     # the endpoint).
     account_id = _make_primary_account(conn, balance_cents=100000)
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, estimate_cents=-15000,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        estimate_cents=-15000,
     )
-    store.set_adjusted(conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03")
+    store.set_adjusted(
+        conn, "p1", "2026-03", -9300, "2026-03-01", "2026-03-11T00:00:00Z", open_period="2026-03"
+    )
 
     result = build_cash_flow(conn, TODAY)
     by_date = {p["date"]: p["balance_cents"] for p in result["plan_predicted_series"]}
@@ -584,12 +743,22 @@ def test_plan_predicted_series_does_not_anchor_snap_to_a_balance_correction(conn
     account_id = _make_primary_account(conn, balance_cents=85000)
     _make_item(conn, account_id, day_of_month=25)  # no occurrence in [month_start, today]
     store.create_balance_adjustment(
-        conn, adjustment_id="adj1", account_id=account_id, as_of_date="2026-03-05",
-        real_balance_cents=90000, plan_predicted_cents=100000, created_at="2026-03-05T00:00:00Z",
+        conn,
+        adjustment_id="adj1",
+        account_id=account_id,
+        as_of_date="2026-03-05",
+        real_balance_cents=90000,
+        plan_predicted_cents=100000,
+        created_at="2026-03-05T00:00:00Z",
     )
     store.create_balance_adjustment(
-        conn, adjustment_id="adj2", account_id=account_id, as_of_date="2026-03-10",
-        real_balance_cents=85000, plan_predicted_cents=90000, created_at="2026-03-10T00:00:00Z",
+        conn,
+        adjustment_id="adj2",
+        account_id=account_id,
+        as_of_date="2026-03-10",
+        real_balance_cents=85000,
+        plan_predicted_cents=90000,
+        created_at="2026-03-10T00:00:00Z",
     )
     result = build_cash_flow(conn, TODAY)
     by_date = {p["date"]: p["balance_cents"] for p in result["plan_predicted_series"]}
@@ -611,7 +780,8 @@ def test_plan_predicted_for_primary_today_matches_the_cash_flow_offset_relations
     _make_item(conn, account_id, day_of_month=5, estimate_cents=-15000)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "
-        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')", (account_id,),
+        "VALUES ('t1', ?, '2026-03-05', 'RENT', 'Landlord', -10000, 'p1', 'h1')",
+        (account_id,),
     )
     conn.commit()
     result = build_cash_flow(conn, TODAY)
@@ -626,14 +796,24 @@ def test_week_unit_dated_item_lands_more_than_once_in_the_forward_horizon(conn):
     # 2026-04-03, both inside (TODAY, TODAY+30] = (2026-03-14, 2026-04-13].
     account_id = _make_primary_account(conn, balance_cents=500000)
     _make_item(
-        conn, account_id, name="Paycheck", estimate_cents=200000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=2, anchor_date="2026-03-20",
+        conn,
+        account_id,
+        name="Paycheck",
+        estimate_cents=200000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=2,
+        anchor_date="2026-03-20",
     )
     result = build_cash_flow(conn, TODAY)
     dates = [r["date"] for r in result["expected_next"]["rows"] if r["name"] == "Paycheck"]
     assert dates == ["2026-03-20", "2026-04-03"]
     # Both occurrences actually stepped the projected balance, not just listed.
-    balances = {r["date"]: r["balance_cents"] for r in result["expected_next"]["rows"] if r["name"] == "Paycheck"}
+    balances = {
+        r["date"]: r["balance_cents"]
+        for r in result["expected_next"]["rows"]
+        if r["name"] == "Paycheck"
+    }
     assert balances["2026-03-20"] == 500000 + 200000
     assert balances["2026-04-03"] == 500000 + 200000 + 200000
 
@@ -646,8 +826,14 @@ def test_a_matched_occurrence_does_not_mark_a_later_unmatched_occurrence_process
     # 03-01 and 03-08, both <= today. Only 03-01 has a real matching transaction.
     account_id = _make_primary_account(conn, balance_cents=500000)
     _make_item(
-        conn, account_id, name="Weekly gig", estimate_cents=10000,
-        day_of_month=None, cadence_unit="week", cadence_frequency=1, anchor_date="2026-03-01",
+        conn,
+        account_id,
+        name="Weekly gig",
+        estimate_cents=10000,
+        day_of_month=None,
+        cadence_unit="week",
+        cadence_frequency=1,
+        anchor_date="2026-03-01",
     )
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, plan_item_id, dedupe_hash) "

@@ -17,7 +17,12 @@ def test_get_calendar_returns_pulled_events(client, tmp_vault):
             {
                 "pulled_at": "2026-08-09T12:00:00Z",
                 "events": [
-                    {"summary": "Standup", "start": "2026-08-09T09:00:00-05:00", "end": "2026-08-09T09:30:00-05:00", "all_day": False}
+                    {
+                        "summary": "Standup",
+                        "start": "2026-08-09T09:00:00-05:00",
+                        "end": "2026-08-09T09:30:00-05:00",
+                        "all_day": False,
+                    }
                 ],
             }
         )
@@ -27,12 +32,18 @@ def test_get_calendar_returns_pulled_events(client, tmp_vault):
     body = res.json()
     assert body["pulled_at"] == "2026-08-09T12:00:00Z"
     assert body["events"] == [
-        {"summary": "Standup", "start": "2026-08-09T09:00:00-05:00", "end": "2026-08-09T09:30:00-05:00", "all_day": False}
+        {
+            "summary": "Standup",
+            "start": "2026-08-09T09:00:00-05:00",
+            "end": "2026-08-09T09:30:00-05:00",
+            "all_day": False,
+        }
     ]
 
 
 def test_get_calendar_503_when_vault_unreadable(client, tmp_vault):
     import shutil
+
     shutil.rmtree(tmp_vault / "system")
     res = client.get("/calendar")
     assert res.status_code == 503

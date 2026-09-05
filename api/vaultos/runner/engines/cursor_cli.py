@@ -97,18 +97,30 @@ class CursorCliEngine:
         timeout_s = config.get("timeout_s", DEFAULT_TIMEOUT_S)
         try:
             proc = subprocess.run(
-                argv, cwd=ctx.vault_root, capture_output=True, text=True, timeout=timeout_s,
+                argv,
+                cwd=ctx.vault_root,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise CursorCliEngineError(f"cursor-cli skill '{skill.id}' failed to run: {exc}") from exc
+            raise CursorCliEngineError(
+                f"cursor-cli skill '{skill.id}' failed to run: {exc}"
+            ) from exc
 
         self._write_run_log(ctx, job.id, argv, proc)
 
         resolved_deliverable = None
-        if proc.returncode == 0 and deliverable_path and (ctx.vault_root / deliverable_path).exists():
+        if (
+            proc.returncode == 0
+            and deliverable_path
+            and (ctx.vault_root / deliverable_path).exists()
+        ):
             resolved_deliverable = deliverable_path
 
-        summary = (proc.stdout.strip() or proc.stderr.strip() or f"cursor-cli exited {proc.returncode}")
+        summary = (
+            proc.stdout.strip() or proc.stderr.strip() or f"cursor-cli exited {proc.returncode}"
+        )
         return EngineResult(
             success=proc.returncode == 0,
             exit_code=proc.returncode,
@@ -125,7 +137,8 @@ class CursorCliEngine:
         builder = get_builder(skill.id)
         if builder is not None:
             built = builder(
-                job.args, BuilderContext(vault_root=ctx.vault_root, settings=ctx.settings, job_id=job.id)
+                job.args,
+                BuilderContext(vault_root=ctx.vault_root, settings=ctx.settings, job_id=job.id),
             )
             if built is None:
                 raise CursorCliEngineError(
@@ -153,7 +166,9 @@ class CursorCliEngine:
         return prompt, None
 
     @staticmethod
-    def _write_run_log(ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess) -> None:
+    def _write_run_log(
+        ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess
+    ) -> None:
         log_dir = ctx.state_root / "runs"
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / f"{job_id}.log").write_text(

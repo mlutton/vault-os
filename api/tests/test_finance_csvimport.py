@@ -7,8 +7,11 @@ from vaultos.modules.finance.csvimport import CsvImportError, parse_rows, sniff
 
 def _mapping(**over):
     defaults = dict(
-        source_date="Date", source_merchant="Description",
-        source_amount="Amount", source_debit=None, source_credit=None,
+        source_date="Date",
+        source_merchant="Description",
+        source_amount="Amount",
+        source_debit=None,
+        source_credit=None,
         amount_sign_convention="as_is",
     )
     defaults.update(over)
@@ -40,7 +43,9 @@ def test_sniff_rejects_an_empty_file():
 
 
 def test_parse_rows_single_amount_column_as_is():
-    csv_bytes = b"Date,Description,Amount\n2026-03-01,COMCAST CABLE,-10.00\n2026-03-02,PAYCHECK,2000.00\n"
+    csv_bytes = (
+        b"Date,Description,Amount\n2026-03-01,COMCAST CABLE,-10.00\n2026-03-02,PAYCHECK,2000.00\n"
+    )
     rows = parse_rows(csv_bytes, _mapping())
     assert rows == [
         {"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000},
@@ -57,7 +62,12 @@ def test_parse_rows_single_amount_column_flipped():
 
 def test_parse_rows_debit_credit_split_columns():
     csv_bytes = b"Date,Description,Debit,Credit\n2026-03-01,COMCAST CABLE,10.00,\n2026-03-02,PAYCHECK,,2000.00\n"
-    mapping = _mapping(source_amount=None, source_debit="Debit", source_credit="Credit", amount_sign_convention=None)
+    mapping = _mapping(
+        source_amount=None,
+        source_debit="Debit",
+        source_credit="Credit",
+        amount_sign_convention=None,
+    )
     rows = parse_rows(csv_bytes, mapping)
     assert rows == [
         {"date": "2026-03-01", "merchant_raw": "COMCAST CABLE", "amount_cents": -1000},
@@ -116,8 +126,15 @@ def test_parse_rows_handles_a_ragged_row_missing_trailing_columns():
 
 
 def test_parse_rows_ragged_row_in_an_unmapped_optional_column_is_treated_as_blank():
-    csv_bytes = b"Date,Description,Debit,Credit\n2026-03-01,PAYCHECK,,2000.00\n2026-03-02,ATM FEE,3.50\n"
-    mapping = _mapping(source_amount=None, source_debit="Debit", source_credit="Credit", amount_sign_convention=None)
+    csv_bytes = (
+        b"Date,Description,Debit,Credit\n2026-03-01,PAYCHECK,,2000.00\n2026-03-02,ATM FEE,3.50\n"
+    )
+    mapping = _mapping(
+        source_amount=None,
+        source_debit="Debit",
+        source_credit="Credit",
+        amount_sign_convention=None,
+    )
     rows = parse_rows(csv_bytes, mapping)
     assert rows[1] == {"date": "2026-03-02", "merchant_raw": "ATM FEE", "amount_cents": -350}
 

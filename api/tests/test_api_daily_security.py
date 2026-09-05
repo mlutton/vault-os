@@ -1,5 +1,5 @@
 def test_daily_rejects_path_traversal(client, tmp_vault):
-    (tmp_vault / "CONTEXT.md").write_text("---\nfocus: \"leaked\"\n---\nsecret content")
+    (tmp_vault / "CONTEXT.md").write_text('---\nfocus: "leaked"\n---\nsecret content')
 
     res = client.get("/daily", params={"date": "../CONTEXT"})
     assert res.status_code == 400

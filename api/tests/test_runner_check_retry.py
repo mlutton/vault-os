@@ -79,8 +79,13 @@ def conn(settings):
 
 def _enqueue(conn, vault, registry, ts="2026-09-05T00:00:00Z"):
     job = store.create_job(
-        conn, job_id=f"checked-script-{ts}", skill="checked-script", args={},
-        source="api", engine=registry.get("checked-script").engine, ts_queued=ts,
+        conn,
+        job_id=f"checked-script-{ts}",
+        skill="checked-script",
+        args={},
+        source="api",
+        engine=registry.get("checked-script").engine,
+        ts_queued=ts,
     )
     write_intent(vault, job_id=job.id, skill="checked-script", args={}, ts=ts, source="api")
     return job
@@ -133,8 +138,7 @@ def test_check_fail_then_retry_then_pass(conn, vault, tmp_path, settings):
     assert log_text.count("ran") == 2, "engine should run once, then once more on retry"
     assert "feedback=<none>" in log_text, "first attempt has no retry context"
     assert "first check failure marker" in log_text, (
-        "the retried process must see the failed check's stdout via "
-        "VAULTOS_CHECK_FEEDBACK"
+        "the retried process must see the failed check's stdout via VAULTOS_CHECK_FEEDBACK"
     )
 
     assert len(events) == 1
@@ -177,8 +181,13 @@ def test_engine_failure_on_retry_is_error(conn, vault, tmp_path, settings):
         f'echo "ok"\n',
     )
     skill = {
-        "id": "checked-script", "label": "Checked Script", "deck": True, "engine": "script",
-        "args": [], "engine_config": {"argv": [str(engine_script)]}, "check": "exit 1",
+        "id": "checked-script",
+        "label": "Checked Script",
+        "deck": True,
+        "engine": "script",
+        "args": [],
+        "engine_config": {"argv": [str(engine_script)]},
+        "check": "exit 1",
     }
     (vault / "system" / "skills.json").write_text(json.dumps({"version": 1, "skills": [skill]}))
     registry = load_registry(vault)
@@ -213,7 +222,9 @@ def test_no_check_declared_engine_success_suffices(conn, vault, tmp_path, settin
     assert events[0]["check"] is None
 
 
-def test_check_timeout_is_treated_as_failure_then_retry_passes(conn, vault, tmp_path, settings, monkeypatch):
+def test_check_timeout_is_treated_as_failure_then_retry_passes(
+    conn, vault, tmp_path, settings, monkeypatch
+):
     """A check that hangs past CHECK_TIMEOUT_S is treated exactly like a
     check that exits nonzero: it's a failure, its feedback names the
     timeout, and the one retry engages with that feedback visible to the
@@ -223,9 +234,7 @@ def test_check_timeout_is_treated_as_failure_then_retry_passes(conn, vault, tmp_
     # Hangs well past the 0.3s timeout on the first call (no marker file
     # yet); on the retry's check, the marker exists so it returns instantly.
     counter = tmp_path / "check-counter"
-    check_cmd = (
-        f'if [ -f "{counter}" ]; then exit 0; else touch "{counter}"; sleep 5; fi'
-    )
+    check_cmd = f'if [ -f "{counter}" ]; then exit 0; else touch "{counter}"; sleep 5; fi'
     run_log = _registry_with_check(vault, tmp_path, check_cmd)
     registry = load_registry(vault)
     job = _enqueue(conn, vault, registry)
@@ -239,8 +248,7 @@ def test_check_timeout_is_treated_as_failure_then_retry_passes(conn, vault, tmp_
     log_text = run_log.read_text()
     assert log_text.count("ran") == 2, "engine should run once, then once more on retry"
     assert "timed out" in log_text, (
-        "the retried process must see the timed-out check's feedback via "
-        "VAULTOS_CHECK_FEEDBACK"
+        "the retried process must see the timed-out check's feedback via VAULTOS_CHECK_FEEDBACK"
     )
 
     assert len(events) == 1
@@ -278,12 +286,17 @@ def test_check_not_run_when_engine_itself_fails(conn, vault, tmp_path, settings)
     failure -- check+retry only ever engages after an engine success."""
     run_log = tmp_path / "run-log.txt"
     engine_script = _write_script(
-        tmp_path / "engine.sh", f'#!/bin/sh\necho "ran" >> "{run_log}"\nexit 9\n',
+        tmp_path / "engine.sh",
+        f'#!/bin/sh\necho "ran" >> "{run_log}"\nexit 9\n',
     )
     check_marker = tmp_path / "check-ran"
     skill = {
-        "id": "checked-script", "label": "Checked Script", "deck": True, "engine": "script",
-        "args": [], "engine_config": {"argv": [str(engine_script)]},
+        "id": "checked-script",
+        "label": "Checked Script",
+        "deck": True,
+        "engine": "script",
+        "args": [],
+        "engine_config": {"argv": [str(engine_script)]},
         "check": f'touch "{check_marker}"; exit 0',
     }
     (vault / "system" / "skills.json").write_text(json.dumps({"version": 1, "skills": [skill]}))

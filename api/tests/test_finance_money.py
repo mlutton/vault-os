@@ -335,14 +335,18 @@ def test_budget_planned_cents_in_period_weekly_applies_adjustment_only_to_its_ow
     # on -27500. The OTHER weeks in this same period (including the two boundary weeks)
     # are untouched by an adjustment scoped to only this one window.
     adjustment = (-3500, 2, "2026-08-03")
-    assert budget_planned_cents_in_period(-7000, "weekly", "2026-08", adjustment=adjustment) == -27500
+    assert (
+        budget_planned_cents_in_period(-7000, "weekly", "2026-08", adjustment=adjustment) == -27500
+    )
 
 
 def test_budget_planned_cents_in_period_ignores_an_adjustment_for_a_different_window():
     # An adjustment recorded for a window that doesn't land in this period at all must
     # have zero effect -- the plain baseline total.
     adjustment = (-100, 0, "2026-09-07")
-    assert budget_planned_cents_in_period(-7000, "weekly", "2026-08", adjustment=adjustment) == -31000
+    assert (
+        budget_planned_cents_in_period(-7000, "weekly", "2026-08", adjustment=adjustment) == -31000
+    )
 
 
 def test_budget_planned_cents_in_period_monthly_applies_the_adjustment_to_the_whole_period():
@@ -351,7 +355,10 @@ def test_budget_planned_cents_in_period_monthly_applies_the_adjustment_to_the_wh
     # remain (per-day math itself already covered by adjusted_spread_daily_amounts's
     # own tests).
     adjustment = (-20000, 10, "2026-08-01")
-    assert budget_planned_cents_in_period(-40000, "monthly", "2026-08", adjustment=adjustment) == -20000
+    assert (
+        budget_planned_cents_in_period(-40000, "monthly", "2026-08", adjustment=adjustment)
+        == -20000
+    )
 
 
 def test_one_off_occurrence_only_occurs_in_its_anchor_period():
@@ -367,29 +374,47 @@ def test_one_off_occurrence_requires_day_of_month():
 def test_dated_occurrences_month_unit_frequency_one_lands_every_month():
     # frequency=1 (monthly) needs no anchor_period -- lands unconditionally, matching
     # the old "monthly is the one dated cadence with no anchor" rule.
-    occs = dated_occurrences_in_range("month", 1, 15, None, None, date(2026, 1, 1), date(2026, 3, 31))
+    occs = dated_occurrences_in_range(
+        "month", 1, 15, None, None, date(2026, 1, 1), date(2026, 3, 31)
+    )
     assert occs == [date(2026, 1, 15), date(2026, 2, 15), date(2026, 3, 15)]
 
 
 def test_dated_occurrences_month_unit_clamps_to_last_day_of_short_month():
-    occs = dated_occurrences_in_range("month", 1, 31, None, None, date(2026, 2, 1), date(2026, 2, 28))
+    occs = dated_occurrences_in_range(
+        "month", 1, 31, None, None, date(2026, 2, 1), date(2026, 2, 28)
+    )
     assert occs == [date(2026, 2, 28)]
 
 
 def test_dated_occurrences_month_unit_frequency_three_is_quarterly():
-    occs = dated_occurrences_in_range("month", 3, 1, "2026-01", None, date(2026, 1, 1), date(2027, 1, 31))
-    assert occs == [date(2026, 1, 1), date(2026, 4, 1), date(2026, 7, 1), date(2026, 10, 1), date(2027, 1, 1)]
+    occs = dated_occurrences_in_range(
+        "month", 3, 1, "2026-01", None, date(2026, 1, 1), date(2027, 1, 31)
+    )
+    assert occs == [
+        date(2026, 1, 1),
+        date(2026, 4, 1),
+        date(2026, 7, 1),
+        date(2026, 10, 1),
+        date(2027, 1, 1),
+    ]
 
 
 def test_dated_occurrences_month_unit_frequency_six_and_twelve_use_that_cycle():
-    semiannual = dated_occurrences_in_range("month", 6, 24, "2026-02", None, date(2026, 1, 1), date(2026, 12, 31))
+    semiannual = dated_occurrences_in_range(
+        "month", 6, 24, "2026-02", None, date(2026, 1, 1), date(2026, 12, 31)
+    )
     assert semiannual == [date(2026, 2, 24), date(2026, 8, 24)]
-    annual = dated_occurrences_in_range("month", 12, 24, "2026-02", None, date(2026, 1, 1), date(2027, 12, 31))
+    annual = dated_occurrences_in_range(
+        "month", 12, 24, "2026-02", None, date(2026, 1, 1), date(2027, 12, 31)
+    )
     assert annual == [date(2026, 2, 24), date(2027, 2, 24)]
 
 
 def test_dated_occurrences_month_unit_never_occurs_before_its_anchor():
-    occs = dated_occurrences_in_range("month", 3, 1, "2026-04", None, date(2026, 1, 1), date(2026, 3, 31))
+    occs = dated_occurrences_in_range(
+        "month", 3, 1, "2026-04", None, date(2026, 1, 1), date(2026, 3, 31)
+    )
     assert occs == []
 
 
@@ -404,7 +429,9 @@ def test_dated_occurrences_month_unit_frequency_one_still_respects_an_anchor_as_
     # as a lower bound -- a Posting created in August must never show a phantom Overdue
     # occurrence back in January just because frequency=1 used to ignore anchor_period
     # entirely.
-    occs = dated_occurrences_in_range("month", 1, 15, "2026-03", None, date(2026, 1, 1), date(2026, 5, 31))
+    occs = dated_occurrences_in_range(
+        "month", 1, 15, "2026-03", None, date(2026, 1, 1), date(2026, 5, 31)
+    )
     assert occs == [date(2026, 3, 15), date(2026, 4, 15), date(2026, 5, 15)]
 
 
@@ -412,30 +439,40 @@ def test_dated_occurrences_month_unit_frequency_one_with_no_anchor_still_lands_u
     # Regression guard for the case above -- an unset anchor_period must remain a no-op
     # (matches today's behavior for items with no Anchor set, ADR-0019 ticket #17's own
     # acceptance criterion), not silently start requiring one.
-    occs = dated_occurrences_in_range("month", 1, 15, None, None, date(2026, 1, 1), date(2026, 3, 31))
+    occs = dated_occurrences_in_range(
+        "month", 1, 15, None, None, date(2026, 1, 1), date(2026, 3, 31)
+    )
     assert occs == [date(2026, 1, 15), date(2026, 2, 15), date(2026, 3, 15)]
 
 
 def test_dated_occurrences_week_unit_weekly_lands_every_seven_days():
-    occs = dated_occurrences_in_range("week", 1, None, None, "2026-08-07", date(2026, 8, 1), date(2026, 8, 31))
+    occs = dated_occurrences_in_range(
+        "week", 1, None, None, "2026-08-07", date(2026, 8, 1), date(2026, 8, 31)
+    )
     assert occs == [date(2026, 8, 7), date(2026, 8, 14), date(2026, 8, 21), date(2026, 8, 28)]
 
 
 def test_dated_occurrences_week_unit_biweekly_lands_every_fourteen_days():
     # 2026-08-07 is a Friday -- "every other Friday" from there.
-    occs = dated_occurrences_in_range("week", 2, None, None, "2026-08-07", date(2026, 8, 1), date(2026, 9, 30))
+    occs = dated_occurrences_in_range(
+        "week", 2, None, None, "2026-08-07", date(2026, 8, 1), date(2026, 9, 30)
+    )
     assert occs == [date(2026, 8, 7), date(2026, 8, 21), date(2026, 9, 4), date(2026, 9, 18)]
 
 
 def test_dated_occurrences_week_unit_never_occurs_before_its_anchor():
-    occs = dated_occurrences_in_range("week", 2, None, None, "2026-08-07", date(2026, 7, 1), date(2026, 8, 6))
+    occs = dated_occurrences_in_range(
+        "week", 2, None, None, "2026-08-07", date(2026, 7, 1), date(2026, 8, 6)
+    )
     assert occs == []
 
 
 def test_dated_occurrences_week_unit_can_land_three_times_in_one_calendar_month():
     # A biweekly cycle phased onto day 1/2/3 of a 31-day month completes 3 cycles
     # (day 1, 15, 29) -- callers must not assume at most 2 occurrences per month.
-    occs = dated_occurrences_in_range("week", 2, None, None, "2026-08-01", date(2026, 8, 1), date(2026, 8, 31))
+    occs = dated_occurrences_in_range(
+        "week", 2, None, None, "2026-08-01", date(2026, 8, 1), date(2026, 8, 31)
+    )
     assert occs == [date(2026, 8, 1), date(2026, 8, 15), date(2026, 8, 29)]
 
 
@@ -463,32 +500,44 @@ def test_dated_cadence_label_falls_back_for_a_pair_outside_the_presets():
 
 
 def test_occurrence_status_matched_transaction_is_processed_even_if_unticked():
-    status = occurrence_status(date(2026, 3, 14), today=date(2026, 3, 20), matched=True, ticked=False)
+    status = occurrence_status(
+        date(2026, 3, 14), today=date(2026, 3, 20), matched=True, ticked=False
+    )
     assert status == "processed"
 
 
 def test_occurrence_status_ticked_with_no_import_is_processed():
-    status = occurrence_status(date(2026, 3, 14), today=date(2026, 3, 20), matched=False, ticked=True)
+    status = occurrence_status(
+        date(2026, 3, 14), today=date(2026, 3, 20), matched=False, ticked=True
+    )
     assert status == "processed"
 
 
 def test_occurrence_status_matched_and_ticked_agree_and_are_still_processed():
-    status = occurrence_status(date(2026, 3, 14), today=date(2026, 3, 20), matched=True, ticked=True)
+    status = occurrence_status(
+        date(2026, 3, 14), today=date(2026, 3, 20), matched=True, ticked=True
+    )
     assert status == "processed"
 
 
 def test_occurrence_status_unprocessed_past_date_is_overdue_not_skipped():
-    status = occurrence_status(date(2026, 3, 14), today=date(2026, 3, 20), matched=False, ticked=False)
+    status = occurrence_status(
+        date(2026, 3, 14), today=date(2026, 3, 20), matched=False, ticked=False
+    )
     assert status == "overdue"
 
 
 def test_occurrence_status_unprocessed_today_is_due_today():
-    status = occurrence_status(date(2026, 3, 20), today=date(2026, 3, 20), matched=False, ticked=False)
+    status = occurrence_status(
+        date(2026, 3, 20), today=date(2026, 3, 20), matched=False, ticked=False
+    )
     assert status == "due_today"
 
 
 def test_occurrence_status_unprocessed_future_date_is_upcoming():
-    status = occurrence_status(date(2026, 3, 25), today=date(2026, 3, 20), matched=False, ticked=False)
+    status = occurrence_status(
+        date(2026, 3, 25), today=date(2026, 3, 20), matched=False, ticked=False
+    )
     assert status == "upcoming"
 
 

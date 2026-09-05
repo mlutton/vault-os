@@ -19,9 +19,13 @@ def registry(tmp_vault):
     return load_registry(tmp_vault)
 
 
-def _write_queue_file(tmp_vault, job_id, skill="metrics-pull", args=None, source="api", ts="2026-08-09T00:00:00Z"):
+def _write_queue_file(
+    tmp_vault, job_id, skill="metrics-pull", args=None, source="api", ts="2026-08-09T00:00:00Z"
+):
     path = tmp_vault / "system" / "queue" / f"{job_id}.json"
-    path.write_text(json.dumps({"id": job_id, "skill": skill, "args": args or {}, "ts": ts, "source": source}))
+    path.write_text(
+        json.dumps({"id": job_id, "skill": skill, "args": args or {}, "ts": ts, "source": source})
+    )
     return path
 
 
@@ -70,11 +74,13 @@ def test_reconcile_brings_run_record_forward_to_terminal_status(tmp_vault, conn,
     assert job.ts_queued == "2026-08-09T00:00:00Z"
     assert job.ts_started == "2026-08-09T00:00:01Z"
     assert job.ts_completed == "2026-08-09T00:00:05Z"
-    assert job.deliverables == [f"inbox/reports/j2.md"]
+    assert job.deliverables == ["inbox/reports/j2.md"]
 
 
 def test_reconcile_leaves_in_progress_run_as_running(tmp_vault, conn, registry):
-    _write_run_record(tmp_vault, "j3", status="running", ts_completed=None, exit_code=None, summary=None)
+    _write_run_record(
+        tmp_vault, "j3", status="running", ts_completed=None, exit_code=None, summary=None
+    )
     reconcile_from_files(tmp_vault, conn, registry)
 
     job = store.get_job(conn, "j3")
@@ -86,18 +92,32 @@ def test_reconcile_leaves_in_progress_run_as_running(tmp_vault, conn, registry):
 
 def test_reconcile_does_not_regress_a_more_advanced_db_row(tmp_vault, conn, registry):
     store.create_job(
-        conn, job_id="j4", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="2026-08-09T00:00:00Z",
+        conn,
+        job_id="j4",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:00Z",
     )
     now = datetime.now(timezone.utc).isoformat()
-    store.apply_event(conn, job_id="j4", status="running", ts="2026-08-09T00:00:01Z", received_at=now)
     store.apply_event(
-        conn, job_id="j4", status="ok", ts="2026-08-09T00:00:05Z", received_at=now,
-        exit_code=0, summary="finished before the spine went down",
+        conn, job_id="j4", status="running", ts="2026-08-09T00:00:01Z", received_at=now
+    )
+    store.apply_event(
+        conn,
+        job_id="j4",
+        status="ok",
+        ts="2026-08-09T00:00:05Z",
+        received_at=now,
+        exit_code=0,
+        summary="finished before the spine went down",
     )
 
     # A stale run record on disk still shows "running" -- must not regress the DB.
-    _write_run_record(tmp_vault, "j4", status="running", ts_completed=None, exit_code=None, summary=None)
+    _write_run_record(
+        tmp_vault, "j4", status="running", ts_completed=None, exit_code=None, summary=None
+    )
     reconcile_from_files(tmp_vault, conn, registry)
 
     job = store.get_job(conn, "j4")

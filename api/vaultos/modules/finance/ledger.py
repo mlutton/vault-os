@@ -73,7 +73,7 @@ def build_ledger(conn: sqlite3.Connection, ledger_filter: str | None) -> dict:
 
 
 def remember_match_text(conn: sqlite3.Connection, plan_item_id: str, merchant_raw: str) -> None:
-    """"remember this" (README field spec): appends the transaction's own merchant text
+    """ "remember this" (README field spec): appends the transaction's own merchant text
     to the confirmed Plan Item's match_text, so a future import matches by rule instead
     of guessing. No-ops on an exact-duplicate entry rather than piling up repeats. Also
     no-ops for a Budget-kind item (ADR-0019: match_text is meaningless for a Budget,

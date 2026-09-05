@@ -83,7 +83,16 @@ def create_account(
         conn.execute(
             "INSERT INTO account (id, nickname, institution, type, last_four, balance_cents, "
             "is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (account_id, nickname, institution, account_type, last_four, balance_cents, int(is_primary), created_at),
+            (
+                account_id,
+                nickname,
+                institution,
+                account_type,
+                last_four,
+                balance_cents,
+                int(is_primary),
+                created_at,
+            ),
         )
         conn.commit()
         return _get_account(conn, account_id)  # type: ignore[return-value]
@@ -146,9 +155,9 @@ def _is_catch_all_conflict(exc: sqlite3.DatabaseError) -> bool:
     # subclass wraps them, so pairing that against the message is narrower and more
     # version/locale-stable than a pure message check alone (SQLITE_CONSTRAINT_UNIQUE
     # also covers e.g. account_primary_unique, hence still requiring the column name).
-    return getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_CONSTRAINT_UNIQUE and "plan_item.is_catch_all" in str(
-        exc
-    )
+    return getattr(
+        exc, "sqlite_errorcode", None
+    ) == sqlite3.SQLITE_CONSTRAINT_UNIQUE and "plan_item.is_catch_all" in str(exc)
 
 
 class InvalidPlanItemError(Exception):
@@ -200,11 +209,15 @@ def _validate_kind_fields(
             # auto-default a Posting to (it's a required field with many valid shapes),
             # so this can only be surfaced as a clearer error, not auto-fixed.
             raise InvalidPlanItemError("cadence is required when switching to Posting")
-        _validate_cadence_fields(cadence, day_of_month, anchor_period, cadence_unit, cadence_frequency, anchor_date)
+        _validate_cadence_fields(
+            cadence, day_of_month, anchor_period, cadence_unit, cadence_frequency, anchor_date
+        )
         return
     if kind == "budget":
         if reset_period not in RESET_PERIODS:
-            raise InvalidPlanItemError(f"reset_period must be one of {sorted(RESET_PERIODS)}, got {reset_period!r}")
+            raise InvalidPlanItemError(
+                f"reset_period must be one of {sorted(RESET_PERIODS)}, got {reset_period!r}"
+            )
         meaningless_fields = {
             "day_of_month": day_of_month,
             "anchor_period": anchor_period,
@@ -259,11 +272,20 @@ def _validate_cadence_fields(
         return
     if cadence == "dated":
         if cadence_unit not in money.CADENCE_UNITS:
-            raise InvalidPlanItemError(f"cadence_unit must be one of {sorted(money.CADENCE_UNITS)}, got {cadence_unit!r}")
-        if not isinstance(cadence_frequency, int) or isinstance(cadence_frequency, bool) or cadence_frequency < 1:
-            raise InvalidPlanItemError(f"cadence_frequency must be a positive integer, got {cadence_frequency!r}")
+            raise InvalidPlanItemError(
+                f"cadence_unit must be one of {sorted(money.CADENCE_UNITS)}, got {cadence_unit!r}"
+            )
+        if (
+            not isinstance(cadence_frequency, int)
+            or isinstance(cadence_frequency, bool)
+            or cadence_frequency < 1
+        ):
+            raise InvalidPlanItemError(
+                f"cadence_frequency must be a positive integer, got {cadence_frequency!r}"
+            )
         if not any(
-            p["unit"] == cadence_unit and p["frequency"] == cadence_frequency for p in money.DATED_CADENCE_PRESETS
+            p["unit"] == cadence_unit and p["frequency"] == cadence_frequency
+            for p in money.DATED_CADENCE_PRESETS
         ):
             raise InvalidPlanItemError(
                 f"unsupported (cadence_unit, cadence_frequency) pair: ({cadence_unit!r}, {cadence_frequency!r})"
@@ -279,15 +301,21 @@ def _validate_cadence_fields(
             if day_of_month is None:
                 raise InvalidPlanItemError("month-unit 'dated' cadence requires day_of_month")
             if not 1 <= day_of_month <= 31:
-                raise InvalidPlanItemError(f"day_of_month must be between 1 and 31, got {day_of_month}")
+                raise InvalidPlanItemError(
+                    f"day_of_month must be between 1 and 31, got {day_of_month}"
+                )
             if cadence_frequency != 1 and anchor_period is None:
-                raise InvalidPlanItemError("month-unit 'dated' cadence with frequency > 1 requires anchor_period")
+                raise InvalidPlanItemError(
+                    "month-unit 'dated' cadence with frequency > 1 requires anchor_period"
+                )
             # frequency=1 (monthly) never REQUIRES an anchor_period (ADR-0019 ticket #17
             # -- it's an optional lower bound, not a phase-fixer), but a malformed one
             # sent anyway must still be rejected rather than silently ignored, same as
             # every other frequency.
             if anchor_period is not None and not money.is_valid_period(anchor_period):
-                raise InvalidPlanItemError(f"anchor_period must be 'YYYY-MM', got {anchor_period!r}")
+                raise InvalidPlanItemError(
+                    f"anchor_period must be 'YYYY-MM', got {anchor_period!r}"
+                )
         return
     raise InvalidPlanItemError(f"unknown cadence {cadence!r}")
 
@@ -397,8 +425,15 @@ def create_plan_item(
     if kind == "budget":
         cadence = "budget"
     _validate_kind_fields(
-        kind, cadence, day_of_month, anchor_period, cadence_unit, cadence_frequency,
-        anchor_date, reset_period, match_text,
+        kind,
+        cadence,
+        day_of_month,
+        anchor_period,
+        cadence_unit,
+        cadence_frequency,
+        anchor_date,
+        reset_period,
+        match_text,
     )
     with _lock:
         try:
@@ -408,9 +443,23 @@ def create_plan_item(
                 "account_id, verified, is_catch_all, match_text) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    item_id, name, estimate_cents, plan_type, payee, day_of_month, cadence,
-                    anchor_period, cadence_unit, cadence_frequency, anchor_date, kind, reset_period,
-                    account_id, int(verified), int(is_catch_all), json.dumps(match_text),
+                    item_id,
+                    name,
+                    estimate_cents,
+                    plan_type,
+                    payee,
+                    day_of_month,
+                    cadence,
+                    anchor_period,
+                    cadence_unit,
+                    cadence_frequency,
+                    anchor_date,
+                    kind,
+                    reset_period,
+                    account_id,
+                    int(verified),
+                    int(is_catch_all),
+                    json.dumps(match_text),
                 ),
             )
         except sqlite3.DatabaseError as exc:
@@ -427,9 +476,22 @@ def create_plan_item(
 # without first stripping fields this store function doesn't own (e.g. account_id, which
 # this ticket's CRUD never reassigns).
 _PLAN_ITEM_UPDATE_COLUMNS = {
-    "name", "estimate_cents", "type", "payee", "day_of_month", "cadence",
-    "anchor_period", "cadence_unit", "cadence_frequency", "anchor_date", "kind", "reset_period",
-    "account_id", "verified", "is_catch_all", "match_text",
+    "name",
+    "estimate_cents",
+    "type",
+    "payee",
+    "day_of_month",
+    "cadence",
+    "anchor_period",
+    "cadence_unit",
+    "cadence_frequency",
+    "anchor_date",
+    "kind",
+    "reset_period",
+    "account_id",
+    "verified",
+    "is_catch_all",
+    "match_text",
 }
 
 
@@ -471,7 +533,9 @@ def update_plan_item(conn: sqlite3.Connection, item_id: str, changes: dict) -> P
             relevant["day_of_month"] if "day_of_month" in relevant else existing.day_of_month,
             relevant["anchor_period"] if "anchor_period" in relevant else existing.anchor_period,
             relevant["cadence_unit"] if "cadence_unit" in relevant else existing.cadence_unit,
-            relevant["cadence_frequency"] if "cadence_frequency" in relevant else existing.cadence_frequency,
+            relevant["cadence_frequency"]
+            if "cadence_frequency" in relevant
+            else existing.cadence_frequency,
             relevant["anchor_date"] if "anchor_date" in relevant else existing.anchor_date,
             relevant["reset_period"] if "reset_period" in relevant else existing.reset_period,
             relevant["match_text"] if "match_text" in relevant else existing.match_text,
@@ -551,7 +615,9 @@ def get_plan_periods_for_period(conn: sqlite3.Connection, period: str) -> dict[s
         return {r["plan_item_id"]: _row_to_plan_period(r) for r in rows}
 
 
-def get_plan_period_for_item(conn: sqlite3.Connection, plan_item_id: str, period: str) -> PlanPeriod | None:
+def get_plan_period_for_item(
+    conn: sqlite3.Connection, plan_item_id: str, period: str
+) -> PlanPeriod | None:
     """Single-row counterpart to get_plan_periods_for_period -- ticket #23 code review:
     plan.active_budget_adjustment needs to check a SPECIFIC other period's bucket too
     (a Weekly Budget's Reset window can straddle a month boundary, so an override
@@ -560,7 +626,8 @@ def get_plan_period_for_item(conn: sqlite3.Connection, plan_item_id: str, period
     use for."""
     with _lock:
         row = conn.execute(
-            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?", (plan_item_id, period)
+            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?",
+            (plan_item_id, period),
         ).fetchone()
         return _row_to_plan_period(row) if row else None
 
@@ -583,14 +650,23 @@ def _reject_if_period_closed(period: str, open_period: str, last_closed_period: 
     check, deliberately dropping the catch-up leniency for good."""
     if last_closed_period is not None:
         if period != open_period:
-            raise PeriodClosedError(f"period {period!r} is closed; the open period is {open_period!r}")
+            raise PeriodClosedError(
+                f"period {period!r} is closed; the open period is {open_period!r}"
+            )
         return
     if period > open_period:
-        raise PeriodClosedError(f"period {period!r} is in the future; the open period is {open_period!r}")
+        raise PeriodClosedError(
+            f"period {period!r} is in the future; the open period is {open_period!r}"
+        )
 
 
 def set_ticked(
-    conn: sqlite3.Connection, plan_item_id: str, period: str, ticked: bool, ticked_at: str | None, open_period: str,
+    conn: sqlite3.Connection,
+    plan_item_id: str,
+    period: str,
+    ticked: bool,
+    ticked_at: str | None,
+    open_period: str,
     last_closed_period: str | None = None,
 ) -> PlanPeriod:
     """The one write path for plan_period rows -- creates the row lazily (per the handoff
@@ -608,7 +684,8 @@ def set_ticked(
     _reject_if_period_closed(period, open_period, last_closed_period)
     with _lock:
         existing = conn.execute(
-            "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?", (plan_item_id, period)
+            "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?",
+            (plan_item_id, period),
         ).fetchone()
         if existing is None:
             conn.execute(
@@ -622,14 +699,21 @@ def set_ticked(
             )
         conn.commit()
         row = conn.execute(
-            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?", (plan_item_id, period)
+            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?",
+            (plan_item_id, period),
         ).fetchone()
         return _row_to_plan_period(row)
 
 
 def set_adjusted(
-    conn: sqlite3.Connection, plan_item_id: str, period: str, target_cents: int,
-    window_start: str, set_at: str, open_period: str, last_closed_period: str | None = None,
+    conn: sqlite3.Connection,
+    plan_item_id: str,
+    period: str,
+    target_cents: int,
+    window_start: str,
+    set_at: str,
+    open_period: str,
+    last_closed_period: str | None = None,
 ) -> PlanPeriod:
     """ADR-0019 ticket #23: Adjusted -- a manual, single-Reset-Period override changing
     a Budget's target amount, forward-only from the moment it's set. Creates the
@@ -661,7 +745,8 @@ def set_adjusted(
     _reject_if_period_closed(period, open_period, last_closed_period)
     with _lock:
         existing = conn.execute(
-            "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?", (plan_item_id, period)
+            "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?",
+            (plan_item_id, period),
         ).fetchone()
         if existing is None:
             conn.execute(
@@ -678,7 +763,8 @@ def set_adjusted(
             )
         conn.commit()
         row = conn.execute(
-            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?", (plan_item_id, period)
+            "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?",
+            (plan_item_id, period),
         ).fetchone()
         return _row_to_plan_period(row)
 
@@ -701,7 +787,11 @@ def sum_matched_transactions_for_period(conn: sqlite3.Connection, period: str) -
             "WHERE date >= ? AND date < ? GROUP BY effective_plan_item_id",
             (catch_all_id, start, end),
         ).fetchall()
-        return {r["effective_plan_item_id"]: r["total"] for r in rows if r["effective_plan_item_id"] is not None}
+        return {
+            r["effective_plan_item_id"]: r["total"]
+            for r in rows
+            if r["effective_plan_item_id"] is not None
+        }
 
 
 def count_matched_transactions_for_period(conn: sqlite3.Connection, period: str) -> dict[str, int]:
@@ -721,7 +811,11 @@ def count_matched_transactions_for_period(conn: sqlite3.Connection, period: str)
             "WHERE date >= ? AND date < ? GROUP BY effective_plan_item_id",
             (catch_all_id, start, end),
         ).fetchall()
-        return {r["effective_plan_item_id"]: r["n"] for r in rows if r["effective_plan_item_id"] is not None}
+        return {
+            r["effective_plan_item_id"]: r["n"]
+            for r in rows
+            if r["effective_plan_item_id"] is not None
+        }
 
 
 def any_transactions_for_period(conn: sqlite3.Connection, period: str) -> bool:
@@ -730,7 +824,9 @@ def any_transactions_for_period(conn: sqlite3.Connection, period: str) -> bool:
     item never matched" (a genuine, separately-displayed $0/no-match state)."""
     start, end = money.period_bounds(period)
     with _lock:
-        row = conn.execute("SELECT EXISTS(SELECT 1 FROM txn WHERE date >= ? AND date < ?)", (start, end)).fetchone()
+        row = conn.execute(
+            "SELECT EXISTS(SELECT 1 FROM txn WHERE date >= ? AND date < ?)", (start, end)
+        ).fetchone()
         return bool(row[0])
 
 
@@ -797,7 +893,9 @@ def get_last_closed_period(conn: sqlite3.Connection) -> str | None:
     """NULL until the very first real Month-End Close runs (ticket #24) -- the
     "has real closing begun at all" signal _reject_if_period_closed branches on."""
     with _lock:
-        row = conn.execute("SELECT last_closed_period FROM finance_settings WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT last_closed_period FROM finance_settings WHERE id = 1"
+        ).fetchone()
         return row["last_closed_period"]
 
 
@@ -840,12 +938,15 @@ def list_planned_postings_for_period(conn: sqlite3.Connection, period: str) -> l
     occurrences fresh."""
     with _lock:
         rows = conn.execute(
-            f"SELECT * FROM planned_posting WHERE period = ? ORDER BY {_EFFECTIVE_DATE_SQL}", (period,)
+            f"SELECT * FROM planned_posting WHERE period = ? ORDER BY {_EFFECTIVE_DATE_SQL}",
+            (period,),
         ).fetchall()
         return [_row_to_planned_posting(r) for r in rows]
 
 
-def list_planned_postings_for_item_period(conn: sqlite3.Connection, plan_item_id: str, period: str) -> list[PlannedPosting]:
+def list_planned_postings_for_item_period(
+    conn: sqlite3.Connection, plan_item_id: str, period: str
+) -> list[PlannedPosting]:
     with _lock:
         rows = conn.execute(
             f"SELECT * FROM planned_posting WHERE plan_item_id = ? AND period = ? ORDER BY {_EFFECTIVE_DATE_SQL}",
@@ -854,7 +955,9 @@ def list_planned_postings_for_item_period(conn: sqlite3.Connection, plan_item_id
         return [_row_to_planned_posting(r) for r in rows]
 
 
-def list_unreconciled_planned_postings_for_period(conn: sqlite3.Connection, period: str) -> list[PlannedPosting]:
+def list_unreconciled_planned_postings_for_period(
+    conn: sqlite3.Connection, period: str
+) -> list[PlannedPosting]:
     """Every Planned Posting in `period` still needing attention when the period closes
     (ticket #24's carry-forward candidates) -- unmatched AND not covered by a manual
     tick, the exact same "processed" definition money.occurrence_status already uses
@@ -873,7 +976,9 @@ def list_unreconciled_planned_postings_for_period(conn: sqlite3.Connection, peri
 
 
 def carry_forward_planned_postings(
-    conn: sqlite3.Connection, posting_ids: list[str], new_period: str,
+    conn: sqlite3.Connection,
+    posting_ids: list[str],
+    new_period: str,
 ) -> list[PlannedPosting]:
     """Moves each row's `period` column to `new_period`, in place -- id, expected_date,
     deferred_date, and matched_txn_id (always NULL for a carry-forward candidate) all
@@ -952,7 +1057,10 @@ _PLANNED_POSTING_UPDATE_COLUMNS = {"deferred_date", "expected_amount_cents"}
 
 
 def update_planned_posting(
-    conn: sqlite3.Connection, posting_id: str, changes: dict, open_period: str,
+    conn: sqlite3.Connection,
+    posting_id: str,
+    changes: dict,
+    open_period: str,
     last_closed_period: str | None = None,
 ) -> PlannedPosting | None:
     """ticket #22: Deferred -- `deferred_date` is the only date this touches. `expected_date`
@@ -975,7 +1083,9 @@ def update_planned_posting(
     target period is still Open... a Closed Period must stay closed") applied to this
     sibling endpoint too, a gap caught in code review."""
     with _lock:
-        existing = conn.execute("SELECT * FROM planned_posting WHERE id = ?", (posting_id,)).fetchone()
+        existing = conn.execute(
+            "SELECT * FROM planned_posting WHERE id = ?", (posting_id,)
+        ).fetchone()
         if existing is None:
             return None
         _reject_if_period_closed(existing["period"], open_period, last_closed_period)
@@ -998,7 +1108,10 @@ def get_planned_posting(conn: sqlite3.Connection, posting_id: str) -> PlannedPos
 
 
 def _attribute_transaction_to_planned_posting(
-    conn: sqlite3.Connection, plan_item_id: str, txn_date: str, txn_id: str,
+    conn: sqlite3.Connection,
+    plan_item_id: str,
+    txn_date: str,
+    txn_id: str,
 ) -> PlannedPosting | None:
     """Lock-free core -- callable from inside a caller (commit_import, update_transaction)
     that already holds `_lock`, same _get_account/_list_plan_items-style private-core
@@ -1019,7 +1132,10 @@ def _attribute_transaction_to_planned_posting(
 
 
 def attribute_transaction_to_planned_posting(
-    conn: sqlite3.Connection, plan_item_id: str, txn_date: str, txn_id: str,
+    conn: sqlite3.Connection,
+    plan_item_id: str,
+    txn_date: str,
+    txn_id: str,
 ) -> PlannedPosting | None:
     """Reconciliation against Planned Posting (ADR-0019 ticket #21) -- links `txn_id` to
     the EARLIEST still-open (matched_txn_id IS NULL) Planned Posting for `plan_item_id`
@@ -1045,7 +1161,9 @@ def attribute_transaction_to_planned_posting(
 
 def _unattribute_transaction_from_planned_posting(conn: sqlite3.Connection, txn_id: str) -> None:
     """Lock-free core -- see unattribute_transaction_from_planned_posting below."""
-    conn.execute("UPDATE planned_posting SET matched_txn_id = NULL WHERE matched_txn_id = ?", (txn_id,))
+    conn.execute(
+        "UPDATE planned_posting SET matched_txn_id = NULL WHERE matched_txn_id = ?", (txn_id,)
+    )
 
 
 def unattribute_transaction_from_planned_posting(conn: sqlite3.Connection, txn_id: str) -> None:
@@ -1059,7 +1177,9 @@ def unattribute_transaction_from_planned_posting(conn: sqlite3.Connection, txn_i
         conn.commit()
 
 
-def reconcile_existing_transactions_for_item_period(conn: sqlite3.Connection, plan_item_id: str, period: str) -> None:
+def reconcile_existing_transactions_for_item_period(
+    conn: sqlite3.Connection, plan_item_id: str, period: str
+) -> None:
     """Called right after Month-End Close materializes new Planned Posting rows for
     `plan_item_id`/`period` -- links any real transaction for this item/period that
     already existed (imported or manually confirmed before this close ever ran) but
@@ -1140,11 +1260,23 @@ def create_balance_adjustment(
         conn.execute(
             "INSERT INTO balance_adjustment (id, account_id, as_of_date, real_balance_cents, "
             "plan_predicted_cents, difference_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (adjustment_id, account_id, as_of_date, real_balance_cents, plan_predicted_cents, difference_cents, created_at),
+            (
+                adjustment_id,
+                account_id,
+                as_of_date,
+                real_balance_cents,
+                plan_predicted_cents,
+                difference_cents,
+                created_at,
+            ),
         )
-        conn.execute("UPDATE account SET balance_cents = ? WHERE id = ?", (real_balance_cents, account_id))
+        conn.execute(
+            "UPDATE account SET balance_cents = ? WHERE id = ?", (real_balance_cents, account_id)
+        )
         conn.commit()
-        row = conn.execute("SELECT * FROM balance_adjustment WHERE id = ?", (adjustment_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM balance_adjustment WHERE id = ?", (adjustment_id,)
+        ).fetchone()
         return _row_to_balance_adjustment(row)
 
 
@@ -1161,7 +1293,9 @@ def list_balance_adjustments_between(
         return [_row_to_balance_adjustment(r) for r in rows]
 
 
-def get_latest_balance_adjustment(conn: sqlite3.Connection, account_id: str) -> BalanceAdjustment | None:
+def get_latest_balance_adjustment(
+    conn: sqlite3.Connection, account_id: str
+) -> BalanceAdjustment | None:
     """For the "last reconciled" footer note -- the most recent hand-set balance ever
     recorded for this account, regardless of month."""
     with _lock:
@@ -1173,6 +1307,7 @@ def get_latest_balance_adjustment(conn: sqlite3.Connection, account_id: str) -> 
 
 
 # --- CSV import (ticket vault-os-api#7) -------------------------------------------
+
 
 @dataclass
 class ColumnMapping:
@@ -1203,7 +1338,9 @@ def _row_to_column_mapping(row: sqlite3.Row) -> ColumnMapping:
 
 def get_column_mapping(conn: sqlite3.Connection, account_id: str) -> ColumnMapping | None:
     with _lock:
-        row = conn.execute("SELECT * FROM column_mapping WHERE account_id = ?", (account_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM column_mapping WHERE account_id = ?", (account_id,)
+        ).fetchone()
         return _row_to_column_mapping(row) if row else None
 
 
@@ -1217,7 +1354,9 @@ class DuplicateColumnMappingError(Exception):
 
 
 def _is_column_mapping_conflict(exc: sqlite3.DatabaseError) -> bool:
-    return getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_CONSTRAINT_UNIQUE and "column_mapping.account_id" in str(exc)
+    return getattr(
+        exc, "sqlite_errorcode", None
+    ) == sqlite3.SQLITE_CONSTRAINT_UNIQUE and "column_mapping.account_id" in str(exc)
 
 
 def create_column_mapping(
@@ -1233,7 +1372,7 @@ def create_column_mapping(
     amount_sign_convention: str | None,
     confirmed_at: str,
 ) -> ColumnMapping:
-    """"Confirmed once per account and remembered" (README) -- the API layer's
+    """ "Confirmed once per account and remembered" (README) -- the API layer's
     check-then-act 409 (account.mapping_id already set) covers the ordinary case; this
     is the backstop against a genuine race between two concurrent first confirmations
     for the same account (see DuplicateColumnMappingError). Writes the row and points
@@ -1245,8 +1384,15 @@ def create_column_mapping(
                 "INSERT INTO column_mapping (id, account_id, source_date, source_merchant, source_amount, "
                 "source_debit, source_credit, amount_sign_convention, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    mapping_id, account_id, source_date, source_merchant, source_amount,
-                    source_debit, source_credit, amount_sign_convention, confirmed_at,
+                    mapping_id,
+                    account_id,
+                    source_date,
+                    source_merchant,
+                    source_amount,
+                    source_debit,
+                    source_credit,
+                    amount_sign_convention,
+                    confirmed_at,
                 ),
             )
         except sqlite3.DatabaseError as exc:
@@ -1300,7 +1446,9 @@ def list_all_imports(conn: sqlite3.Connection) -> list[Import]:
 
 def existing_dedupe_hashes(conn: sqlite3.Connection, account_id: str) -> set[str]:
     with _lock:
-        rows = conn.execute("SELECT dedupe_hash FROM txn WHERE account_id = ?", (account_id,)).fetchall()
+        rows = conn.execute(
+            "SELECT dedupe_hash FROM txn WHERE account_id = ?", (account_id,)
+        ).fetchall()
         return {r["dedupe_hash"] for r in rows}
 
 
@@ -1346,9 +1494,18 @@ def commit_import(
                     "category, category_source, plan_item_id, match_source, excluded_from_charts, "
                     "import_id, dedupe_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
                     (
-                        txn_id, account_id, row["date"], row["merchant_raw"], row["merchant_raw"],
-                        row["amount_cents"], row["category"], row["category_source"], row["plan_item_id"],
-                        row["match_source"], import_id, row["dedupe_hash"],
+                        txn_id,
+                        account_id,
+                        row["date"],
+                        row["merchant_raw"],
+                        row["merchant_raw"],
+                        row["amount_cents"],
+                        row["category"],
+                        row["category_source"],
+                        row["plan_item_id"],
+                        row["match_source"],
+                        import_id,
+                        row["dedupe_hash"],
                     ),
                 )
                 added += 1
@@ -1357,7 +1514,9 @@ def commit_import(
                 # a no-op (returns None) for a period nothing has materialized, same as
                 # before this ticket existed.
                 if row["plan_item_id"] is not None:
-                    _attribute_transaction_to_planned_posting(conn, row["plan_item_id"], row["date"], txn_id)
+                    _attribute_transaction_to_planned_posting(
+                        conn, row["plan_item_id"], row["date"], txn_id
+                    )
             except sqlite3.DatabaseError as exc:
                 if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_CONSTRAINT_UNIQUE:
                     skipped += 1
@@ -1382,6 +1541,7 @@ def commit_import(
 
 
 # --- Ledger (ticket vault-os-api#8) -------------------------------------------------
+
 
 @dataclass
 class Txn:
@@ -1517,7 +1677,9 @@ def update_transaction(
                 match_source if match_source is not _UNSET else existing.match_source,
                 category if category is not _UNSET else existing.category,
                 category_source if category_source is not _UNSET else existing.category_source,
-                int(excluded_from_charts) if excluded_from_charts is not _UNSET else int(existing.excluded_from_charts),
+                int(excluded_from_charts)
+                if excluded_from_charts is not _UNSET
+                else int(existing.excluded_from_charts),
                 txn_id,
             ),
         )

@@ -202,7 +202,12 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
         conn.execute(
             "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) "
             "VALUES (?, 'queued', ?, ?, ?)",
-            (job_id, ts_queued, json.dumps({"skill": skill, "args": args, "source": source}), ts_queued),
+            (
+                job_id,
+                ts_queued,
+                json.dumps({"skill": skill, "args": args, "source": source}),
+                ts_queued,
+            ),
         )
         conn.commit()
         return _get_job(conn, job_id)
@@ -267,15 +272,36 @@ def release_job(conn: sqlite3.Connection, *, job_id: str, ts: str) -> "Job | Non
 
 
 def apply_event(
-    conn, *, job_id, status, ts, received_at, skill=None, args=None, source=None,
-    engine=None, exit_code=None, summary=None, deliverable_path=None, md_path=None, pid=None,
+    conn,
+    *,
+    job_id,
+    status,
+    ts,
+    received_at,
+    skill=None,
+    args=None,
+    source=None,
+    engine=None,
+    exit_code=None,
+    summary=None,
+    deliverable_path=None,
+    md_path=None,
+    pid=None,
 ) -> Job | None:
     with _lock:
         detail = {
-            k: v for k, v in dict(
-                skill=skill, args=args, source=source, exit_code=exit_code, summary=summary,
-                deliverable_path=deliverable_path, md_path=md_path, pid=pid,
-            ).items() if v is not None
+            k: v
+            for k, v in dict(
+                skill=skill,
+                args=args,
+                source=source,
+                exit_code=exit_code,
+                summary=summary,
+                deliverable_path=deliverable_path,
+                md_path=md_path,
+                pid=pid,
+            ).items()
+            if v is not None
         }
         # Note: job_events insertion happens before jobs row exists for on-the-fly creation.
         # This is safe because foreign_keys PRAGMA is not enabled; if FK enforcement is added
@@ -333,8 +359,10 @@ def apply_event(
                 (deliverable_path, job_id),
             )
 
-        should_apply = created or STATUS_RANK[status] > STATUS_RANK[job.status] or (
-            status in ("ok", "error") and job.status == "orphaned"
+        should_apply = (
+            created
+            or STATUS_RANK[status] > STATUS_RANK[job.status]
+            or (status in ("ok", "error") and job.status == "orphaned")
         )
         if should_apply:
             fields = ["status = ?", "last_event_ts = ?"]

@@ -12,17 +12,34 @@ def conn(tmp_path):
 @pytest.fixture
 def account_id(conn):
     return store.create_account(
-        conn, account_id="a1", nickname="Checking", institution=None, account_type="checking",
-        last_four=None, balance_cents=0, is_primary=True, created_at="2026-01-01T00:00:00Z",
+        conn,
+        account_id="a1",
+        nickname="Checking",
+        institution=None,
+        account_type="checking",
+        last_four=None,
+        balance_cents=0,
+        is_primary=True,
+        created_at="2026-01-01T00:00:00Z",
     ).id
 
 
 def _make_item(conn, account_id, **over):
     defaults = dict(
-        item_id="p1", name="Rent", estimate_cents=-150000, plan_type="Rent", payee="Landlord",
-        day_of_month=1, cadence="dated", cadence_unit="month", cadence_frequency=1,
-        anchor_period=None, account_id=account_id,
-        verified=True, is_catch_all=False, match_text=[],
+        item_id="p1",
+        name="Rent",
+        estimate_cents=-150000,
+        plan_type="Rent",
+        payee="Landlord",
+        day_of_month=1,
+        cadence="dated",
+        cadence_unit="month",
+        cadence_frequency=1,
+        anchor_period=None,
+        account_id=account_id,
+        verified=True,
+        is_catch_all=False,
+        match_text=[],
     )
     defaults.update(over)
     return store.create_plan_item(conn, **defaults)
@@ -30,18 +47,33 @@ def _make_item(conn, account_id, **over):
 
 def _make_txn(conn, account_id, **over):
     defaults = dict(
-        txn_id="t1", date="2026-03-01", merchant_raw="COMCAST", merchant="COMCAST",
-        amount_cents=-1000, category=None, category_source=None, plan_item_id=None,
-        match_source=None, dedupe_hash="h1",
+        txn_id="t1",
+        date="2026-03-01",
+        merchant_raw="COMCAST",
+        merchant="COMCAST",
+        amount_cents=-1000,
+        category=None,
+        category_source=None,
+        plan_item_id=None,
+        match_source=None,
+        dedupe_hash="h1",
     )
     defaults.update(over)
     conn.execute(
         "INSERT INTO txn (id, account_id, date, merchant_raw, merchant, amount_cents, category, "
         "category_source, plan_item_id, match_source, dedupe_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            defaults["txn_id"], account_id, defaults["date"], defaults["merchant_raw"], defaults["merchant"],
-            defaults["amount_cents"], defaults["category"], defaults["category_source"],
-            defaults["plan_item_id"], defaults["match_source"], defaults["dedupe_hash"],
+            defaults["txn_id"],
+            account_id,
+            defaults["date"],
+            defaults["merchant_raw"],
+            defaults["merchant"],
+            defaults["amount_cents"],
+            defaults["category"],
+            defaults["category_source"],
+            defaults["plan_item_id"],
+            defaults["match_source"],
+            defaults["dedupe_hash"],
         ),
     )
     conn.commit()
@@ -68,8 +100,13 @@ def test_build_ledger_enriches_rows_with_account_and_plan_item_names(conn, accou
 
 def test_build_ledger_includes_import_provenance(conn, account_id):
     store.commit_import(
-        conn, import_id="imp1", account_id=account_id, filename="statement.csv",
-        imported_at="2026-08-18T00:00:00Z", rows_to_add=[], rows_skipped=0,
+        conn,
+        import_id="imp1",
+        account_id=account_id,
+        filename="statement.csv",
+        imported_at="2026-08-18T00:00:00Z",
+        rows_to_add=[],
+        rows_skipped=0,
     )
     _make_txn(conn, account_id, txn_id="t1")
     conn.execute("UPDATE txn SET import_id = 'imp1' WHERE id = 't1'")
@@ -88,10 +125,18 @@ def test_build_ledger_import_provenance_is_null_for_a_hand_inserted_row(conn, ac
 
 def test_build_ledger_why_text_covers_all_match_states(conn, account_id):
     _make_item(conn, account_id)
-    _make_txn(conn, account_id, txn_id="t1", plan_item_id="p1", match_source="rule", dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", plan_item_id="p1", match_source="auto", dedupe_hash="h2")
-    _make_txn(conn, account_id, txn_id="t3", plan_item_id="p1", match_source="user", dedupe_hash="h3")
-    _make_txn(conn, account_id, txn_id="t4", plan_item_id=None, match_source="user", dedupe_hash="h4")
+    _make_txn(
+        conn, account_id, txn_id="t1", plan_item_id="p1", match_source="rule", dedupe_hash="h1"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t2", plan_item_id="p1", match_source="auto", dedupe_hash="h2"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t3", plan_item_id="p1", match_source="user", dedupe_hash="h3"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t4", plan_item_id=None, match_source="user", dedupe_hash="h4"
+    )
     _make_txn(conn, account_id, txn_id="t5", plan_item_id=None, match_source=None, dedupe_hash="h5")
     rows = {r["id"]: r for r in ledger.build_ledger(conn, None)["rows"]}
     assert rows["t1"]["why"] == "Matched by rule to Rent."
@@ -103,8 +148,12 @@ def test_build_ledger_why_text_covers_all_match_states(conn, account_id):
 
 def test_build_ledger_footer_counts_ignore_the_active_filter(conn, account_id):
     _make_item(conn, account_id)
-    _make_txn(conn, account_id, txn_id="t1", plan_item_id="p1", match_source="rule", dedupe_hash="h1")
-    _make_txn(conn, account_id, txn_id="t2", plan_item_id="p1", match_source="auto", dedupe_hash="h2")
+    _make_txn(
+        conn, account_id, txn_id="t1", plan_item_id="p1", match_source="rule", dedupe_hash="h1"
+    )
+    _make_txn(
+        conn, account_id, txn_id="t2", plan_item_id="p1", match_source="auto", dedupe_hash="h2"
+    )
     _make_txn(conn, account_id, txn_id="t3", plan_item_id=None, dedupe_hash="h3")
 
     result = ledger.build_ledger(conn, "unmatched")
@@ -134,8 +183,15 @@ def test_remember_match_text_against_a_budget_kind_item_is_a_noop(conn, account_
     # alongside Postings with no kind filter, and offers "remember this" unconditionally
     # -- a user matching a transaction to a Budget with remember checked must not crash.
     _make_item(
-        conn, account_id, kind="budget", reset_period="monthly", cadence="budget",
-        day_of_month=None, cadence_unit=None, cadence_frequency=None, anchor_period=None,
+        conn,
+        account_id,
+        kind="budget",
+        reset_period="monthly",
+        cadence="budget",
+        day_of_month=None,
+        cadence_unit=None,
+        cadence_frequency=None,
+        anchor_period=None,
         match_text=[],
     )
     ledger.remember_match_text(conn, "p1", "COFFEE SHOP")  # must not raise

@@ -53,24 +53,20 @@ def _echo_argv_stub(path, log_path):
 def _ctx(vault_root, state_root=None):
     settings_stub = object.__new__(Settings)  # unused by the engine itself
     return EngineContext(
-        vault_root=vault_root, state_root=state_root or (vault_root / "system"),
-        settings=settings_stub, emit=lambda event: None,
+        vault_root=vault_root,
+        state_root=state_root or (vault_root / "system"),
+        settings=settings_stub,
+        emit=lambda event: None,
     )
 
 
 # A POSIX-sh stub that echoes only its final argv element (the prompt is
 # always the last one this adapter appends, per the module docstring).
-_LAST_ARG_STUB_BODY = (
-    "#!/bin/sh\n"
-    'for a in "$@"; do last="$a"; done\n'
-    'echo "{prefix}$last"\n'
-)
+_LAST_ARG_STUB_BODY = '#!/bin/sh\nfor a in "$@"; do last="$a"; done\necho "{prefix}$last"\n'
 
 
 def test_cursor_cli_success_prompt_from_job_arg(tmp_path):
-    stub = _write_stub(
-        tmp_path / "cursor-agent", _LAST_ARG_STUB_BODY.format(prefix="reply to: ")
-    )
+    stub = _write_stub(tmp_path / "cursor-agent", _LAST_ARG_STUB_BODY.format(prefix="reply to: "))
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(id="ask-cursor", engine_config={"binary": str(stub)})
@@ -133,7 +129,8 @@ def test_cursor_cli_misconfigured_binary_path_fails_fast(tmp_path):
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     skill = _Skill(
-        id="s", engine_config={"binary": str(tmp_path / "does-not-exist-cursor-agent")},
+        id="s",
+        engine_config={"binary": str(tmp_path / "does-not-exist-cursor-agent")},
     )
     job = _Job(id="job-6", args={"prompt": "hi"})
 
@@ -225,7 +222,7 @@ def test_cursor_cli_base_args_precede_trust_model_and_prompt(tmp_path):
 
     CursorCliEngine().run(job=job, skill=skill, ctx=_ctx(vault_root))
 
-    lines = [l for l in log.read_text().splitlines() if l != "=== invocation ==="]
+    lines = [line for line in log.read_text().splitlines() if line != "=== invocation ==="]
     assert lines == ["--print", "--force", TRUST_FLAG, "--model", "sonnet", "hello there"]
 
 
@@ -237,7 +234,10 @@ def test_cursor_cli_retry_context_appended_under_marker(tmp_path):
     job = _Job(id="job-11", args={"prompt": "original prompt"})
 
     result = CursorCliEngine().run(
-        job=job, skill=skill, ctx=_ctx(vault_root), retry_context="check said: missing frobnicator",
+        job=job,
+        skill=skill,
+        ctx=_ctx(vault_root),
+        retry_context="check said: missing frobnicator",
     )
 
     assert result.summary.startswith("original prompt")

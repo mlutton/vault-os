@@ -13,8 +13,13 @@ def conn(tmp_path):
 
 def test_create_and_get_job(conn):
     job = store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="2026-08-09T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:00Z",
     )
     assert job.status == "queued"
     assert job.deliverables == []
@@ -28,14 +33,24 @@ def test_get_job_missing_returns_none(conn):
 
 def test_create_job_chain_source_is_idempotent(conn):
     first = store.create_job(
-        conn, job_id="j1", skill="daily-topic-digest", args={}, source="chain:acquire:parent-1",
-        engine="claude", ts_queued="2026-08-09T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="daily-topic-digest",
+        args={},
+        source="chain:acquire:parent-1",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:00Z",
     )
     assert first.id == "j1"
 
     second = store.create_job(
-        conn, job_id="j2", skill="daily-topic-digest", args={}, source="chain:acquire:parent-1",
-        engine="claude", ts_queued="2026-08-09T00:00:05Z",
+        conn,
+        job_id="j2",
+        skill="daily-topic-digest",
+        args={},
+        source="chain:acquire:parent-1",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:05Z",
     )
     # Same parent -> same winning job returned, no second row created.
     assert second.id == "j1"
@@ -44,12 +59,22 @@ def test_create_job_chain_source_is_idempotent(conn):
 
 def test_create_job_non_chain_source_never_dedupes(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="2026-08-09T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:00Z",
     )
     second = store.create_job(
-        conn, job_id="j2", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="2026-08-09T00:00:05Z",
+        conn,
+        job_id="j2",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="2026-08-09T00:00:05Z",
     )
     # Ordinary jobs share source values by design -- must never collide.
     assert second.id == "j2"
@@ -65,16 +90,28 @@ def test_duration_s_returns_none_on_mixed_tz_awareness_instead_of_raising(conn):
 
 def test_apply_event_advances_status(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     job = store.apply_event(conn, job_id="j1", status="running", ts="t1", received_at="t1", pid=999)
     assert job.status == "running"
     assert job.runner_pid == 999
 
     job = store.apply_event(
-        conn, job_id="j1", status="ok", ts="t2", received_at="t2",
-        exit_code=0, summary="done", deliverable_path="inbox/x.md", md_path="system/runs/j1.md",
+        conn,
+        job_id="j1",
+        status="ok",
+        ts="t2",
+        received_at="t2",
+        exit_code=0,
+        summary="done",
+        deliverable_path="inbox/x.md",
+        md_path="system/runs/j1.md",
     )
     assert job.status == "ok"
     assert job.exit_code == 0
@@ -83,29 +120,51 @@ def test_apply_event_advances_status(conn):
 
 def test_apply_event_ignores_regression(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
-    store.apply_event(conn, job_id="j1", status="ok", ts="t2", received_at="t2", exit_code=0, summary="done")
+    store.apply_event(
+        conn, job_id="j1", status="ok", ts="t2", received_at="t2", exit_code=0, summary="done"
+    )
     job = store.apply_event(conn, job_id="j1", status="running", ts="t1", received_at="t1")
     assert job.status == "ok"
 
 
 def test_apply_event_orphaned_is_superseded_by_ok(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
     store.apply_event(conn, job_id="j1", status="running", ts="t1", received_at="t1")
     store.apply_event(conn, job_id="j1", status="orphaned", ts="t2", received_at="t2")
-    job = store.apply_event(conn, job_id="j1", status="ok", ts="t3", received_at="t3", exit_code=0, summary="done")
+    job = store.apply_event(
+        conn, job_id="j1", status="ok", ts="t3", received_at="t3", exit_code=0, summary="done"
+    )
     assert job.status == "ok"
 
 
 def test_apply_event_creates_job_when_unseen(conn):
     job = store.apply_event(
-        conn, job_id="j-unseen", status="running", ts="t1", received_at="t1",
-        skill="ai-wire", args={}, source="obsidian", engine="claude", pid=42,
+        conn,
+        job_id="j-unseen",
+        status="running",
+        ts="t1",
+        received_at="t1",
+        skill="ai-wire",
+        args={},
+        source="obsidian",
+        engine="claude",
+        pid=42,
     )
     assert job is not None
     assert job.skill == "ai-wire"
@@ -115,13 +174,23 @@ def test_apply_event_creates_job_when_unseen(conn):
 
 
 def test_apply_event_cannot_create_job_without_skill(conn):
-    job = store.apply_event(conn, job_id="j-unseen", status="ok", ts="t1", received_at="t1", exit_code=0)
+    job = store.apply_event(
+        conn, job_id="j-unseen", status="ok", ts="t1", received_at="t1", exit_code=0
+    )
     assert job is None
 
 
 def test_apply_event_is_idempotent_and_order_independent(tmp_path):
     events = [
-        dict(status="queued", ts="t0", received_at="t0", skill="metrics-pull", args={}, source="api", engine="claude"),
+        dict(
+            status="queued",
+            ts="t0",
+            received_at="t0",
+            skill="metrics-pull",
+            args={},
+            source="api",
+            engine="claude",
+        ),
         dict(status="running", ts="t1", received_at="t1", pid=1),
         dict(status="ok", ts="t2", received_at="t2", exit_code=0, summary="done"),
     ]
@@ -152,15 +221,28 @@ def test_apply_event_backfills_running_metadata_after_terminal_event(conn):
     status-rank gate says "running" doesn't outrank "error".
     """
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
-    job = store.apply_event(conn, job_id="j1", status="error", ts="t2", received_at="t2", exit_code=1)
+    job = store.apply_event(
+        conn, job_id="j1", status="error", ts="t2", received_at="t2", exit_code=1
+    )
     assert job.status == "error"
 
     job = store.apply_event(
-        conn, job_id="j1", status="running", ts="t1", received_at="t1",
-        pid=4242, md_path="system/runs/j1.md", deliverable_path="inbox/x.md",
+        conn,
+        job_id="j1",
+        status="running",
+        ts="t1",
+        received_at="t1",
+        pid=4242,
+        md_path="system/runs/j1.md",
+        deliverable_path="inbox/x.md",
     )
     # Status must NOT regress back to "running" -- it stays at the terminal value.
     assert job.status == "error"
@@ -188,8 +270,13 @@ def test_apply_event_concurrent_calls_converge_to_consistent_state(tmp_path):
     """
     conn = connect(tmp_path / "concurrent.db")
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="claude", ts_queued="t0",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
     )
 
     events = [
@@ -220,16 +307,38 @@ def test_apply_event_concurrent_calls_converge_to_consistent_state(tmp_path):
 
 
 def _ok_job(conn, job_id, skill, ts_started, ts_completed):
-    store.create_job(conn, job_id=job_id, skill=skill, args={}, source="api", engine="claude", ts_queued=ts_started)
+    store.create_job(
+        conn,
+        job_id=job_id,
+        skill=skill,
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued=ts_started,
+    )
     store.apply_event(conn, job_id=job_id, status="running", ts=ts_started, received_at=ts_started)
     store.apply_event(
-        conn, job_id=job_id, status="ok", ts=ts_completed, received_at=ts_completed, exit_code=0, summary="done",
+        conn,
+        job_id=job_id,
+        status="ok",
+        ts=ts_completed,
+        received_at=ts_completed,
+        exit_code=0,
+        summary="done",
     )
 
 
 def test_compute_skill_etas_only_counts_ok_runs(conn):
     _ok_job(conn, "j1", "metrics-pull", "2026-08-01T00:00:00Z", "2026-08-01T00:00:10Z")
-    store.create_job(conn, job_id="j2", skill="metrics-pull", args={}, source="api", engine="claude", ts_queued="t0")
+    store.create_job(
+        conn,
+        job_id="j2",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        ts_queued="t0",
+    )
     store.apply_event(conn, job_id="j2", status="running", ts="t0", received_at="t0")
     store.apply_event(conn, job_id="j2", status="error", ts="t1", received_at="t1", exit_code=1)
 
@@ -239,8 +348,15 @@ def test_compute_skill_etas_only_counts_ok_runs(conn):
 
 def test_compute_skill_etas_ignores_rows_missing_timestamps(conn):
     store.apply_event(
-        conn, job_id="j-no-times", status="ok", ts="t0", received_at="t0",
-        skill="metrics-pull", args={}, source="api", exit_code=0,
+        conn,
+        job_id="j-no-times",
+        status="ok",
+        ts="t0",
+        received_at="t0",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        exit_code=0,
     )
     assert store.compute_skill_etas(conn) == {}
 
@@ -256,7 +372,13 @@ def test_compute_skill_etas_returns_median_per_skill(conn):
 
 def test_compute_skill_etas_respects_limit(conn):
     for i in range(3):
-        _ok_job(conn, f"j{i}", "metrics-pull", f"2026-08-0{i + 1}T00:00:00Z", f"2026-08-0{i + 1}T00:05:00Z")
+        _ok_job(
+            conn,
+            f"j{i}",
+            "metrics-pull",
+            f"2026-08-0{i + 1}T00:00:00Z",
+            f"2026-08-0{i + 1}T00:05:00Z",
+        )
     etas = store.compute_skill_etas(conn, limit=1)
     assert etas == {"metrics-pull": 300}
 
@@ -271,8 +393,16 @@ def test_apply_event_backfills_ts_queued_regardless_of_order(tmp_path):
 
     # Running event arrives first and creates the job (with skill)
     job = store.apply_event(
-        conn, job_id="j1", status="running", ts="t1", received_at="t1",
-        skill="metrics-pull", args={}, source="api", engine="claude", pid=999,
+        conn,
+        job_id="j1",
+        status="running",
+        ts="t1",
+        received_at="t1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="claude",
+        pid=999,
     )
     assert job.status == "running"
     assert job.ts_queued is None  # Not set because job was created by running event
@@ -280,7 +410,11 @@ def test_apply_event_backfills_ts_queued_regardless_of_order(tmp_path):
 
     # Queued event arrives late for the same job
     job = store.apply_event(
-        conn, job_id="j1", status="queued", ts="t0", received_at="t0",
+        conn,
+        job_id="j1",
+        status="queued",
+        ts="t0",
+        received_at="t0",
     )
     # ts_queued should be backfilled even though status won't advance
     assert job.ts_queued == "t0"
@@ -297,12 +431,22 @@ def test_claim_oldest_queued_returns_none_when_empty(conn):
 
 def test_claim_oldest_queued_picks_oldest_and_flips_to_running(conn):
     store.create_job(
-        conn, job_id="newer", skill="metrics-pull", args={}, source="api",
-        engine="script", ts_queued="2026-09-04T00:00:05Z",
+        conn,
+        job_id="newer",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="script",
+        ts_queued="2026-09-04T00:00:05Z",
     )
     store.create_job(
-        conn, job_id="older", skill="metrics-pull", args={}, source="api",
-        engine="script", ts_queued="2026-09-04T00:00:01Z",
+        conn,
+        job_id="older",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="script",
+        ts_queued="2026-09-04T00:00:01Z",
     )
 
     claimed = store.claim_oldest_queued(conn, pid=555, ts="2026-09-04T00:01:00Z")
@@ -319,8 +463,13 @@ def test_claim_oldest_queued_picks_oldest_and_flips_to_running(conn):
 
 def test_claim_oldest_queued_two_racers_only_one_wins(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="script", ts_queued="2026-09-04T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="script",
+        ts_queued="2026-09-04T00:00:00Z",
     )
 
     results = []
@@ -342,8 +491,13 @@ def test_claim_oldest_queued_two_racers_only_one_wins(conn):
 
 def test_release_job_reverts_running_to_queued(conn):
     claimed = store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="script", ts_queued="2026-09-04T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="script",
+        ts_queued="2026-09-04T00:00:00Z",
     )
     store.claim_oldest_queued(conn, pid=42, ts="2026-09-04T00:01:00Z")
 
@@ -355,11 +509,20 @@ def test_release_job_reverts_running_to_queued(conn):
 
 def test_release_job_is_noop_for_terminal_job(conn):
     store.create_job(
-        conn, job_id="j1", skill="metrics-pull", args={}, source="api",
-        engine="script", ts_queued="2026-09-04T00:00:00Z",
+        conn,
+        job_id="j1",
+        skill="metrics-pull",
+        args={},
+        source="api",
+        engine="script",
+        ts_queued="2026-09-04T00:00:00Z",
     )
     store.apply_event(
-        conn, job_id="j1", status="ok", ts="2026-09-04T00:05:00Z", received_at="2026-09-04T00:05:00Z",
+        conn,
+        job_id="j1",
+        status="ok",
+        ts="2026-09-04T00:05:00Z",
+        received_at="2026-09-04T00:05:00Z",
         exit_code=0,
     )
     released = store.release_job(conn, job_id="j1", ts="2026-09-04T00:06:00Z")

@@ -49,14 +49,16 @@ retention: ephemeral
 """
 
 # A lane with content but no link on its bullet, to exercise link=None.
-NO_LINK_SECTION = "## leadership\n*1 candidates, 1 kept*\n- **A headline with no source link at all**\n"
+NO_LINK_SECTION = (
+    "## leadership\n*1 candidates, 1 kept*\n- **A headline with no source link at all**\n"
+)
 
 
 def test_parse_lane_section_extracts_text_and_link():
     headlines = parse_lane_section(REAL_ACQUIRE_REPORT, "leadership", 4)
     assert headlines[0] == Headline(
         text="Demand for engineering managers is surging — LeadDev's report finds EM skills map "
-             "directly to overseeing agents. LeadDev — link",
+        "directly to overseeing agents. LeadDev — link",
         link="https://leaddev.com/example",
     )
     assert len(headlines) == 2
@@ -142,7 +144,10 @@ def test_read_morning_report_ignores_non_acquire_files_in_same_directory(tmp_pat
     # A stray file from before the consolidation (or any other same-day
     # file) must not be picked up just because it lives in inbox/research/.
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    _write(tmp_path / "inbox" / "research" / f"{today}-leadership-brief.md", "## Headlines\n- old format\n")
+    _write(
+        tmp_path / "inbox" / "research" / f"{today}-leadership-brief.md",
+        "## Headlines\n- old format\n",
+    )
     assert read_morning_report(tmp_path, TZ) is None
 
 
@@ -153,7 +158,11 @@ def test_read_lane_briefs_all_five_lanes_present_from_one_file(tmp_path):
     briefs = read_lane_briefs(tmp_path, TZ)
     assert len(briefs) == 5
     assert [b.source for b in briefs] == [
-        "leadership_brief", "payments_brief", "lean_agile_brief", "dev_trends_brief", "chicago_brief",
+        "leadership_brief",
+        "payments_brief",
+        "lean_agile_brief",
+        "dev_trends_brief",
+        "chicago_brief",
     ]
     assert all(b.skill == "acquire" for b in briefs)
     assert all(b.rel == f"inbox/research/{today}-acquire.md" for b in briefs)

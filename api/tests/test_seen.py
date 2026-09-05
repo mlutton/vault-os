@@ -1,7 +1,7 @@
 import pytest
 
-from vaultos.db.conn import connect
 from vaultos import seen
+from vaultos.db.conn import connect
 
 
 @pytest.fixture

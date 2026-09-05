@@ -5,7 +5,9 @@ from vaultos.timeutil import today_in_tz
 
 @pytest.fixture
 def account_id(client):
-    res = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True})
+    res = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}
+    )
     return res.json()["id"]
 
 
@@ -15,8 +17,14 @@ def _current_period():
 
 def _make_posting(client, account_id, **over):
     body = {
-        "name": "Rent", "estimate_cents": -150000, "type": "Rent", "day_of_month": 1,
-        "cadence": "dated", "cadence_unit": "month", "cadence_frequency": 1, "account_id": account_id,
+        "name": "Rent",
+        "estimate_cents": -150000,
+        "type": "Rent",
+        "day_of_month": 1,
+        "cadence": "dated",
+        "cadence_unit": "month",
+        "cadence_frequency": 1,
+        "account_id": account_id,
     }
     body.update(over)
     return client.post("/finance/plan-items", json=body).json()
@@ -63,8 +71,12 @@ def test_month_end_close_ignores_budgets(client, account_id):
     client.post(
         "/finance/plan-items",
         json={
-            "name": "Lunch", "estimate_cents": -4000, "type": "Food",
-            "account_id": account_id, "kind": "budget", "reset_period": "weekly",
+            "name": "Lunch",
+            "estimate_cents": -4000,
+            "type": "Food",
+            "account_id": account_id,
+            "kind": "budget",
+            "reset_period": "weekly",
         },
     )
     body = _close(client)
@@ -89,7 +101,9 @@ def test_month_end_close_a_second_call_closes_the_new_period_in_turn(client, acc
     assert second["carried_forward_count"] == 2
 
 
-def test_patch_planned_posting_sets_a_deferred_date_and_is_reflected_on_the_plan_screen(client, account_id):
+def test_patch_planned_posting_sets_a_deferred_date_and_is_reflected_on_the_plan_screen(
+    client, account_id
+):
     _make_posting(client, account_id, day_of_month=14, match_text=["COMCAST"])
     period_before = _current_period()
     # Reconcile the closing period's occurrence BEFORE closing, so it's excluded from
@@ -99,18 +113,30 @@ def test_patch_planned_posting_sets_a_deferred_date_and_is_reflected_on_the_plan
     # tests above for that.
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     csv_bytes = f"Date,Description,Amount\n{period_before}-14,COMCAST CABLE,-1500.00\n".encode()
-    client.post(f"/finance/accounts/{account_id}/import", files={"file": ("statement.csv", csv_bytes, "text/csv")})
+    client.post(
+        f"/finance/accounts/{account_id}/import",
+        files={"file": ("statement.csv", csv_bytes, "text/csv")},
+    )
 
     close_body = _close(client)
     assert close_body["carried_forward_count"] == 0
-    created = next(pp for pp in close_body["materialized"] if pp["period"] == close_body["new_period"])
+    created = next(
+        pp for pp in close_body["materialized"] if pp["period"] == close_body["new_period"]
+    )
 
     period = created["period"]
     new_date = f"{period}-25"
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"deferred_date": new_date})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"deferred_date": new_date}
+    )
     assert res.status_code == 200
     body = res.json()
     assert body["deferred_date"] == new_date
@@ -121,8 +147,11 @@ def test_patch_planned_posting_sets_a_deferred_date_and_is_reflected_on_the_plan
     assert row["lands"] == new_date  # not the 14th anymore
     assert row["occurrences"] == [
         {
-            "id": created["id"], "cadence_date": created["expected_date"],
-            "deferred_date": new_date, "date": new_date, "status": "upcoming",
+            "id": created["id"],
+            "cadence_date": created["expected_date"],
+            "deferred_date": new_date,
+            "date": new_date,
+            "status": "upcoming",
         },
     ]
 
@@ -131,7 +160,9 @@ def test_patch_planned_posting_can_clear_a_deferred_date(client, account_id):
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
     period = created["period"]
-    client.patch(f"/finance/planned-postings/{created['id']}", json={"deferred_date": f"{period}-25"})
+    client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"deferred_date": f"{period}-25"}
+    )
 
     res = client.patch(f"/finance/planned-postings/{created['id']}", json={"deferred_date": None})
     assert res.status_code == 200
@@ -144,15 +175,22 @@ def test_patch_planned_posting_can_clear_a_deferred_date(client, account_id):
 def test_patch_planned_posting_changes_expected_amount(client, account_id):
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": -175000})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": -175000}
+    )
     assert res.status_code == 200
     assert res.json()["expected_amount_cents"] == -175000
 
 
-def test_patch_planned_posting_ignores_expected_date_the_cadence_reference_is_immutable(client, account_id):
+def test_patch_planned_posting_ignores_expected_date_the_cadence_reference_is_immutable(
+    client, account_id
+):
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"expected_date": f"{created['period']}-25"})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}",
+        json={"expected_date": f"{created['period']}-25"},
+    )
     assert res.status_code == 200
     assert res.json()["expected_date"] == created["expected_date"]
 
@@ -166,7 +204,9 @@ def test_patch_planned_posting_null_expected_amount_cents_is_400_not_500(client,
     # instead of being rejected as the malformed request it is.
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": None})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": None}
+    )
     assert res.status_code == 400
 
 
@@ -178,7 +218,9 @@ def test_patch_planned_posting_missing_is_404(client):
 def test_patch_planned_posting_malformed_deferred_date_is_400(client, account_id):
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"deferred_date": "not-a-date"})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"deferred_date": "not-a-date"}
+    )
     assert res.status_code == 400
 
 
@@ -193,7 +235,10 @@ def test_patch_planned_posting_rejects_a_since_closed_period(client, account_id)
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]  # now in the (currently open) new period
     period = created["period"]
-    client.post(f"/finance/plan-items/{created['plan_item_id']}/tick", json={"period": period, "ticked": True})
+    client.post(
+        f"/finance/plan-items/{created['plan_item_id']}/tick",
+        json={"period": period, "ticked": True},
+    )
     _close(client)  # closes `period` -- the ticked row stays behind, unmoved
     res = client.patch(f"/finance/planned-postings/{created['id']}", json={"deferred_date": None})
     assert res.status_code == 409
@@ -204,13 +249,18 @@ def test_patch_planned_posting_response_includes_matched_txn_id(client, account_
     created = _close(client)["carried_forward"][0]
     assert created["matched_txn_id"] is None
 
-    res = client.patch(f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": -175000})
+    res = client.patch(
+        f"/finance/planned-postings/{created['id']}", json={"expected_amount_cents": -175000}
+    )
     assert res.json()["matched_txn_id"] is None
 
 
 # --- Reconciliation against Planned Posting (ticket vault-os-api#21), end to end -----
 
-def test_importing_a_matched_transaction_closes_the_materialized_planned_posting(client, account_id):
+
+def test_importing_a_matched_transaction_closes_the_materialized_planned_posting(
+    client, account_id
+):
     # Reconciled BEFORE closing (same-period match), so it stays "processed" in its
     # original period rather than getting swept into carry-forward.
     _make_posting(client, account_id, day_of_month=14, match_text=["COMCAST"])
@@ -218,10 +268,18 @@ def test_importing_a_matched_transaction_closes_the_materialized_planned_posting
 
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     csv_bytes = f"Date,Description,Amount\n{period}-14,COMCAST CABLE,-1500.00\n".encode()
-    client.post(f"/finance/accounts/{account_id}/import", files={"file": ("statement.csv", csv_bytes, "text/csv")})
+    client.post(
+        f"/finance/accounts/{account_id}/import",
+        files={"file": ("statement.csv", csv_bytes, "text/csv")},
+    )
 
     _close(client)
     plan = client.get("/finance/plan", params={"period": period}).json()
@@ -231,7 +289,9 @@ def test_importing_a_matched_transaction_closes_the_materialized_planned_posting
     assert row["actual_cents"] == -150000
 
 
-def test_confirming_a_match_manually_closes_the_planned_posting_and_clearing_reopens_it(client, account_id):
+def test_confirming_a_match_manually_closes_the_planned_posting_and_clearing_reopens_it(
+    client, account_id
+):
     _make_posting(client, account_id, day_of_month=14)
     created = _close(client)["carried_forward"][0]
     period = created["period"]
@@ -243,11 +303,19 @@ def test_confirming_a_match_manually_closes_the_planned_posting_and_clearing_reo
     # still-open-period edit, not the late-arriving-into-a-closed-period case.
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     day = created["expected_date"][-2:]
     csv_bytes = f"Date,Description,Amount\n{period}-{day},UNRECOGNIZED MERCHANT,-1500.00\n".encode()
-    client.post(f"/finance/accounts/{account_id}/import", files={"file": ("statement.csv", csv_bytes, "text/csv")})
+    client.post(
+        f"/finance/accounts/{account_id}/import",
+        files={"file": ("statement.csv", csv_bytes, "text/csv")},
+    )
     txn_id = client.get("/finance/ledger").json()["rows"][0]["id"]
 
     # Checked per-occurrence (not the row's own aggregate `status`), since this item's
@@ -268,7 +336,9 @@ def test_confirming_a_match_manually_closes_the_planned_posting_and_clearing_reo
     assert _occurrence_status(plan_after_clear) != "processed"
 
 
-def test_month_end_close_does_not_regress_an_already_matched_occurrence_to_overdue(client, account_id):
+def test_month_end_close_does_not_regress_an_already_matched_occurrence_to_overdue(
+    client, account_id
+):
     # A transaction auto-matches BEFORE any Month-End Close exists for this period --
     # plan.occurrences_for_item falls back to count-based pairing and correctly shows
     # it processed.
@@ -276,10 +346,18 @@ def test_month_end_close_does_not_regress_an_already_matched_occurrence_to_overd
     period = _current_period()
     client.post(
         f"/finance/accounts/{account_id}/column-mapping",
-        json={"source_date": "Date", "source_merchant": "Description", "source_amount": "Amount", "amount_sign_convention": "as_is"},
+        json={
+            "source_date": "Date",
+            "source_merchant": "Description",
+            "source_amount": "Amount",
+            "amount_sign_convention": "as_is",
+        },
     )
     csv_bytes = f"Date,Description,Amount\n{period}-14,COMCAST CABLE,-1500.00\n".encode()
-    client.post(f"/finance/accounts/{account_id}/import", files={"file": ("statement.csv", csv_bytes, "text/csv")})
+    client.post(
+        f"/finance/accounts/{account_id}/import",
+        files={"file": ("statement.csv", csv_bytes, "text/csv")},
+    )
     plan_before_close = client.get("/finance/plan", params={"period": period}).json()
     assert plan_before_close["items"][0]["status"] == "processed"
 

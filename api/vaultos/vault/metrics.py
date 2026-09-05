@@ -86,7 +86,9 @@ def latest_metrics(samples: list[MetricSample]) -> list[MetricSample]:
     return [sample for _, sample in latest.values()]
 
 
-def latest_sample(samples: list[MetricSample], *, source: str, metric: str | None = None) -> MetricSample | None:
+def latest_sample(
+    samples: list[MetricSample], *, source: str, metric: str | None = None
+) -> MetricSample | None:
     """The most recent sample for a Source (all Metrics) or one (Source, Metric) pair."""
     matches = [
         (ts, sample)
@@ -98,7 +100,9 @@ def latest_sample(samples: list[MetricSample], *, source: str, metric: str | Non
     return max(matches, key=lambda item: item[0])[1]
 
 
-def _pair_samples_sorted(samples: list[MetricSample], source: str, metric: str) -> list[tuple[datetime, MetricSample]]:
+def _pair_samples_sorted(
+    samples: list[MetricSample], source: str, metric: str
+) -> list[tuple[datetime, MetricSample]]:
     pairs = [
         (ts, sample)
         for ts, sample in _timestamped(samples)

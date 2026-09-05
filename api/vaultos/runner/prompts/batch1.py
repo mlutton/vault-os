@@ -120,7 +120,7 @@ def inbox_brief(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"single-line JSON array — this exact shape, no line breaks inside it: `action_items: "
         f'[{{"id": "<real gmail thread id>", "sender": "<sender name>", "subject": "<subject '
         f'line>", "priority": "action"}}]`. Omit `action_items` entirely if step 2 found no '
-        f"Gmail connector or no messages.\n5. Check off \"- [ ] Inbox triage (Gmail)\" under "
+        f'Gmail connector or no messages.\n5. Check off "- [ ] Inbox triage (Gmail)" under '
         f"today's daily note's \"## Daily Drivers\" (daily-notes/{date}.md) if present — create "
         f"the day's Daily Drivers section from system/templates/daily.md first if today's note "
         f"doesn't exist yet.\n\nEnd your reply with: SAVED {deliverable}"
@@ -155,7 +155,7 @@ def metrics_pull(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"\n\nAppend one CSV row per metric to system/metrics/metrics.csv (eleven rows total: 5 "
         f"lanes × 2 metrics, plus vault.new_files_24h), matching its exact existing header "
         f"`timestamp,source,metric,value,status,error` — timestamp = current UTC time in ISO "
-        f"8601 (e.g. 2026-08-08T20:00:00Z), status = \"ok\", error = blank. Do not rewrite "
+        f'8601 (e.g. 2026-08-08T20:00:00Z), status = "ok", error = blank. Do not rewrite '
         f"existing rows.\n\nWrite the report — YAML frontmatter `date: {date}`, `skill: "
         f"metrics-pull`, `tags: [metrics]`, `retention: ephemeral`; body is a small table of "
         f"what was pulled: | Source | Metric | Value | Status |.\n\nEnd your reply with: SAVED "
@@ -166,7 +166,9 @@ def metrics_pull(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
 
 def research_into_draft(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
     date = today_date(ctx.settings)
-    deliverable = f"inbox/reports/research-into-draft/{date}-research-into-draft-{id8(ctx.job_id)}.md"
+    deliverable = (
+        f"inbox/reports/research-into-draft/{date}-research-into-draft-{id8(ctx.job_id)}.md"
+    )
     prompt = (
         f"{AUTONOMOUS_PREFIX}\n\nTask: merge any waiting deep-research reports into their "
         f"matching draft articles, and save a summary of what happened at exactly {deliverable}."
@@ -185,7 +187,7 @@ def research_into_draft(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f'Research (auto-merged {date})" sub-section containing 2-4 bullet points of the '
         f"report's Key Takeaways most relevant to this specific article's subject (skip "
         f"takeaways that are off-topic for this piece even if the report covered other ground), "
-        f"plus a \"Sources\" sub-list of the 2-4 strongest supporting links from the report "
+        f'plus a "Sources" sub-list of the 2-4 strongest supporting links from the report '
         f"(prefer Web/Articles entries; skip YouTube/X links unless nothing else supports a "
         f'given point). IMPORTANT: only ever match the exact heading text "## Notes" as the '
         f'section marker -- articles routinely use "##" for their own internal subheadings as '
@@ -314,9 +316,9 @@ def draft_persona_fanout(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
     next_round = 1
     if abs_reviews_dir.is_dir():
         rounds = [
-            int(entry.name[len("round-"):])
+            int(entry.name[len("round-") :])
             for entry in abs_reviews_dir.iterdir()
-            if entry.name.startswith("round-") and entry.name[len("round-"):].isdigit()
+            if entry.name.startswith("round-") and entry.name[len("round-") :].isdigit()
         ]
         if rounds:
             next_round = max(rounds) + 1
@@ -343,7 +345,7 @@ def draft_persona_fanout(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"commit sha, then write {deliverable} (the round summary) with YAML frontmatter: "
         f'`round: <the integer in "{round_label}">`, `personas: [{personas_frontmatter_list}]`, '
         f"`reviewed_sha: <the sha you just got>`, `reviewed_at: <current UTC ISO timestamp>`, "
-        f"`status: complete`, `retention: durable`. Body: an \"Overall synthesis\" section -- "
+        f'`status: complete`, `retention: durable`. Body: an "Overall synthesis" section -- '
         f"note where personas agree (shared strengths/gaps are highest-confidence, worth fixing "
         f"regardless of audience), where they genuinely conflict (name the tradeoff plainly, "
         f"don't paper over it with a mushy middle), and a recommendation on what to prioritize."

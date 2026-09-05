@@ -59,7 +59,11 @@ class ScriptEngine:
         timeout_s = config.get("timeout_s", DEFAULT_TIMEOUT_S)
         try:
             proc = subprocess.run(
-                argv, cwd=ctx.vault_root, capture_output=True, text=True, timeout=timeout_s,
+                argv,
+                cwd=ctx.vault_root,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
                 env=env,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -74,7 +78,7 @@ class ScriptEngine:
             if (ctx.vault_root / rel).exists():
                 deliverable_path = rel
 
-        summary = (proc.stdout.strip() or proc.stderr.strip() or f"script exited {proc.returncode}")
+        summary = proc.stdout.strip() or proc.stderr.strip() or f"script exited {proc.returncode}"
         return EngineResult(
             success=proc.returncode == 0,
             exit_code=proc.returncode,
@@ -83,7 +87,9 @@ class ScriptEngine:
         )
 
     @staticmethod
-    def _write_run_log(ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess) -> None:
+    def _write_run_log(
+        ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess
+    ) -> None:
         log_dir = ctx.state_root / "runs"
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / f"{job_id}.log").write_text(

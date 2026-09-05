@@ -7,7 +7,12 @@ def test_list_accounts_starts_empty(client):
 def test_create_and_list_account(client):
     res = client.post(
         "/finance/accounts",
-        json={"nickname": "Checking", "type": "checking", "balance_cents": 500000, "is_primary": True},
+        json={
+            "nickname": "Checking",
+            "type": "checking",
+            "balance_cents": 500000,
+            "is_primary": True,
+        },
     )
     assert res.status_code == 201
     created = res.json()
@@ -25,8 +30,12 @@ def test_create_account_missing_required_fields_is_422(client):
 
 
 def test_creating_a_second_primary_account_unprimaries_the_first(client):
-    first = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}).json()
-    second = client.post("/finance/accounts", json={"nickname": "Savings", "type": "savings", "is_primary": True}).json()
+    first = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking", "is_primary": True}
+    ).json()
+    second = client.post(
+        "/finance/accounts", json={"nickname": "Savings", "type": "savings", "is_primary": True}
+    ).json()
 
     accounts = {a["id"]: a for a in client.get("/finance/accounts").json()}
     assert accounts[first["id"]]["is_primary"] is False
@@ -34,7 +43,9 @@ def test_creating_a_second_primary_account_unprimaries_the_first(client):
 
 
 def test_update_account_balance(client):
-    created = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking"}).json()
+    created = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking"}
+    ).json()
     res = client.patch(f"/finance/accounts/{created['id']}", json={"balance_cents": 12345})
     assert res.status_code == 200
     assert res.json()["balance_cents"] == 12345
@@ -57,6 +68,8 @@ def test_create_account_empty_type_is_422(client):
 
 
 def test_update_account_empty_nickname_is_422(client):
-    created = client.post("/finance/accounts", json={"nickname": "Checking", "type": "checking"}).json()
+    created = client.post(
+        "/finance/accounts", json={"nickname": "Checking", "type": "checking"}
+    ).json()
     res = client.patch(f"/finance/accounts/{created['id']}", json={"nickname": ""})
     assert res.status_code == 422

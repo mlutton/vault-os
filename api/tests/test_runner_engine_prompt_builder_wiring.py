@@ -44,13 +44,17 @@ def _echo_argv_stub(path):
     # prompt as argv[1], but cursor-cli inserts TRUST_FLAG before it, so the
     # prompt is only ever reliably the *last* element across both adapters
     # under test here (this file is parametrized over both).
-    return _write_stub(path, '#!/bin/sh\nfor a in "$@"; do last="$a"; done\nprintf \'%s\' "$last"\n')
+    return _write_stub(
+        path, '#!/bin/sh\nfor a in "$@"; do last="$a"; done\nprintf \'%s\' "$last"\n'
+    )
 
 
 def _ctx(vault_root):
     settings_stub = object.__new__(Settings)
     return EngineContext(
-        vault_root=vault_root, state_root=vault_root / "system", settings=settings_stub,
+        vault_root=vault_root,
+        state_root=vault_root / "system",
+        settings=settings_stub,
         emit=lambda event: None,
     )
 
@@ -92,7 +96,9 @@ def test_no_builder_passthrough_uses_job_prompt_arg(tmp_path, engine_cls):
     assert result.summary == "what time is it"
 
 
-def test_registered_builder_wins_over_engine_config_prompt_template(tmp_path, engine_cls, monkeypatch):
+def test_registered_builder_wins_over_engine_config_prompt_template(
+    tmp_path, engine_cls, monkeypatch
+):
     """A skill WITH a registered builder must ignore engine_config's own
     `prompt` template (and any `prompt` job arg) entirely -- the builder is
     the sole prompt source once one is registered."""
@@ -115,7 +121,9 @@ def test_registered_builder_wins_over_engine_config_prompt_template(tmp_path, en
     assert result.summary == "BUILT PROMPT TEXT"
 
 
-def test_builder_deliverable_path_set_when_file_exists_after_success(tmp_path, engine_cls, monkeypatch):
+def test_builder_deliverable_path_set_when_file_exists_after_success(
+    tmp_path, engine_cls, monkeypatch
+):
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
     deliverable_abs = vault_root / "inbox" / "reports" / "built.md"
@@ -140,7 +148,9 @@ def test_builder_deliverable_path_set_when_file_exists_after_success(tmp_path, e
     assert result.deliverable_path == "inbox/reports/built.md"
 
 
-def test_builder_deliverable_path_none_when_file_missing_after_success(tmp_path, engine_cls, monkeypatch):
+def test_builder_deliverable_path_none_when_file_missing_after_success(
+    tmp_path, engine_cls, monkeypatch
+):
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
 
@@ -193,7 +203,10 @@ def test_retry_context_still_appended_after_builder_prompt(tmp_path, engine_cls,
     job = _Job(id="job-7", args={})
 
     result = engine_cls().run(
-        job=job, skill=skill, ctx=_ctx(vault_root), retry_context="check said: nope",
+        job=job,
+        skill=skill,
+        ctx=_ctx(vault_root),
+        retry_context="check said: nope",
     )
 
     assert "original builder prompt" in result.summary

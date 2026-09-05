@@ -3,7 +3,12 @@ def _complete_job(client, skill, ts_ok, exit_code=0, summary="done"):
     client.post(f"/jobs/{job_id}/events", json={"status": "running", "ts": "2026-08-01T00:00:00Z"})
     client.post(
         f"/jobs/{job_id}/events",
-        json={"status": "ok" if exit_code == 0 else "error", "ts": ts_ok, "exit_code": exit_code, "summary": summary},
+        json={
+            "status": "ok" if exit_code == 0 else "error",
+            "ts": ts_ok,
+            "exit_code": exit_code,
+            "summary": summary,
+        },
     )
     return job_id
 

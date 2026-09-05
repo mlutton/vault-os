@@ -13,6 +13,7 @@ import stat
 
 import pytest
 
+import vaultos.runner.core as core
 from vaultos.config import Settings
 from vaultos.db.conn import connect
 from vaultos.jobs import store
@@ -163,7 +164,10 @@ def test_check_fail_then_retry_then_fail_is_error(conn, vault, tmp_path, setting
 def test_engine_failure_on_retry_is_error(conn, vault, tmp_path, settings):
     """If the retried engine invocation itself fails (nonzero exit), the job
     errors without a second check -- per the addendum, "Engine failure on the
-    retry also -> error.\""""
+    retry also -> error." The eval event's check outcome must describe the
+    last check that actually ran -- the first (failing) one, attempt 1 --
+    not a synthetic "attempt: 2" for a second check that never executed
+    (operator decision, fix round 1)."""
     run_log = tmp_path / "run-log.txt"
     engine_script = _write_script(
         tmp_path / "engine.sh",
@@ -189,7 +193,7 @@ def test_engine_failure_on_retry_is_error(conn, vault, tmp_path, settings):
     assert run_log.read_text().count("ran") == 2
 
     assert len(events) == 1
-    assert events[0]["check"] == {"passed": False, "attempt": 2}
+    assert events[0]["check"] == {"passed": False, "attempt": 1}
 
 
 def test_no_check_declared_engine_success_suffices(conn, vault, tmp_path, settings):
@@ -207,6 +211,65 @@ def test_no_check_declared_engine_success_suffices(conn, vault, tmp_path, settin
 
     assert len(events) == 1
     assert events[0]["check"] is None
+
+
+def test_check_timeout_is_treated_as_failure_then_retry_passes(conn, vault, tmp_path, settings, monkeypatch):
+    """A check that hangs past CHECK_TIMEOUT_S is treated exactly like a
+    check that exits nonzero: it's a failure, its feedback names the
+    timeout, and the one retry engages with that feedback visible to the
+    retried engine process (fix round 1, CHANGE 1)."""
+    monkeypatch.setattr(core, "CHECK_TIMEOUT_S", 0.3)
+
+    # Hangs well past the 0.3s timeout on the first call (no marker file
+    # yet); on the retry's check, the marker exists so it returns instantly.
+    counter = tmp_path / "check-counter"
+    check_cmd = (
+        f'if [ -f "{counter}" ]; then exit 0; else touch "{counter}"; sleep 5; fi'
+    )
+    run_log = _registry_with_check(vault, tmp_path, check_cmd)
+    registry = load_registry(vault)
+    job = _enqueue(conn, vault, registry)
+
+    claimed, events = _run(conn, vault, registry, settings)
+
+    assert claimed is True
+    final = store.get_job(conn, job.id)
+    assert final.status == "ok"
+
+    log_text = run_log.read_text()
+    assert log_text.count("ran") == 2, "engine should run once, then once more on retry"
+    assert "timed out" in log_text, (
+        "the retried process must see the timed-out check's feedback via "
+        "VAULTOS_CHECK_FEEDBACK"
+    )
+
+    assert len(events) == 1
+    assert events[0]["success"] is True
+    assert events[0]["check"] == {"passed": True, "attempt": 2}
+
+
+def test_check_timeout_twice_is_error(conn, vault, tmp_path, settings, monkeypatch):
+    """A check that hangs past the timeout on both attempts errors the job
+    after the one retry -- same "fail -> retry -> fail" shape as an
+    ordinary nonzero-exit check, just via the timeout path."""
+    monkeypatch.setattr(core, "CHECK_TIMEOUT_S", 0.3)
+
+    run_log = _registry_with_check(vault, tmp_path, "sleep 5")
+    registry = load_registry(vault)
+    job = _enqueue(conn, vault, registry)
+
+    claimed, events = _run(conn, vault, registry, settings)
+
+    assert claimed is True
+    final = store.get_job(conn, job.id)
+    assert final.status == "error"
+    assert "timed out" in final.summary
+
+    assert run_log.read_text().count("ran") == 2, "exactly one retry, no more"
+
+    assert len(events) == 1
+    assert events[0]["success"] is False
+    assert events[0]["check"] == {"passed": False, "attempt": 2}
 
 
 def test_check_not_run_when_engine_itself_fails(conn, vault, tmp_path, settings):

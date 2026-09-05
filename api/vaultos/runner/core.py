@@ -35,7 +35,11 @@ CHECK_SUMMARY_MAX_CHARS = 500
 # No timeout is specified by the runner spec's check+retry addendum for the
 # check command itself; a default is applied here (same value as the script
 # engine's DEFAULT_TIMEOUT_S) so a hung check command can't wedge the runner
-# -- see this ticket's Deviations.
+# -- see this ticket's Deviations. Deliberately a plain module-level constant
+# (not buried behind a settings object): `_run_check` reads it by bare name
+# at call time, so a test can lower it with `monkeypatch.setattr(core,
+# "CHECK_TIMEOUT_S", ...)` to exercise the timeout path in well under a
+# second, exactly like patching any other module attribute.
 CHECK_TIMEOUT_S = 120
 
 
@@ -146,10 +150,17 @@ class Runner:
         where check_outcome is None when no check was declared (engine
         success alone is job success, unchanged from #22) or
         {"passed": bool, "attempt": 1 | 2} recording which attempt the check
-        was decided on. Any exception from `engine.run` (first call or the
-        retry) propagates to the caller unchanged -- `_execute`'s existing
-        engine-crash handling covers both ("engine failure on the retry also
-        -> error", per the addendum)."""
+        was decided on. `check_outcome` only ever describes a check that
+        actually ran (operator decision, fix round 1): if the retried ENGINE
+        itself fails (no second check runs), the outcome reported is the
+        last check that did run -- the first one, which is why the retry
+        happened at all -- not a synthetic "attempt: 2" implying a second
+        check that never executed; the engine failure itself is already
+        carried by the returned EngineResult's exit code/summary. Any
+        exception from `engine.run` (first call or the retry) propagates to
+        the caller unchanged -- `_execute`'s existing engine-crash handling
+        covers both ("engine failure on the retry also -> error", per the
+        addendum)."""
         result = engine.run(job=job, skill=skill, ctx=ctx)
         if not result.success or not skill.check:
             return result, None
@@ -160,7 +171,10 @@ class Runner:
 
         retry_result = engine.run(job=job, skill=skill, ctx=ctx, retry_context=feedback)
         if not retry_result.success:
-            return retry_result, {"passed": False, "attempt": 2}
+            # The retry's engine call itself failed -- no second check ran,
+            # so the outcome we report is the last check that actually did:
+            # the first one (which is exactly why this retry happened).
+            return retry_result, {"passed": False, "attempt": 1}
 
         passed_retry, feedback_retry = self._run_check(skill, ctx)
         if passed_retry:

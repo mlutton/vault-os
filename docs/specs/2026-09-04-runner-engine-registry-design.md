@@ -159,6 +159,14 @@ interface and eval schema referenced here are frozen on main.
 - **Eval events**: the existing schema's `check` field (null since the
   core landed) now records the real outcome, including which attempt
   passed.
+- **The `check` field describes only checks that actually ran** (fix round
+  1, 2026-09-05, operator decision): if the retried engine call itself
+  fails, no second check executes, so the outcome reported is the last
+  check that did run — the first one (`{"passed": false, "attempt": 1}`),
+  not a synthetic second attempt. The engine failure itself is already
+  visible on the job's exit code/summary; the `check` field's job is
+  narrower — only ever describing verification that was actually
+  performed.
 - Tests keep the established seam: end-to-end through the HTTP API with
   a stub CLI binary scripted to succeed/fail/hang — no real vendor CLI,
   key, or network.

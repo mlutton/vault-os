@@ -11,6 +11,7 @@ in-process, no HTTP calls. See docs/specs/2026-09-04-runner-engine-registry-desi
 import logging
 import os
 import signal
+import subprocess
 import threading
 import time
 
@@ -20,10 +21,26 @@ from ..jobs import store
 from ..registry import Registry
 from ..state import resolve_state_root
 from ..timeutil import utcnow_z
-from .engines import ENGINE_REGISTRY, EngineContext
+from .engines import ENGINE_REGISTRY, EngineContext, EngineResult
 from .heartbeat import RUNNER_VERSION, write_heartbeat
 
 logger = logging.getLogger(__name__)
+
+# Cap what a check's own failure feedback contributes to a job's `summary`
+# column on a second, terminal failure -- mirrors script.py's
+# SUMMARY_MAX_CHARS; the full stdout/stderr is what actually gets replayed
+# into the retried engine call, this is just the at-a-glance record.
+CHECK_SUMMARY_MAX_CHARS = 500
+
+# No timeout is specified by the runner spec's check+retry addendum for the
+# check command itself; a default is applied here (same value as the script
+# engine's DEFAULT_TIMEOUT_S) so a hung check command can't wedge the runner
+# -- see this ticket's Deviations. Deliberately a plain module-level constant
+# (not buried behind a settings object): `_run_check` reads it by bare name
+# at call time, so a test can lower it with `monkeypatch.setattr(core,
+# "CHECK_TIMEOUT_S", ...)` to exercise the timeout path in well under a
+# second, exactly like patching any other module attribute.
+CHECK_TIMEOUT_S = 120
 
 
 def default_emit(event: dict) -> None:
@@ -105,7 +122,7 @@ class Runner:
         self._executing = True
         start = time.monotonic()
         try:
-            result = engine.run(job=job, skill=skill, ctx=ctx)
+            result, check_outcome = self._run_with_check(job, skill, engine, ctx)
         except Exception as exc:  # noqa: BLE001 - any engine crash must not take the runner down
             duration_s = time.monotonic() - start
             self.emit({
@@ -119,12 +136,77 @@ class Runner:
         duration_s = time.monotonic() - start
         self.emit({
             "run_id": job.id, "skill": job.skill, "engine": job.engine,
-            "duration_s": duration_s, "success": result.success, "check": None,
+            "duration_s": duration_s, "success": result.success, "check": check_outcome,
         })
         self._post_terminal(
             job, status=("ok" if result.success else "error"), exit_code=result.exit_code,
             summary=result.summary, deliverable_path=result.deliverable_path,
         )
+
+    def _run_with_check(self, job, skill, engine, ctx: EngineContext):
+        """Run `engine` once, then -- if it succeeded and `skill` declares a
+        `check` -- verify with exactly one retry (2026-09-05 check+retry
+        addendum to the runner spec). Returns (EngineResult, check_outcome)
+        where check_outcome is None when no check was declared (engine
+        success alone is job success, unchanged from #22) or
+        {"passed": bool, "attempt": 1 | 2} recording which attempt the check
+        was decided on. `check_outcome` only ever describes a check that
+        actually ran (operator decision, fix round 1): if the retried ENGINE
+        itself fails (no second check runs), the outcome reported is the
+        last check that did run -- the first one, which is why the retry
+        happened at all -- not a synthetic "attempt: 2" implying a second
+        check that never executed; the engine failure itself is already
+        carried by the returned EngineResult's exit code/summary. Any
+        exception from `engine.run` (first call or the retry) propagates to
+        the caller unchanged -- `_execute`'s existing engine-crash handling
+        covers both ("engine failure on the retry also -> error", per the
+        addendum)."""
+        result = engine.run(job=job, skill=skill, ctx=ctx)
+        if not result.success or not skill.check:
+            return result, None
+
+        passed, feedback = self._run_check(skill, ctx)
+        if passed:
+            return result, {"passed": True, "attempt": 1}
+
+        retry_result = engine.run(job=job, skill=skill, ctx=ctx, retry_context=feedback)
+        if not retry_result.success:
+            # The retry's engine call itself failed -- no second check ran,
+            # so the outcome we report is the last check that actually did:
+            # the first one (which is exactly why this retry happened).
+            return retry_result, {"passed": False, "attempt": 1}
+
+        passed_retry, feedback_retry = self._run_check(skill, ctx)
+        if passed_retry:
+            return retry_result, {"passed": True, "attempt": 2}
+
+        failed_result = EngineResult(
+            success=False,
+            exit_code=retry_result.exit_code,
+            summary=f"check failed after retry: {feedback_retry[:CHECK_SUMMARY_MAX_CHARS]}",
+            deliverable_path=retry_result.deliverable_path,
+        )
+        return failed_result, {"passed": False, "attempt": 2}
+
+    @staticmethod
+    def _run_check(skill, ctx: EngineContext) -> tuple[bool, str]:
+        """Run `skill.check` as a shell command with the job's working
+        context -- VAULT_ROOT in env, cwd set to it -- per the addendum: "a
+        check is a shell command run with the job's working context". Exit 0
+        passes. Returns (passed, combined stdout+stderr) -- the latter is
+        exactly what's carried as failure context into the one retry, and
+        into the terminal error summary on a second failure."""
+        env = {**os.environ, "VAULT_ROOT": str(ctx.vault_root)}
+        try:
+            proc = subprocess.run(
+                skill.check, shell=True, cwd=ctx.vault_root, capture_output=True,
+                text=True, env=env, timeout=CHECK_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired as exc:
+            feedback = f"check command timed out after {CHECK_TIMEOUT_S}s: {exc}"
+            return False, feedback
+        feedback = f"--- check stdout ---\n{proc.stdout}--- check stderr ---\n{proc.stderr}"
+        return proc.returncode == 0, feedback
 
     def _post_terminal(self, job, *, status, exit_code, summary, deliverable_path=None) -> None:
         apply_event_and_chain(

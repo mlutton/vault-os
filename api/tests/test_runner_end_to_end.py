@@ -55,7 +55,7 @@ def tmp_vault(tmp_path):
                 "id": "unavailable-engine-skill",
                 "label": "Unavailable Engine",
                 "deck": True,
-                "engine": "claude-cli",
+                "engine": "nonexistent-engine",
                 "args": [],
             },
         ],
@@ -112,7 +112,7 @@ def test_unknown_engine_job_fails_fast_via_runner(client, tmp_vault):
 
     detail = client.get(f"/jobs/{job_id}").json()
     assert detail["status"] == "error"
-    assert "claude-cli" in detail["summary"]
+    assert "nonexistent-engine" in detail["summary"]
 
 
 def test_chaining_triggers_after_runner_posts_terminal_event(client, tmp_vault, monkeypatch):

@@ -35,6 +35,13 @@ class Skill:
     # keeps adding a runtime to one adapter plus one registry row (per the
     # runner spec) instead of growing named fields on Skill for every engine.
     engine_config: dict = field(default_factory=dict)
+    # Optional shell command string verifying a run's output (2026-09-05
+    # check+retry addendum to the runner spec). Deliberately top-level, not
+    # inside engine_config: verification is engine-agnostic -- a script skill
+    # deserves a check as much as an LLM one -- so runner core (not any
+    # adapter) runs it. Absent/None means no check; engine success alone is
+    # job success (unchanged from #22).
+    check: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,7 @@ def load_registry(vault_root: Path) -> Registry:
             deck=s["deck"],
             engine=s.get("engine"),
             engine_config=s.get("engine_config", {}),
+            check=s.get("check"),
             args=tuple(
                 SkillArg(
                     name=a["name"],

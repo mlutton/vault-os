@@ -9,6 +9,7 @@ substituted against the job's own args plus two reserved placeholders,
 `{job_id}` and `{vault_root}`.
 """
 
+import os
 import subprocess
 
 from .base import EngineContext, EngineResult
@@ -30,7 +31,9 @@ class ScriptEngineError(RuntimeError):
 class ScriptEngine:
     name = "script"
 
-    def run(self, *, job, skill, ctx: EngineContext) -> EngineResult:
+    def run(
+        self, *, job, skill, ctx: EngineContext, retry_context: str | None = None
+    ) -> EngineResult:
         config = skill.engine_config or {}
         argv_template = config.get("argv")
         if not argv_template:
@@ -44,10 +47,20 @@ class ScriptEngine:
                 f"script skill '{skill.id}' argv references unknown placeholder {exc}"
             ) from exc
 
+        # This adapter's choice of how retry_context (core's check+retry loop,
+        # see engines/base.py's Engine.run docstring) enters its input: an
+        # environment variable, visible to the subprocess like any other env
+        # var. Only set on a retry -- a first attempt runs with a plain
+        # inherited environment, same as before this feature existed.
+        env = None
+        if retry_context is not None:
+            env = {**os.environ, "VAULTOS_CHECK_FEEDBACK": retry_context}
+
         timeout_s = config.get("timeout_s", DEFAULT_TIMEOUT_S)
         try:
             proc = subprocess.run(
                 argv, cwd=ctx.vault_root, capture_output=True, text=True, timeout=timeout_s,
+                env=env,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ScriptEngineError(f"script skill '{skill.id}' failed to run: {exc}") from exc

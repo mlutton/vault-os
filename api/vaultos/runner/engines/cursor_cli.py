@@ -19,6 +19,14 @@ vaultos/registry.py's Skill.engine_config docstring):
   absent, the job's own `prompt` arg (a normal Skill arg, validated by the
   registry like any other) is used verbatim.
 
+**Prompt-builder registry (ticket #25)**: mirrors claude_cli.py exactly --
+before either of the above, this adapter checks
+`vaultos.runner.prompts.get_builder(skill.id)`; a registered builder's
+prompt (and deliverable path) wins over `engine_config`'s `prompt` template
+and the job's own `prompt` arg. No builder = unchanged passthrough behavior.
+See claude_cli.py's module docstring for the full rationale (deliberately
+not repeated here -- same mirror relationship as the rest of this file).
+
 The prompt is passed as the invocation's final argv element (one-shot,
 matching claude_cli's shape); stdout is the run's output.
 
@@ -35,6 +43,7 @@ where trust should be withheld, so the flag is not configurable.
 
 import subprocess
 
+from ..prompts import BuilderContext, get_builder
 from .base import EngineContext, EngineResult
 from .claude_cli import RETRY_CONTEXT_MARKER  # noqa: F401 -- shared marker contract, see below
 
@@ -75,7 +84,7 @@ class CursorCliEngine:
         if not binary:
             raise CursorCliEngineError(f"cursor-cli skill '{skill.id}' has no binary configured")
 
-        prompt = self._build_prompt(job, skill, config)
+        prompt, deliverable_path = self._build_prompt(job, skill, config, ctx)
         if retry_context is not None:
             prompt = f"{prompt}{RETRY_CONTEXT_MARKER}{retry_context}"
 
@@ -95,20 +104,41 @@ class CursorCliEngine:
 
         self._write_run_log(ctx, job.id, argv, proc)
 
+        resolved_deliverable = None
+        if proc.returncode == 0 and deliverable_path and (ctx.vault_root / deliverable_path).exists():
+            resolved_deliverable = deliverable_path
+
         summary = (proc.stdout.strip() or proc.stderr.strip() or f"cursor-cli exited {proc.returncode}")
         return EngineResult(
             success=proc.returncode == 0,
             exit_code=proc.returncode,
             summary=summary[:SUMMARY_MAX_CHARS],
+            deliverable_path=resolved_deliverable,
         )
 
     @staticmethod
-    def _build_prompt(job, skill, config: dict) -> str:
+    def _build_prompt(job, skill, config: dict, ctx: EngineContext) -> tuple[str, str | None]:
+        """Returns (prompt, deliverable_path) -- see claude_cli.py's
+        identical method for the full rationale (prompt-builder registry
+        checked first; deliverable_path is None unless a builder supplied
+        one)."""
+        builder = get_builder(skill.id)
+        if builder is not None:
+            built = builder(
+                job.args, BuilderContext(vault_root=ctx.vault_root, settings=ctx.settings, job_id=job.id)
+            )
+            if built is None:
+                raise CursorCliEngineError(
+                    f"cursor-cli skill '{skill.id}' prompt builder rejected this job's args "
+                    f"(missing or blank required field)"
+                )
+            return built.prompt, built.deliverable_path
+
         template = config.get("prompt")
         if template:
             subst = {**job.args, "job_id": job.id}
             try:
-                return template.format(**subst)
+                return template.format(**subst), None
             except KeyError as exc:
                 raise CursorCliEngineError(
                     f"cursor-cli skill '{skill.id}' prompt template references unknown placeholder {exc}"
@@ -120,7 +150,7 @@ class CursorCliEngine:
                 f"cursor-cli skill '{skill.id}' has no engine_config 'prompt' template "
                 f"and the job carries no 'prompt' arg"
             )
-        return prompt
+        return prompt, None
 
     @staticmethod
     def _write_run_log(ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess) -> None:

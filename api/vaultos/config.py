@@ -39,6 +39,17 @@ class Settings:
         state_root = os.environ.get("VAULTOS_STATE_ROOT")
         self.state_root_override = Path(state_root) if state_root else None
         self.runner_poll_interval_s = float(os.environ.get("RUNNER_POLL_INTERVAL_S", "5"))
+        # The only personal-path lift batch 1's ported prompts need (ticket
+        # #25): the legacy daemon's wiki-ingest prompt hardcoded a
+        # home-relative doc pointer, `~/.claude/skills/wiki-ingest/SKILL.md`
+        # -- a real path on the operator's own box, not something a public
+        # repo's committed strings may contain (see the runner spec's
+        # "Configuration does the scrubbing" addendum). The default below is
+        # a generic description with no path at all; set this env var to a
+        # real path if a given deployment wants the prompt to name one.
+        self.wiki_ingest_skill_doc_hint = os.environ.get(
+            "WIKI_INGEST_SKILL_DOC_HINT", "the wiki-ingest skill's own SKILL.md"
+        )
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

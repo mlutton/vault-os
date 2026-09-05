@@ -8,7 +8,7 @@ landed on disk, and serves read-models to whatever surface you point at it.
 Today it also carries a personal-finance module — the first real application
 built on it.
 
-**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 873
+**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 918
 tests, and its interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not as something to depend on yet.
 
@@ -43,7 +43,7 @@ is the seam currently being built. That gap is known, named, and being closed
 |---|---|
 | **42 endpoints** | 11 platform routers in `vaultos/api/` + the finance module |
 | **22 of them** | the finance module |
-| **873 tests** | `pytest`, 70 files, no network, no API spend |
+| **918 tests** | `pytest`, 73 files, no network, no API spend |
 | **16 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
 | **14 migrations** | plain SQL, `PRAGMA user_version` (`vaultos/db/migrations/`) |
 | **Dependencies** | FastAPI, uvicorn, python-multipart, httpx, icalendar, recurring-ical-events. That's the list. |
@@ -89,7 +89,7 @@ inventing a default vault. Optional: `VAULTOS_DB` (default `data/vaultos.db`),
 `VAULTOS_PORT`, `HUD_TZ` and `CALENDAR_ICAL_URL`.
 
 ```bash
-pytest                                   # 873 tests, ~30s, no network
+pytest                                   # 918 tests, ~30s, no network
 vaultos reindex                          # rebuild the DB from vault files
 ```
 
@@ -146,6 +146,33 @@ are answered in one of them. Numbering has gaps — those slots were decisions a
 
 Design specs live in [`docs/specs/`](docs/specs/); the
 domain glossary is [`CONTEXT.md`](CONTEXT.md).
+
+### Runner: engines and the prompt-builder registry
+
+`vaultos/runner/` claims queued jobs and routes each to an engine adapter
+(`script`, `claude-cli`, `cursor-cli`) by the skill's `engine` field — see
+[the runner + engine registry design](docs/specs/2026-09-04-runner-engine-registry-design.md).
+For LLM engines, some skills' prompts come from a **prompt-builder
+registry** (`vaultos/runner/prompts/`) instead of `engine_config`: skill id →
+`builder(job_args, BuilderContext) -> BuiltPrompt | None`. This is how the
+legacy Node daemon's (`Fable-Os-Web/runner/runner.js`, a private repo) inline
+per-skill prompts move into this codebase — ported verbatim, wording and
+guard rails unchanged, batch by batch (batch 1: `plan-today`,
+`plan-tomorrow`, `vault-cleanup`, `inbox-brief`, `metrics-pull`,
+`research-into-draft`, `wiki-ingest`, `visual-asset-proposal`,
+`draft-persona-fanout` — the operational/simple set; batch 2, the heavy
+research/writing pipeline, is a separate ticket). A skill with no registered
+builder keeps prompting from `engine_config`'s own template or the job's
+`prompt` arg, unchanged.
+
+Every absolute path a ported prompt embedded lifts into `Settings` at build
+time, so committed prompt strings carry no personal paths (CI's scrub gate:
+`grep -rn "/home/michael" vaultos/ tests/` must stay empty). Batch 1 lifted
+exactly one such value:
+
+| Setting | Env var | Default | What it was |
+|---|---|---|---|
+| `Settings.wiki_ingest_skill_doc_hint` | `WIKI_INGEST_SKILL_DOC_HINT` | `"the wiki-ingest skill's own SKILL.md"` | The legacy `wiki-ingest` prompt's hardcoded `~/.claude/skills/wiki-ingest/SKILL.md` doc pointer — a real, personal, home-relative path. The default is a path-free description; set the env var if a deployment wants the prompt to name a real path. |
 
 ## Conventions
 

@@ -1,12 +1,12 @@
-# CLAUDE.md — api/
+# CLAUDE.md
 
-Instructions for Claude Code working inside `api/`.
+Instructions for Claude Code working in this repository.
 
-@../docs/agents/shared.md
+@docs/agents/shared.md
 
-The import above pulls in this repository's actual instructions — its
-`## api/` section covers this component specifically. The block below is
-repeated directly so it is visible even if the import above is ever skipped.
+The import above pulls in this repository's actual instructions. The block
+below is repeated directly so it is visible even if the import above is ever
+skipped.
 
 <!-- shared-invariants:start -->
 This block is the minimum every coding agent must read, even if nothing else in this repository is read.

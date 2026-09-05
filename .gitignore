@@ -1,0 +1,3 @@
+# working directories used by driver-orchestrated agent runs — never committed
+.dispatch/
+.reference/

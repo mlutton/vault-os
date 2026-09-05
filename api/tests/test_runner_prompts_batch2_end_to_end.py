@@ -6,8 +6,8 @@ the API, and confirm the stub's logged argv actually carries the
 prompt-builder registry's built prompt.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire`, `daily-topic-digest`, and
-`deep-research`.
+this file currently covers `acquire`, `daily-topic-digest`,
+`deep-research`, and `article-refiner`.
 """
 
 import json
@@ -16,7 +16,7 @@ import stat
 import pytest
 
 from vaultos.runner.core import Runner
-from vaultos.runner.prompts import slugify, today_date
+from vaultos.runner.prompts import id8, slugify, today_date
 
 
 def _write_stub(path, body):
@@ -68,6 +68,10 @@ def tmp_vault(tmp_path, stub_claude):
                     {"name": "draft_slug", "required": False, "type": "string"},
                     {"name": "topic_context", "required": False, "type": "string"},
                 ],
+            ),
+            skill_entry(
+                "article-refiner",
+                [{"name": "article_path", "required": True, "type": "string"}],
             ),
         ],
     }
@@ -157,4 +161,34 @@ def test_deep_research_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
 
 def test_deep_research_missing_topic_fails_fast(client, tmp_vault):
     res = client.post("/jobs", json={"skill": "deep-research", "args": {"topic": ""}})
+    assert res.status_code == 400
+
+
+def test_article_refiner_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
+    from vaultos.main import app
+
+    article_path = "writing/articles/my-piece/my-piece.md"
+    log_path = tmp_path / "argv.log"
+    monkeypatch.setenv("CLAUDE_STUB_LOG", str(log_path))
+    res = client.post(
+        "/jobs", json={"skill": "article-refiner", "args": {"article_path": article_path}}
+    )
+    assert res.status_code == 201, res.text
+    job_id = res.json()["id"]
+    date = today_date(app.state.settings)
+    deliverable_rel = f"inbox/reports/article-refiner/{date}-article-refiner-{id8(job_id)}.md"
+    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
+
+    Runner(app.state.conn, app.state.registry, app.state.settings).run_once()
+    detail = client.get(f"/jobs/{job_id}").json()
+
+    assert detail["status"] == "ok"
+    assert detail["deliverables"] == [deliverable_rel]
+    prompt = _invoked_prompt(log_path)
+    assert article_path in prompt
+    assert "propose a polish pass" in prompt
+
+
+def test_article_refiner_missing_article_path_fails_fast(client, tmp_vault):
+    res = client.post("/jobs", json={"skill": "article-refiner", "args": {"article_path": ""}})
     assert res.status_code == 400

@@ -69,6 +69,12 @@ class Settings:
             "ASSEMBLE_ACQUIRE_REPORT_CLI", "the assemble-acquire-report CLI script"
         )
         self.yt_search_script = os.environ.get("YT_SEARCH_SCRIPT", "the yt-search script")
+        # Same doc-pointer pattern as wiki_ingest_skill_doc_hint -- the
+        # legacy article-refiner prompt hardcoded its own home-relative
+        # SKILL.md pointer.
+        self.article_refiner_skill_doc_hint = os.environ.get(
+            "ARTICLE_REFINER_SKILL_DOC_HINT", "the article-refiner skill's own SKILL.md"
+        )
 
     def vault_readable(self) -> bool:
         return self.vault_root.is_dir() and (self.vault_root / "system").is_dir()

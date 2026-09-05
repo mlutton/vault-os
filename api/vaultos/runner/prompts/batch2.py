@@ -30,6 +30,8 @@ from .base import (
     BuilderContext,
     BuiltPrompt,
     PromptBuilder,
+    id8,
+    now_time,
     slugify,
     today_date,
 )
@@ -112,10 +114,30 @@ def deep_research(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
     return BuiltPrompt(prompt=prompt, deliverable_path=deliverable)
 
 
+def article_refiner(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
+    article_path = (args.get("article_path") or "").strip()
+    if not article_path:
+        return None
+    date = today_date(ctx.settings)
+    deliverable = f"inbox/reports/article-refiner/{date}-article-refiner-{id8(ctx.job_id)}.md"
+    # date AND local time, not just the date -- a second run later the same
+    # day needs distinguishable headings across every dated sub-section it
+    # writes (Proposed Revision, Hook Options, Changelog), not just
+    # Changelog, or a same-day re-run edits the prior entry in place instead
+    # of creating its own.
+    run_stamp = f"{date} {now_time(ctx.settings)}"
+    doc_hint = ctx.settings.article_refiner_skill_doc_hint
+    prompt = (
+        f"""{AUTONOMOUS_PREFIX}\n\nTask: propose a polish pass on the article at {article_path}, and save a short summary of what you proposed at exactly {deliverable}.\n\nThis is content-flow design Q52's queueable form of the article-refiner skill (see {doc_hint} for the full editorial rules this inlines) -- it is NOT a direct rewrite. You never touch the article's Body directly; everything you produce gets appended into the article's own Notes/Changelog/Flagged for Input sections for the author to review and manually promote.\n\nStep 1 -- read the article. Its Body is everything in the file before the first exact occurrence of "## Notes", "## Changelog", or "## Flagged for Input" (if none exist, the whole thing is Body). IMPORTANT: only ever match those three headings by their exact text -- articles routinely use "##" for their own internal subheadings as ordinary prose structure (confirmed: 11 of 22 published articles do this), and those must never be mistaken for a section boundary.\n\nIf Body is empty or near-empty, there's no existing draft to refine -- treat whatever's in Notes (evidence, research, the author's own thinking) as raw material and draft a full first piece from it.\n\nIf Body already has real prose, that's the actual draft to work from -- and Notes now serves two different purposes you need to tell apart:\n- Background context (evidence lists, research bullets, prior "### Proposed Revision" or "### Research" entries from earlier runs) -- scratch space from other tools and prior passes. Don't re-read this as new instructions, and don't repeat it verbatim into your output.\n- Revision requests -- freeform notes the author wrote about THIS draft specifically: things to cover, cut, expand, or change. These read like directives, not evidence ("expand the X section," "cut the Y paragraph," "extend the closing"). Treat these as live instructions for this pass. If a request already looks satisfied by the current Body, don't force a change for its own sake -- just say so in the Changelog, the same way you'd note a Flagged item is now resolved.\n\nStep 2 -- refine, don't reinvent. Preserve the author's argument and voice exactly -- same claims, same support, same characteristic word choices and rhythm, just clearer and more persuasive. Never invent statistics, dates, names, quotes, or sources that aren't in the draft; when a passage would clearly benefit from a specific fact that isn't there, leave it honestly vague or mark it inline with [NEEDS INPUT: ...] rather than fabricating one. Work the dimensions that actually need it: hook/opening, structure, clarity/flow, closing, voice consistency -- don't rewrite what already works. When Body already had prose and Step 1 identified revision requests in Notes, weave those specific changes in as part of this pass -- don't just do a generic polish and skip what was actually asked for. Produce the full refined draft, not notes about what should change.\n\nStep 2b -- link sources. When the draft references a specific person's quote, a named source, or a statistic, and that source's URL is unambiguous (the only candidate source provided for that specific claim -- check the article's own Evidence/Sources entries and any linked deep-research report), hyperlink it inline using standard markdown: `[Aaron Levie](https://x.com/levie/status/...)`. If two or more possible sources could back the same claim and it isn't clear which one actually does, don't guess and link one -- flag the attribution with [NEEDS INPUT: ...] instead, same as a missing fact. A confidently-wrong link is worse than an honest gap.\n\nStep 2c -- hook and subtitle options. Every draft needs a deliberate opening, not a default one. Generate 2-3 distinct hook options for the piece's first paragraph, each paired with a matching subtitle -- draw from patterns already validated in this author's own published work: a direct-address conditional ("If you're experiencing X, this is for you"), a sharp claim/thesis-first opening, a concrete scene or anecdote, or a real open question. Each option should be a genuinely different approach, not a reworded variant of the same one. Pick whichever fits this piece best and use it as the actual opening of your refined draft in Step 2 -- don't leave the draft with a placeholder opening. Never write into the `subtitle:` frontmatter field directly -- subtitle gets the exact same propose-then-promote treatment as Body. Put every option (including the one you used) in the Hook Options entry described in Step 3, and let the author choose which one, if any, to promote themselves.\n\nStep 3 -- append your output into the article's own sections, never touching Body or frontmatter:\n- If the article doesn't already have a "## Notes" heading, add one at the end of the body. Under it, append a "### Proposed Revision ({run_stamp})" sub-section containing the complete refined draft in full, and a "### Hook Options ({run_stamp})" sub-section listing each option from Step 2c -- label, the opening paragraph text, and its paired subtitle -- marking which one you used in the Proposed Revision as "(used above)". Use the exact same {run_stamp} value (date and time) for both headings on this pass, so they're visibly paired.\n- If the article doesn't already have a "## Changelog" heading, add one at the end of the body (after Notes if you just added it). Under it, append a "### {run_stamp}" sub-section with a short paragraph or a few bullets on the headline edits and why -- tight context for the author, not a second draft. If Step 1 identified any revision requests in Notes, explicitly call out which ones you applied (and how) and which ones you judged already satisfied by the existing Body -- the author needs to be able to tell what happened to each request without re-reading the whole diff.\n- If the article doesn't already have a "## Flagged for Input" heading, add one at the end of the body. Under it, append the specific things needing the author's input (or skip this step entirely if there's nothing to flag -- don't write an empty section).\n\nStep 4 -- write the summary at exactly {deliverable}. YAML frontmatter: `date: {date}`, `skill: article-refiner`, `tags: [writing]`, `retention: ephemeral`. Body: the article's title, a one-line description of the headline edits proposed, and how many items (if any) got flagged.\n\nEnd your reply with: SAVED {deliverable}"""
+    )
+    return BuiltPrompt(prompt=prompt, deliverable_path=deliverable)
+
+
 # skill id -> builder, merged into vaultos.runner.prompts.PROMPT_BUILDER_REGISTRY
 # (see prompts/__init__.py) -- mirrors batch1.py's own BATCH1_BUILDERS.
 BATCH2_BUILDERS: dict[str, PromptBuilder] = {
     "acquire": acquire,
     "daily-topic-digest": daily_topic_digest,
     "deep-research": deep_research,
+    "article-refiner": article_refiner,
 }

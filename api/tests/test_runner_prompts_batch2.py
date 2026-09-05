@@ -5,10 +5,10 @@ on load-bearing phrases and interpolated job args/settings, plus the
 deliverable path's exact shape -- never a full-string golden.
 
 Built up one skill per commit, matching the ticket's per-skill commit plan;
-this file currently covers `acquire`, `daily-topic-digest`, and
-`deep-research`. The shared registry-boundary tests (batch-2 fully
-registered, excluded set unchanged) live in `test_runner_prompts.py` and
-are updated once all five batch-2 skills land.
+this file currently covers `acquire`, `daily-topic-digest`,
+`deep-research`, and `article-refiner`. The shared registry-boundary tests
+(batch-2 fully registered, excluded set unchanged) live in
+`test_runner_prompts.py` and are updated once all five batch-2 skills land.
 """
 
 import json
@@ -21,6 +21,8 @@ from vaultos.runner.prompts import (
     PROMPT_BUILDER_REGISTRY,
     BuilderContext,
     get_builder,
+    id8,
+    now_time,
     slugify,
     today_date,
 )
@@ -34,6 +36,8 @@ def settings(monkeypatch, tmp_path):
     monkeypatch.delenv("RSS_POLL_SCRIPT", raising=False)
     monkeypatch.delenv("WEBSEARCH_CACHED_FETCH_WORKFLOW", raising=False)
     monkeypatch.delenv("ASSEMBLE_ACQUIRE_REPORT_CLI", raising=False)
+    monkeypatch.delenv("YT_SEARCH_SCRIPT", raising=False)
+    monkeypatch.delenv("ARTICLE_REFINER_SKILL_DOC_HINT", raising=False)
     return Settings()
 
 
@@ -178,3 +182,27 @@ def test_deep_research_topic_context_appended_when_present(ctx):
     assert "Context already gathered" not in built_without.prompt
     assert "Context already gathered" in built_with.prompt
     assert "some prior evidence" in built_with.prompt
+
+
+def test_article_refiner_requires_article_path(ctx):
+    assert PROMPT_BUILDER_REGISTRY["article-refiner"]({}, ctx) is None
+    assert PROMPT_BUILDER_REGISTRY["article-refiner"]({"article_path": "  "}, ctx) is None
+
+
+def test_article_refiner(ctx):
+    article_path = "writing/articles/my-piece/my-piece.md"
+    built = PROMPT_BUILDER_REGISTRY["article-refiner"]({"article_path": article_path}, ctx)
+    assert built is not None
+    date = today_date(ctx.settings)
+    assert built.deliverable_path == f"inbox/reports/article-refiner/{date}-article-refiner-{id8(ctx.job_id)}.md"
+    assert AUTONOMOUS_PREFIX in built.prompt
+    assert article_path in built.prompt
+    assert ctx.settings.article_refiner_skill_doc_hint in built.prompt
+    assert "~/" not in built.prompt and "/home/" not in built.prompt
+    assert '"## Notes", "## Changelog", or "## Flagged for Input"' in built.prompt
+    run_stamp = f"{date} {now_time(ctx.settings)}"
+    assert f"### Proposed Revision ({run_stamp})" in built.prompt
+    assert f"### Hook Options ({run_stamp})" in built.prompt
+    assert f"### {run_stamp}" in built.prompt
+    assert "skill: article-refiner" in built.prompt
+    assert f"SAVED {built.deliverable_path}" in built.prompt

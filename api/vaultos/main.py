@@ -35,15 +35,33 @@ def _run_orphan_sweep(app: FastAPI) -> None:
     detect_orphans(app.state.conn, heartbeat)
 
 
-async def _orphan_detection_loop(app: FastAPI) -> None:
-    while True:
+async def _orphan_detection_loop(app: FastAPI, stop_event: asyncio.Event) -> None:
+    # Cooperative shutdown ONLY -- never `task.cancel()` this loop from outside.
+    # `_run_orphan_sweep` runs on a real OS thread via `asyncio.to_thread`, and
+    # cancelling the awaiting task does not, and cannot, stop that thread: the
+    # `to_thread` executor has no way to interrupt a thread that's already
+    # running, so cancellation just abandons the await early while the thread
+    # keeps executing queries against `app.state.conn` in the background. If
+    # shutdown then closes that connection (as lifespan below always does),
+    # the still-running sweep thread can be mid-`sqlite3` call on a connection
+    # that's being torn out from under it -- reliably a segfault, not just an
+    # exception (see ticket #28: this loop's own `list_jobs` call is the exact
+    # crash site CI's faulthandler dump named). So shutdown here always lets
+    # the CURRENT sweep (if any) finish naturally -- it only ever stops
+    # between sweeps, at the `stop_event.wait()` below.
+    while not stop_event.is_set():
         try:
             # Sync DB work -- offload to a thread so it never blocks the event
             # loop (which is otherwise free to keep serving requests).
             await asyncio.to_thread(_run_orphan_sweep, app)
         except Exception:
             logger.exception("orphan detection loop failed")
-        await asyncio.sleep(ORPHAN_CHECK_INTERVAL_S)
+        if stop_event.is_set():
+            break
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=ORPHAN_CHECK_INTERVAL_S)
+        except asyncio.TimeoutError:
+            pass
 
 
 @asynccontextmanager
@@ -59,15 +77,17 @@ async def lifespan(app: FastAPI):
     write_pid(settings.db_path)
     reconcile_from_files(settings.vault_root, app.state.conn, app.state.registry)
 
-    orphan_task = asyncio.create_task(_orphan_detection_loop(app))
+    orphan_stop = asyncio.Event()
+    orphan_task = asyncio.create_task(_orphan_detection_loop(app, orphan_stop))
 
     yield
 
-    orphan_task.cancel()
-    try:
-        await orphan_task
-    except asyncio.CancelledError:
-        pass
+    # Signal + await, never cancel(): see _orphan_detection_loop's docstring
+    # comment -- awaiting it here (with no prior cancel()) blocks until any
+    # sweep already in flight genuinely finishes on its own thread, so the
+    # connection below is never closed while that thread is still using it.
+    orphan_stop.set()
+    await orphan_task
     remove_pid(settings.db_path)
     app.state.conn.close()
 

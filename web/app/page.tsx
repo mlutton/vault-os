@@ -1,8 +1,9 @@
 export default function Home() {
   return (
-    <main>
-      <h1>VaultOS Web</h1>
+    <section className="cockpit-intro" aria-labelledby="cockpit-title">
+      <p className="cockpit-intro__kicker">Operations cockpit</p>
+      <h1 id="cockpit-title">VaultOS Web</h1>
       <p>The operations cockpit is coming soon.</p>
-    </main>
+    </section>
   );
 }

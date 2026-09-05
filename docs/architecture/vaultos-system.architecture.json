@@ -92,7 +92,7 @@
       "id": "web",
       "type": "frontend",
       "label": "Web Surface",
-      "sublabel": "read-models — planned",
+      "sublabel": "cockpit — in progress",
       "pos": [
         460,
         150
@@ -310,8 +310,9 @@
       "dot": "emerald",
       "title": "Built vs planned",
       "items": [
-        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core + check-retry, script + claude-cli + cursor-cli engines, 872 tests",
-        "Planned: Obsidian plugin, web surface"
+        "Built: the spine — jobs, module contract (ADR-0022), finance module, runner core + check-retry, script + claude-cli + cursor-cli engines, 957 API tests",
+        "In progress: web operations cockpit",
+        "Planned: Obsidian plugin"
       ]
     },
     {

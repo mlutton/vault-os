@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+repo_root=$1
+pytest="$repo_root/api/.venv/bin/pytest"
+if [[ ! -x $pytest ]]; then
+  pytest=$(command -v pytest || true)
+fi
+if [[ -z $pytest ]]; then
+  echo "FAIL tests — pytest is not installed"
+  exit 1
+fi
+
+if "$pytest" -p no:cacheprovider -q "$repo_root/api" "$repo_root/scripts/preflight"; then
+  echo "PASS tests"
+else
+  echo "FAIL tests"
+  exit 1
+fi

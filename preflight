@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONDONTWRITEBYTECODE=1
+
+gates=(lint tests scrub docs-consistency instruction-surface)
+
+usage() {
+  echo "usage: ./preflight [--only <gate>]" >&2
+  echo "gates: ${gates[*]}" >&2
+}
+
+selected=()
+if [[ $# -eq 0 ]]; then
+  selected=("${gates[@]}")
+elif [[ $# -eq 2 && $1 == "--only" ]]; then
+  for gate in "${gates[@]}"; do
+    if [[ $2 == "$gate" ]]; then
+      selected=("$gate")
+      break
+    fi
+  done
+  if [[ ${#selected[@]} -eq 0 ]]; then
+    usage
+    exit 2
+  fi
+else
+  usage
+  exit 2
+fi
+
+status=0
+for gate in "${selected[@]}"; do
+  if ! "$repo_root/scripts/preflight/$gate" "$repo_root"; then
+    status=1
+  fi
+done
+exit "$status"

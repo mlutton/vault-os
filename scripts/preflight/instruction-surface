@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -uo pipefail
+repo_root=$1
+python="$repo_root/api/.venv/bin/python"
+if [[ ! -x $python ]]; then
+  python=$(command -v python3 || true)
+fi
+if [[ -z $python ]]; then
+  echo "FAIL instruction-surface — python3 is not installed"
+  exit 1
+fi
+exec "$python" "$repo_root/scripts/preflight/instruction_surface.py" "$repo_root"

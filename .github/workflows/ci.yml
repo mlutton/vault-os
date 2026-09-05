@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    # `edited` matters: pr-shape reads the body from the event payload, so a
+    # body fixed after a shape failure is invisible to a rerun -- the check
+    # could only be cleared by pushing an unrelated commit.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 

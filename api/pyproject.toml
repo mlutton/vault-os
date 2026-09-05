@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "ruff>=0.12.0"]
+dev = ["pytest>=8.0.0", "ruff>=0.16,<0.17"]  # minor-pinned: ruff's formatter changes between minors, and an unpinned bump would reformat the tree and fail CI on untouched code
 
 [project.scripts]
 # `vaultos reindex` / `vaultos calendar-pull`; `python -m vaultos.cli` keeps working.

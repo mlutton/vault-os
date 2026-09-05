@@ -170,3 +170,33 @@ interface and eval schema referenced here are frozen on main.
 - Tests keep the established seam: end-to-end through the HTTP API with
   a stub CLI binary scripted to succeed/fail/hang — no real vendor CLI,
   key, or network.
+
+## Decisions: prompt-builder registry + port batches (2026-09-05, pre-build)
+
+How the legacy daemon's inline per-skill prompts move into this repo.
+
+- **One new seam: a prompt-builder registry** — skill id → builder(job
+  args, config) → (prompt, deliverable path). The legacy prompt and
+  deliverable-path cases land behind this single lookup, keyed exactly
+  as the skill registry keys skills. Engines are untouched: the CLI
+  engines already accept a prompt; the builder becomes its source when
+  a skill defines one. A skill with no builder keeps today's behavior
+  (prompt from job args / engine config).
+- **Configuration does the scrubbing**: any absolute path embedded in a
+  legacy prompt (helper-script locations, data roots) lifts into
+  settings/engine configuration — making the public-tree privacy rule
+  mechanically enforceable by CI's scrub gate rather than by review.
+- **The port is verbatim otherwise**: wording, sequencing, and guard
+  rails in the prompts carry over unchanged; re-authoring prompts is
+  explicitly not this work.
+- **Two batches by prompt weight**: batch 1 — operational/simple
+  skills (short prompts, no pipeline fan-out); batch 2 — the heavy
+  research/writing pipeline prompts. Batch 1 establishes the porting
+  conventions batch 2 follows. Exact membership is enumerated on the
+  build tickets at dispatch (it derives from the legacy source).
+- **Tests are markers, not goldens**: per-skill assertions that
+  load-bearing phrases and interpolated arguments appear in the built
+  prompt — never full-string golden tests, which would fossilize
+  prompts that are expected to evolve. Plus one end-to-end smoke per
+  ported skill through the HTTP API with a stub engine, and the scrub
+  gate over the ported strings.

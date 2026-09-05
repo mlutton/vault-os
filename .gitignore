@@ -9,3 +9,8 @@
 /web/*.tsbuildinfo
 /web/.env*
 !/web/.env.example
+
+# Python bytecode -- never tracked; running any gate regenerates it, and a
+# dirty tree blocks the next parcel dispatch.
+__pycache__/
+*.py[cod]

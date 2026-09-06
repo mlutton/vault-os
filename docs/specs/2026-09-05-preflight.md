@@ -80,13 +80,19 @@ checkout to establish a known-good baseline before starting.
 - **Docs consistency**: parse the READMEs' stated test and test-file
   counts and compare with the collected suite (`pytest --collect-only`)
   and the test-file count; any mismatch fails and prints the expected
-  values.
+  values. *(Superseded by the 2026-09-06 addendum: the file list is an
+  explicit registry of documents carrying countable claims, not two
+  hard-coded READMEs.)*
 - **Instruction-surface checks** as specified in the instruction-surface
   spec.
 - **CI**: the workflow's jobs call `preflight` (or its `--only` gates)
   instead of re-implementing them; the PR-shape check remains CI-only
   since it reads the PR body.
-- Preflight never writes to the tree; it only reports.
+- Preflight never writes to the tree; it only reports. *(Superseded by
+  the 2026-09-06 addendum: the rule is that a gate writes nothing
+  **outside** the repository. Caches and tool state do land inside it, in
+  gitignored paths, which is what lets a gate run where the home
+  directory is unwritable.)*
 
 ## Testing Decisions
 

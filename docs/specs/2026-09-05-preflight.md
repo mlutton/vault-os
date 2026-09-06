@@ -108,3 +108,77 @@ checkout to establish a known-good baseline before starting.
 This is the deterministic half of the guardrail principle the project
 follows: use models where judgment creates value, and put scripts
 around every point where a model chooses.
+
+## Addendum 2026-09-06 — what a gate looks at, and what it may touch
+
+Decided in the orchestration-layer gate grilling (claude-workspace#56,
+#55). The original spec settled what the gates *enforce* and was silent
+on two properties that turned out to matter more: which files a gate
+judges, and what state it depends on. Both have since cost a real
+incident.
+
+### Gates judge a git-derived file set, never a filesystem walk
+
+The scrub selects files by walking the tree and subtracting a fixed list
+of generated directories. That has now been wrong twice, both times
+about the same question — *what should this gate look at?*
+
+- Its hard-fail set was broad enough that satisfying it meant editing a
+  hundred historical ADRs, specs and tests. Answered at the time by
+  narrowing the set and forbidding a gate from mass-editing existing
+  content.
+- Its scan scope walks sibling git worktrees, whose build output makes
+  the gate report hundreds of hard failures about absolute paths that
+  are in no change under review.
+
+A third guess at an exclusion list would be the same mistake again, so
+the mechanism changes instead:
+
+> **Every gate judges the files git reports** — tracked, plus untracked
+> and not ignored (`git ls-files --cached --others --exclude-standard`)
+> — **never a filesystem walk.**
+
+This respects `.gitignore` by construction, cannot descend into a nested
+worktree, and never reads dependency directories. It has one limitation
+that belongs in the code rather than in folklore: a gate that asks git
+cannot see ignored files, so a secret living in a gitignored file which
+is later force-added would pass unexamined. That is an accepted
+trade-off — the alternative is a gate that judges files no reviewer will
+ever see.
+
+### A gate writes nothing outside the repository
+
+The original spec says preflight never writes to *the tree*. That is too
+narrow. A gate also must not write **outside** it: the web leg inherits
+ambient npm and corepack cache locations under the user's home, and in a
+sandboxed executor those are unwritable, so the gate fails with an
+internal error from a package manager rather than anything about this
+repository.
+
+> **A gate's writes stay inside the repository, and its behaviour does
+> not depend on ambient state.** Caches, temporary files and tool state
+> live in gitignored paths under the component being checked.
+
+Enforced rather than asserted: a test runs the gates with a read-only
+`HOME` and fails if any gate needs to write outside the working tree.
+Stated once as a property of every gate, because patching the one that
+failed leaves the next one free to repeat it.
+
+### Docs-consistency reads a registry, not two hard-coded READMEs
+
+The gate exists to catch a documented count drifting from reality, and a
+stale test count nonetheless shipped for a week — in the architecture
+diagram's JSON source, which the gate does not read.
+
+The file list becomes an **explicit registry** of documents carrying
+countable claims. Deliberately not a sweep over everything tracked: a
+sweep fires on prose that merely resembles a count, and a gate that
+cries wolf is a gate that gets disabled.
+
+### The tests gate names what it counted
+
+Two correct numbers with no explanation read as drift. The suite reports
+every test in the repository; docs-consistency reports the API suite the
+READMEs describe; the difference is the gate scripts' own tests. An
+executor comparing its baseline against a driver-supplied one reported
+the pair as a disagreement. The gate states its scope in its verdict.

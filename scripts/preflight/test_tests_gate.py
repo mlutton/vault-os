@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -8,6 +9,13 @@ def test_tests_gate_names_full_suite_scope_and_docs_consistency_scope(tmp_path: 
     pytest = repo / "api" / ".venv" / "bin" / "pytest"
     pytest.parent.mkdir(parents=True)
     (repo / "scripts" / "preflight").mkdir(parents=True)
+    # The gate requires its hermetic environment and fails loudly without it, so
+    # the fixture carries the real file rather than exercising a path no real
+    # repository has.
+    shutil.copy(
+        Path(__file__).parent / "hermetic-env.sh",
+        repo / "scripts" / "preflight" / "hermetic-env.sh",
+    )
     pytest.write_text(
         "#!/usr/bin/env bash\n"
         "if [[ $* == *--collect-only* ]]; then\n"
@@ -32,6 +40,5 @@ def test_tests_gate_names_full_suite_scope_and_docs_consistency_scope(tmp_path: 
 
     assert result.returncode == 0
     assert (
-        "PASS tests - full repository suite: 5 tests; "
-        "docs-consistency API suite: 3 tests"
+        "PASS tests - full repository suite: 5 tests; docs-consistency API suite: 3 tests"
     ) in result.stdout

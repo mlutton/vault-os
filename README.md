@@ -79,6 +79,17 @@ lint and formatting checks, the API suite, privacy and documentation checks,
 and instruction-surface validation; use `./preflight --only <gate>` to iterate
 on one gate.
 
+Gates that choose their own files — the privacy scrub, and the documentation
+check's file count — judge the files git reports, tracked plus untracked and
+not ignored, rather than walking the filesystem, so build output and other
+checkouts inside the tree cannot influence them. The gates that delegate
+discovery to another tool inherit that tool's rules instead: `ruff` and the web
+toolchain are scoped to their own component, while `pytest` collects by walking
+and does not read `.gitignore`, so an ignored test file still counts toward the
+suite. Gates also write nothing outside the repository — their caches and tool
+state live in gitignored paths inside it — which is what lets a gate run
+unchanged inside a sandbox with no writable home directory.
+
 ### Web quickstart
 
 The web component uses its own npm toolchain and runs on port 3110:

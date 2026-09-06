@@ -14,6 +14,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_files import repository_files
+
 REGISTRY = Path("scripts/preflight/docs-consistency-documents.txt")
 
 
@@ -47,7 +49,9 @@ def count_claims(root: Path) -> list[CountClaim]:
     return claims
 
 
-def documented_counts(root: Path) -> tuple[list[tuple[Path, int]], list[tuple[Path, int]]]:
+def documented_counts(
+    root: Path,
+) -> tuple[list[tuple[Path, int]], list[tuple[Path, int]]]:
     test_counts: list[tuple[Path, int]] = []
     file_counts: list[tuple[Path, int]] = []
     for claim in count_claims(root):
@@ -64,7 +68,22 @@ def documented_counts(root: Path) -> tuple[list[tuple[Path, int]], list[tuple[Pa
 
 
 def real_test_file_count(root: Path) -> int:
-    return sum(1 for path in (root / "api" / "tests").rglob("test_*.py") if path.is_file())
+    """Counted from the files git reports, so a copy of the tree inside a driver
+    worktree cannot inflate it.
+
+    Scoped claim, deliberately: this is the *file* count only. The test count
+    beside it comes from `pytest --collect-only`, which walks the filesystem and
+    does not consult .gitignore -- so a gitignored test file under api/tests/
+    leaves this number alone and still moves that one. Making both git-derived
+    is a separate change; see the follow-up ticket."""
+    tests_directory = (root / "api" / "tests").resolve()
+    return sum(
+        1
+        for path in repository_files(root)
+        if path.name.startswith("test_")
+        and path.suffix == ".py"
+        and tests_directory in path.resolve().parents
+    )
 
 
 def collected_test_count(root: Path, pytest: Path | None = None) -> int:

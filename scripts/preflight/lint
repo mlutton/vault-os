@@ -2,6 +2,10 @@
 set -uo pipefail
 
 repo_root=$1
+source "$repo_root/scripts/preflight/hermetic-env.sh" || {
+  echo "FAIL lint — hermetic environment could not be sourced"
+  exit 1
+}
 ruff="$repo_root/api/.venv/bin/ruff"
 if [[ ! -x $ruff ]]; then
   ruff=$(command -v ruff || true)

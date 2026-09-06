@@ -178,8 +178,8 @@ arg, unchanged.
 Every absolute path a ported prompt embedded lifts into `Settings` at build
 time, so committed prompt strings carry no personal paths — enforced
 repo-wide by CI's `scrub-gate` job (`.github/workflows/ci.yml`), which greps
-the whole tree for the operator's home directory and fails the build if it
-finds a match. Lifted values so far:
+every file git reports — tracked, plus untracked and not ignored — for the
+operator's home directory and fails the build if it finds a match. Lifted values so far:
 
 | Setting | Env var | Default | What it was |
 |---|---|---|---|

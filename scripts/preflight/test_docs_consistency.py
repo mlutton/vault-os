@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import docs_consistency
@@ -9,9 +10,22 @@ api/README.md	files	(?P<count>\\d+) test files
 """
 
 
+def git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
+def make_repo(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    git(root, "init", "--quiet")
+    git(root, "config", "user.email", "gate@example.invalid")
+    git(root, "config", "user.name", "Gate Fixture")
+    return root
+
+
 def fixture_tree(
     tmp_path: Path, root_count: int = 3, api_count: int = 3, file_count: int = 2
 ) -> Path:
+    make_repo(tmp_path)
     (tmp_path / "api" / "tests").mkdir(parents=True)
     (tmp_path / "scripts" / "preflight").mkdir(parents=True)
     (tmp_path / "README.md").write_text(f"The API has {root_count} tests.\n")
@@ -73,3 +87,21 @@ def test_registered_document_ignores_prose_that_only_resembles_a_count(tmp_path:
     )
 
     assert docs_consistency.check(root, expected_tests=3, expected_files=2) == []
+
+
+def test_an_ignored_test_file_is_not_counted(tmp_path: Path):
+    root = fixture_tree(tmp_path)
+    (root / ".gitignore").write_text("api/tests/test_scratch.py\n", encoding="utf-8")
+    (root / "api" / "tests" / "test_scratch.py").write_text("", encoding="utf-8")
+
+    assert docs_consistency.real_test_file_count(root) == 2
+
+
+def test_test_files_outside_the_api_suite_are_not_counted(tmp_path: Path):
+    """The count describes the API suite the READMEs describe, so the gate
+    scripts' own test files must not inflate it -- the same scope distinction
+    the tests gate states in its verdict."""
+    root = fixture_tree(tmp_path)
+    (root / "scripts" / "preflight" / "test_a_gate.py").write_text("", encoding="utf-8")
+
+    assert docs_consistency.real_test_file_count(root) == 2

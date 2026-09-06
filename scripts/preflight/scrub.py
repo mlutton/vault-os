@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Read-only repository privacy scrub."""
+"""Read-only repository privacy scrub.
+
+The file set comes from git, never a filesystem walk -- see repo_files for the
+reasoning and for the blind spot that choice accepts.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,8 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from repo_files import repository_files
 
 
 @dataclass(frozen=True)
@@ -51,31 +57,10 @@ def _patterns() -> tuple[list[tuple[str, re.Pattern[str]]], list[tuple[str, re.P
     return hard, warnings
 
 
-def _files(root: Path):
-    excluded = {".git", ".venv", ".dispatch", ".reference", "__pycache__", ".pytest_cache"}
-    generated_web_roots = {
-        Path("web/.next"),
-        Path("web/node_modules"),
-        Path("web/out"),
-    }
-    for path in root.rglob("*"):
-        relative = path.relative_to(root)
-        if (
-            path.is_file()
-            and not path.is_symlink()
-            and not any(part in excluded for part in relative.parts)
-            and not any(
-                directory == relative or directory in relative.parents
-                for directory in generated_web_roots
-            )
-        ):
-            yield path
-
-
 def scan(root: Path) -> list[Finding]:
     hard, warnings = _patterns()
     findings: list[Finding] = []
-    for path in _files(root):
+    for path in repository_files(root):
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):

@@ -1,6 +1,11 @@
 # working directories used by driver-orchestrated agent runs — never committed
 .dispatch/
 .reference/
+# driver worktrees — nested repositories, never part of this tree. git already
+# declines to descend into a *registered* worktree; this covers one whose
+# registration has been pruned, which git would otherwise walk into.
+.claude/worktrees/
+
 
 # web dependencies, generated output, and local environment
 /web/node_modules/
@@ -16,3 +21,6 @@
 # dirty tree blocks the next parcel dispatch.
 __pycache__/
 *.py[cod]
+
+# shared gate state (config home): not web's, so not under web/
+/.preflight-cache/

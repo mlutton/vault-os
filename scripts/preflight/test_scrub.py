@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import scrub
@@ -83,3 +84,22 @@ def test_an_ignored_file_is_the_gate_s_documented_blind_spot(tmp_path: Path):
     (root / "local.env").write_text(f"PATH={home_path}\n")
 
     assert scrub.scan(root) == []
+
+
+def test_a_tree_git_cannot_describe_reports_a_gate_verdict(tmp_path: Path):
+    """Raising is right -- a silent fallback would reinstate the filesystem walk
+    -- but a gate's contract is to name what failed. A traceback would be the CI
+    scrub job's entire output."""
+    outside = tmp_path / "plain"
+    outside.mkdir()
+
+    result = subprocess.run(
+        [sys.executable, str(Path(scrub.__file__)), str(outside)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout.startswith("FAIL scrub — ")
+    assert "Traceback" not in result.stderr

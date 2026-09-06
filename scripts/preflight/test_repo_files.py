@@ -90,3 +90,40 @@ def test_a_subdirectory_is_reported_relative_to_itself(tmp_path: Path):
     (root / "outer.md").write_text("outer\n", encoding="utf-8")
 
     assert names(root / "sub") == {"inner.md"}
+
+
+def test_a_plain_untracked_directory_is_reported_file_by_file(tmp_path: Path):
+    """The real contract, and the counterpart to the nested-repository case: git
+    descends into an ordinary untracked directory. Stated as a test because the
+    module docstring once claimed the opposite, and because anyone "fixing" that
+    by adding --directory would hide genuinely new source files from the scrub."""
+    root = make_repo(tmp_path)
+    (root / "scratch" / "deep").mkdir(parents=True)
+    (root / "scratch" / "top.md").write_text("top\n", encoding="utf-8")
+    (root / "scratch" / "deep" / "inner.md").write_text("inner\n", encoding="utf-8")
+
+    assert names(root) == {"scratch/top.md", "scratch/deep/inner.md"}
+
+
+def test_a_symlink_is_never_reported(tmp_path: Path):
+    """A tracked symlink pointing outside the tree would otherwise pull an
+    out-of-tree file into the privacy scrub's view."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("out of tree\n", encoding="utf-8")
+    root = make_repo(tmp_path / "repo")
+    (root / "own.md").write_text("mine\n", encoding="utf-8")
+    (root / "link.txt").symlink_to(outside / "secret.txt")
+
+    assert names(root) == {"own.md"}
+
+
+def test_a_name_git_would_quote_is_still_reported(tmp_path: Path):
+    """Without -z git C-quotes these names, the quoted string never resolves to a
+    file, and they are dropped in silence -- a privacy gate skipping exactly the
+    files someone might use to hide something."""
+    root = make_repo(tmp_path)
+    for name in ("weiße datei.md", 'quote"name.md', "two words.md"):
+        (root / name).write_text("content\n", encoding="utf-8")
+
+    assert names(root) == {"weiße datei.md", 'quote"name.md', "two words.md"}

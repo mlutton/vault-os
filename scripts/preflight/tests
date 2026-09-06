@@ -2,7 +2,10 @@
 set -uo pipefail
 
 repo_root=$1
-source "$repo_root/scripts/preflight/hermetic-env.sh"
+source "$repo_root/scripts/preflight/hermetic-env.sh" || {
+  echo "FAIL tests — hermetic environment could not be sourced"
+  exit 1
+}
 pytest="$repo_root/api/.venv/bin/pytest"
 if [[ ! -x $pytest ]]; then
   pytest=$(command -v pytest || true)

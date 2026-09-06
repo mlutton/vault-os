@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 repo_root=$1
-source "$repo_root/scripts/preflight/hermetic-env.sh"
+source "$repo_root/scripts/preflight/hermetic-env.sh" || {
+  echo "FAIL docs-consistency — hermetic environment could not be sourced"
+  exit 1
+}
 python="$repo_root/api/.venv/bin/python"
 if [[ ! -x $python ]]; then
   python=$(command -v python3 || true)

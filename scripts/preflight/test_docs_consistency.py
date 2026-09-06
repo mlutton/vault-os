@@ -105,3 +105,10 @@ def test_test_files_outside_the_api_suite_are_not_counted(tmp_path: Path):
     (root / "scripts" / "preflight" / "test_a_gate.py").write_text("", encoding="utf-8")
 
     assert docs_consistency.real_test_file_count(root) == 2
+
+
+def test_a_non_python_test_file_is_not_counted(tmp_path: Path):
+    root = fixture_tree(tmp_path)
+    (root / "api" / "tests" / "test_fixture_data.json").write_text("{}", encoding="utf-8")
+
+    assert docs_consistency.real_test_file_count(root) == 2

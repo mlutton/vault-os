@@ -77,7 +77,14 @@ def scan(root: Path) -> list[Finding]:
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1] if len(argv) > 1 else ".").resolve()
-    findings = scan(root)
+    try:
+        findings = scan(root)
+    except (OSError, RuntimeError) as error:
+        # The file set comes from git, so git failing is a gate failure -- but it
+        # is reported as one. A traceback here would be the CI scrub job's only
+        # output, and preflight's contract is that a gate names what went wrong.
+        print(f"FAIL scrub — {error}")
+        return 1
     for finding in findings:
         relative = finding.path.relative_to(root)
         print(f"{finding.severity} {relative}:{finding.line}: {finding.label}")

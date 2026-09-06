@@ -68,9 +68,14 @@ def documented_counts(
 
 
 def real_test_file_count(root: Path) -> int:
-    """Counted from the files git reports, so a scratch test file that is
-    gitignored -- or a copy of the tree inside a driver worktree -- cannot
-    inflate the number a README is then judged against."""
+    """Counted from the files git reports, so a copy of the tree inside a driver
+    worktree cannot inflate it.
+
+    Scoped claim, deliberately: this is the *file* count only. The test count
+    beside it comes from `pytest --collect-only`, which walks the filesystem and
+    does not consult .gitignore -- so a gitignored test file under api/tests/
+    leaves this number alone and still moves that one. Making both git-derived
+    is a separate change; see the follow-up ticket."""
     tests_directory = (root / "api" / "tests").resolve()
     return sum(
         1

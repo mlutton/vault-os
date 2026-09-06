@@ -1,0 +1,8 @@
+# Documents with countable API-suite claims checked by docs-consistency.
+# Format: relative-path<TAB>kind<TAB>regex with a named (?P<count>...) group.
+README.md	tests	has (?P<count>\d+) tests
+api/README.md	tests	has (?P<count>\d+)\s+tests
+api/README.md	tests	\*\*(?P<count>\d+) tests\*\*
+api/README.md	tests	pytest\s+# (?P<count>\d+) tests
+api/README.md	files	(?P<count>\d+) files
+docs/architecture/vaultos-system.architecture.json	tests	(?P<count>\d+) API tests

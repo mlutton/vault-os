@@ -11,8 +11,34 @@ if [[ -z $pytest ]]; then
   exit 1
 fi
 
+count_collected() {
+  local output
+  if ! output=$("$pytest" -p no:cacheprovider --collect-only -q "$@" 2>&1); then
+    echo "$output" >&2
+    return 1
+  fi
+  grep -Eo '[0-9]+ tests? collected' <<<"$output" | tail -n 1 | sed -E 's/ .*//'
+}
+
+full_count=$(count_collected "$repo_root/api" "$repo_root/scripts/preflight") || {
+  echo "FAIL tests — could not count full repository suite"
+  exit 1
+}
+if [[ -z $full_count ]]; then
+  echo "FAIL tests — could not count full repository suite"
+  exit 1
+fi
+api_count=$(count_collected "$repo_root/api") || {
+  echo "FAIL tests — could not count docs-consistency API suite"
+  exit 1
+}
+if [[ -z $api_count ]]; then
+  echo "FAIL tests — could not count docs-consistency API suite"
+  exit 1
+fi
+
 if "$pytest" -p no:cacheprovider -q "$repo_root/api" "$repo_root/scripts/preflight"; then
-  echo "PASS tests"
+  echo "PASS tests - full repository suite: $full_count tests; docs-consistency API suite: $api_count tests"
 else
   echo "FAIL tests"
   exit 1

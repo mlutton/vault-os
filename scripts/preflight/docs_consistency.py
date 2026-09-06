@@ -11,22 +11,55 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+REGISTRY = Path("scripts/preflight/docs-consistency-documents.txt")
+
+
+@dataclass(frozen=True)
+class CountClaim:
+    path: Path
+    kind: str
+    pattern: re.Pattern[str]
+
+
+def count_claims(root: Path) -> list[CountClaim]:
+    registry = root / REGISTRY
+    claims: list[CountClaim] = []
+    for number, line in enumerate(registry.read_text(encoding="utf-8").splitlines(), 1):
+        item = line.strip()
+        if not item or item.startswith("#"):
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            raise RuntimeError(f"{REGISTRY}:{number}: expected path, kind, regex")
+        raw_path, kind, raw_pattern = parts
+        relative = Path(raw_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise RuntimeError(f"{REGISTRY}:{number}: invalid document path {raw_path!r}")
+        if kind not in {"tests", "files"}:
+            raise RuntimeError(f"{REGISTRY}:{number}: invalid count kind {kind!r}")
+        pattern = re.compile(raw_pattern, re.IGNORECASE | re.MULTILINE)
+        if "count" not in pattern.groupindex:
+            raise RuntimeError(f"{REGISTRY}:{number}: regex must define a count group")
+        claims.append(CountClaim(relative, kind, pattern))
+    return claims
 
 
 def documented_counts(root: Path) -> tuple[list[tuple[Path, int]], list[tuple[Path, int]]]:
     test_counts: list[tuple[Path, int]] = []
     file_counts: list[tuple[Path, int]] = []
-    for relative in (Path("README.md"), Path("api/README.md")):
-        path = root / relative
+    for claim in count_claims(root):
+        path = root / claim.path
         text = path.read_text(encoding="utf-8")
-        test_counts.extend(
-            (relative, int(value)) for value in re.findall(r"\b(\d+)\s+tests\b", text)
-        )
-        file_counts.extend(
-            (relative, int(value))
-            for value in re.findall(r"\b(\d+)\s+(?:test[- ]?)?files?\b", text, re.IGNORECASE)
-        )
+        matches = [
+            (claim.path, int(match.group("count"))) for match in claim.pattern.finditer(text)
+        ]
+        if claim.kind == "tests":
+            test_counts.extend(matches)
+        else:
+            file_counts.extend(matches)
     return test_counts, file_counts
 
 

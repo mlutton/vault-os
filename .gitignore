@@ -7,6 +7,8 @@
 /web/.next/
 /web/out/
 /web/*.tsbuildinfo
+# gate-owned caches and tool state -- a gate writes nothing outside the repo
+/web/.preflight-cache/
 /web/.env*
 !/web/.env.example
 

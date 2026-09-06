@@ -2,6 +2,7 @@
 set -uo pipefail
 
 repo_root=$1
+source "$repo_root/scripts/preflight/hermetic-env.sh"
 ruff="$repo_root/api/.venv/bin/ruff"
 if [[ ! -x $ruff ]]; then
   ruff=$(command -v ruff || true)

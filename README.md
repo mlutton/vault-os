@@ -79,6 +79,13 @@ lint and formatting checks, the API suite, privacy and documentation checks,
 and instruction-surface validation; use `./preflight --only <gate>` to iterate
 on one gate.
 
+Every gate judges the files git reports — tracked, plus untracked and not
+ignored — rather than walking the filesystem, so build output, dependency
+directories and any other checkout inside the tree cannot influence its
+verdict. Gates also write nothing outside the repository: their caches and tool
+state live in gitignored paths under the component being checked, which is what
+lets a gate run unchanged inside a sandbox with no writable home directory.
+
 ### Web quickstart
 
 The web component uses its own npm toolchain and runs on port 3110:

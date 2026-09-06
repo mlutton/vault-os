@@ -2,6 +2,7 @@
 set -uo pipefail
 
 repo_root="${1:?repository root is required}"
+source "$repo_root/scripts/preflight/hermetic-env.sh"
 
 if command -v npm >/dev/null 2>&1; then
   npm_command=(npm)

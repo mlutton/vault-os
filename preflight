@@ -2,7 +2,7 @@
 set -uo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONDONTWRITEBYTECODE=1
+source "$repo_root/scripts/preflight/hermetic-env.sh"
 
 gates=(lint tests scrub docs-consistency instruction-surface web)
 

@@ -71,7 +71,7 @@ The third is one job's life, from submission to an auditable record:
 [![VaultOS job execution](docs/architecture/img/job-execution-dark.png)](https://mlutton.github.io/vault-os/architecture/vaultos-job-execution.html)
 
 **Status: pre-1.0, single-operator.** The api runs daily against a live vault
-and has 957 tests; interfaces change without deprecation cycles. Read it as a
+and has 961 tests; interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not something to depend on yet.
 
 Run `./preflight` from the repository root before submitting a change. It runs

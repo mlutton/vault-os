@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class ConfigError(RuntimeError):
@@ -11,6 +12,27 @@ def _require(name: str) -> str:
     if not value:
         raise ConfigError(f"{name} is required and was not set")
     return value
+
+
+def cors_allowed_origins_from_env() -> tuple[str, ...]:
+    """Return the exact browser origins allowed to call the API."""
+    raw = os.environ.get("VAULTOS_CORS_ALLOWED_ORIGINS", "")
+    origins = tuple(dict.fromkeys(origin.strip() for origin in raw.split(",") if origin.strip()))
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if origin == "*":
+            raise ConfigError("VAULTOS_CORS_ALLOWED_ORIGINS requires explicit origins, not '*'")
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise ConfigError("VAULTOS_CORS_ALLOWED_ORIGINS entries must be exact http(s) origins")
+    return origins
 
 
 # Default DB path is anchored to this package's location, not the process cwd,

@@ -97,3 +97,13 @@ def test_cors_origins_are_configurable_and_wildcard_is_rejected(monkeypatch):
     monkeypatch.setenv("VAULTOS_CORS_ALLOWED_ORIGINS", "*")
     with pytest.raises(ConfigError, match="explicit origins"):
         cors_allowed_origins_from_env()
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://good.test:bad", "http://good.test:", "https://bad host.test"],
+)
+def test_cors_rejects_malformed_origins(monkeypatch, origin):
+    monkeypatch.setenv("VAULTOS_CORS_ALLOWED_ORIGINS", origin)
+    with pytest.raises(ConfigError, match=r"exact http\(s\) origins"):
+        cors_allowed_origins_from_env()

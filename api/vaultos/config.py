@@ -19,12 +19,21 @@ def cors_allowed_origins_from_env() -> tuple[str, ...]:
     raw = os.environ.get("VAULTOS_CORS_ALLOWED_ORIGINS", "")
     origins = tuple(dict.fromkeys(origin.strip() for origin in raw.split(",") if origin.strip()))
     for origin in origins:
-        parsed = urlsplit(origin)
         if origin == "*":
             raise ConfigError("VAULTOS_CORS_ALLOWED_ORIGINS requires explicit origins, not '*'")
+        try:
+            parsed = urlsplit(origin)
+            parsed.port
+        except ValueError as error:
+            raise ConfigError(
+                "VAULTOS_CORS_ALLOWED_ORIGINS entries must be exact http(s) origins"
+            ) from error
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.netloc
+            or parsed.hostname is None
+            or parsed.netloc.endswith(":")
+            or any(character.isspace() for character in parsed.netloc)
             or parsed.path
             or parsed.query
             or parsed.fragment

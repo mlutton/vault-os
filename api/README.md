@@ -12,7 +12,7 @@ Today it also carries a personal-finance module — the first module held to the
 platform's own contract (ADR-0022), and the worked example of its reconciliation
 shape.
 
-**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 961
+**Status: pre-1.0, single-operator.** It runs daily against a live vault, has 964
 tests, and its interfaces change without deprecation cycles. Read it as a
 worked example of the architecture, not as something to depend on yet.
 
@@ -54,7 +54,7 @@ is the seam currently being built. That gap is known, named, and being closed
 |---|---|
 | **42 endpoints** | 11 platform routers in `vaultos/api/` + the finance module |
 | **22 of them** | the finance module |
-| **961 tests** | `pytest`, 76 files, no network, no API spend |
+| **964 tests** | `pytest`, 76 files, no network, no API spend |
 | **18 ADRs** | every non-obvious decision, in [`docs/adr/`](docs/adr/) |
 | **14 migrations** | plain SQL, `PRAGMA user_version` (`vaultos/db/migrations/`) |
 | **Dependencies** | FastAPI, uvicorn, python-multipart, httpx, icalendar, recurring-ical-events. That's the list. |
@@ -102,7 +102,7 @@ browser-origin allowlist `VAULTOS_CORS_ALLOWED_ORIGINS`. Wildcard origins are
 rejected; see `deploy/README.md` for the separate-origin web configuration.
 
 ```bash
-pytest                                   # 961 tests, ~30s, no network
+pytest                                   # 964 tests, ~30s, no network
 vaultos reindex                          # rebuild the DB from vault files
 ```
 

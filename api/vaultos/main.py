@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from . import modules
 from .api import (
@@ -18,7 +19,7 @@ from .api import (
     skills,
     state,
 )
-from .config import Settings
+from .config import Settings, cors_allowed_origins_from_env
 from .db.conn import connect
 from .jobs.reconcile import detect_orphans, reconcile_from_files
 from .pidfile import remove_pid, write_pid
@@ -28,6 +29,17 @@ from .vault.runner import read_heartbeat
 logger = logging.getLogger(__name__)
 
 ORPHAN_CHECK_INTERVAL_S = 60
+
+
+def configure_cors(app: FastAPI, allowed_origins: tuple[str, ...]) -> None:
+    if not allowed_origins:
+        return
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(allowed_origins),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
 
 def _run_orphan_sweep(app: FastAPI) -> None:
@@ -93,6 +105,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+configure_cors(app, cors_allowed_origins_from_env())
 app.include_router(health.router)
 app.include_router(jobs.router)
 app.include_router(runs.router)

@@ -24,8 +24,18 @@ VAULT_ROOT=/path/to/your/vault
 # VAULTOS_DB=/path/to/Vault-Os-Api/data/vaultos.db
 # TOKEN_BUDGET_5H_USD=100
 # HUD_TZ=America/Chicago
+# Required when the browser client is served from a separate origin. Use the
+# exact deployed web origin; separate multiple trusted origins with commas.
+# Wildcards are rejected.
+# VAULTOS_CORS_ALLOWED_ORIGINS=http://<web-host>:3110
 EOF
 ```
+
+The web and API intentionally run on separate ports, so a browser deployment
+must set `VAULTOS_CORS_ALLOWED_ORIGINS` to its exact web origin. The API then
+allows `GET` and `POST` with the `Content-Type` request header from that
+allowlist only. Non-browser clients and deployments without a web origin can
+leave it unset; cross-origin browser access remains denied by default.
 
 Note: `VAULTOS_PORT` is **not** a usable override here — `deploy/vaultos-api.service`'s
 `ExecStart` pins `--port 3109` directly on the uvicorn command line, which always wins

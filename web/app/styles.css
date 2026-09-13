@@ -340,6 +340,91 @@ a {
   outline-offset: 2px;
 }
 
+.run-history {
+  max-width: 68rem;
+  padding-top: clamp(var(--space-8), 5vh, var(--space-16));
+}
+
+.run-history__kicker {
+  margin: 0 0 var(--space-2);
+  color: var(--muted-ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.run-history h2 {
+  margin: 0 0 var(--space-5);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: var(--text-xl);
+  font-weight: 500;
+}
+
+.run-history__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.run-history__controls label {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.run-history__controls select,
+.run-history__controls input {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.run-history__controls button {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--accent-deep);
+  color: var(--paper);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.run-history__controls select:focus-visible,
+.run-history__controls input:focus-visible,
+.run-history__controls button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.run-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.run-history__table th,
+.run-history__table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.run-history__table th {
+  color: var(--muted-ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 700px) {
   .workspace-frame {
     display: block;

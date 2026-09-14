@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CockpitFrame } from "../components/CockpitFrame";
 import RootLayout from "./layout";
@@ -56,7 +56,13 @@ const TWO_SKILLS = [
   { id: "acquire", label: "Acquire", args: [] },
 ];
 
+const API_BASE = "https://api.example.test";
+
 describe("Home", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", API_BASE);
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -183,6 +189,10 @@ describe("Home", () => {
 });
 
 describe("Run history panel", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", API_BASE);
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -239,6 +249,44 @@ describe("Run history panel", () => {
     expect(within(rows[1]).getAllByText("—")).toHaveLength(2);
   });
 
+  it("issues run-history requests against the configured API base", async () => {
+    const CONFIGURED_BASE = "https://configured-base.example.test";
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", CONFIGURED_BASE);
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        "GET /skills": () => jsonResponse({ version: 1, skills: TWO_SKILLS }),
+        "GET /runs": ({ search }) =>
+          search.get("skill") === "metrics-pull" ? jsonResponse([RUN_OK]) : jsonResponse([RUN_OK, RUN_ERROR]),
+      }),
+    );
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    render(<Home />);
+
+    const region = within(runHistoryRegion());
+    await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(3));
+    expect(fetchMock).toHaveBeenCalledWith(`${CONFIGURED_BASE}/runs?limit=50`);
+
+    fireEvent.change(region.getByLabelText("Skill"), { target: { value: "metrics-pull" } });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(`${CONFIGURED_BASE}/runs?limit=50&skill=metrics-pull`),
+    );
+
+    const callsBeforeRefresh = fetchMock.mock.calls.filter(
+      (call) => call[0] === `${CONFIGURED_BASE}/runs?limit=50&skill=metrics-pull`,
+    ).length;
+
+    fireEvent.click(region.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => {
+      const callsAfterRefresh = fetchMock.mock.calls.filter(
+        (call) => call[0] === `${CONFIGURED_BASE}/runs?limit=50&skill=metrics-pull`,
+      ).length;
+      expect(callsAfterRefresh).toBeGreaterThan(callsBeforeRefresh);
+    });
+  });
+
   it("requests the registered skill and shows only its runs; All skills omits the parameter", async () => {
     vi.stubGlobal(
       "fetch",
@@ -260,8 +308,8 @@ describe("Run history panel", () => {
     await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(2));
     expect(region.getByText("metrics-pull")).toBeInTheDocument();
     expect(region.queryByText("acquire")).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50&skill=metrics-pull");
-    expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50");
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/runs?limit=50&skill=metrics-pull`);
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/runs?limit=50`);
   });
 
   it('acceptance condition 2 — "All skills" omits the skill parameter after a skill was selected', async () => {
@@ -283,14 +331,18 @@ describe("Run history panel", () => {
     fireEvent.change(region.getByLabelText("Skill"), { target: { value: "metrics-pull" } });
     await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(2));
 
-    const callsBeforeReselect = fetchMock.mock.calls.filter((call) => call[0] === "/runs?limit=50").length;
+    const callsBeforeReselect = fetchMock.mock.calls.filter(
+      (call) => call[0] === `${API_BASE}/runs?limit=50`,
+    ).length;
 
     fireEvent.change(region.getByLabelText("Skill"), { target: { value: "" } });
 
     await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(3));
     expect(region.getByText("metrics-pull")).toBeInTheDocument();
     expect(region.getByText("acquire")).toBeInTheDocument();
-    const callsAfterReselect = fetchMock.mock.calls.filter((call) => call[0] === "/runs?limit=50").length;
+    const callsAfterReselect = fetchMock.mock.calls.filter(
+      (call) => call[0] === `${API_BASE}/runs?limit=50`,
+    ).length;
     expect(callsAfterReselect).toBeGreaterThan(callsBeforeReselect);
   });
 
@@ -313,11 +365,11 @@ describe("Run history panel", () => {
 
     fireEvent.change(region.getByLabelText("Since (UTC)"), { target: { value: "2026-08-02" } });
     await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(2));
-    expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50&since=2026-08-02");
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/runs?limit=50&since=2026-08-02`);
 
     fireEvent.change(region.getByLabelText("Since (UTC)"), { target: { value: "" } });
     await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(3));
-    expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50");
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/runs?limit=50`);
   });
 
   it("shows a distinct empty message when no completed runs match", async () => {
@@ -465,18 +517,18 @@ describe("Run history panel", () => {
 
     fireEvent.change(region.getByLabelText("Skill"), { target: { value: "metrics-pull" } });
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50&skill=metrics-pull"),
+      expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/runs?limit=50&skill=metrics-pull`),
     );
 
     const callsBeforeRefresh = fetchMock.mock.calls.filter(
-      (call) => call[0] === "/runs?limit=50&skill=metrics-pull",
+      (call) => call[0] === `${API_BASE}/runs?limit=50&skill=metrics-pull`,
     ).length;
 
     fireEvent.click(region.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => {
       const callsAfterRefresh = fetchMock.mock.calls.filter(
-        (call) => call[0] === "/runs?limit=50&skill=metrics-pull",
+        (call) => call[0] === `${API_BASE}/runs?limit=50&skill=metrics-pull`,
       ).length;
       expect(callsAfterRefresh).toBeGreaterThan(callsBeforeRefresh);
     });

@@ -264,6 +264,36 @@ describe("Run history panel", () => {
     expect(fetchMock).toHaveBeenCalledWith("/runs?limit=50");
   });
 
+  it('acceptance condition 2 — "All skills" omits the skill parameter after a skill was selected', async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        "GET /skills": () => jsonResponse({ version: 1, skills: TWO_SKILLS }),
+        "GET /runs": ({ search }) =>
+          search.get("skill") === "metrics-pull" ? jsonResponse([RUN_OK]) : jsonResponse([RUN_OK, RUN_ERROR]),
+      }),
+    );
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    render(<Home />);
+
+    const region = within(runHistoryRegion());
+    await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(3));
+
+    fireEvent.change(region.getByLabelText("Skill"), { target: { value: "metrics-pull" } });
+    await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(2));
+
+    const callsBeforeReselect = fetchMock.mock.calls.filter((call) => call[0] === "/runs?limit=50").length;
+
+    fireEvent.change(region.getByLabelText("Skill"), { target: { value: "" } });
+
+    await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(3));
+    expect(region.getByText("metrics-pull")).toBeInTheDocument();
+    expect(region.getByText("acquire")).toBeInTheDocument();
+    const callsAfterReselect = fetchMock.mock.calls.filter((call) => call[0] === "/runs?limit=50").length;
+    expect(callsAfterReselect).toBeGreaterThan(callsBeforeReselect);
+  });
+
   it("requests the UTC since-date and clears the parameter when the filter is cleared", async () => {
     vi.stubGlobal(
       "fetch",
@@ -450,5 +480,30 @@ describe("Run history panel", () => {
       ).length;
       expect(callsAfterRefresh).toBeGreaterThan(callsBeforeRefresh);
     });
+  });
+
+  it("acceptance condition 4 — Refresh shows its result", async () => {
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        "GET /skills": () => jsonResponse({ version: 1, skills: [] }),
+        "GET /runs": () => {
+          call += 1;
+          return call === 1 ? jsonResponse([RUN_OK]) : jsonResponse([RUN_ERROR]);
+        },
+      }),
+    );
+
+    render(<Home />);
+
+    const region = within(runHistoryRegion());
+    await waitFor(() => expect(region.getAllByRole("row")).toHaveLength(2));
+    expect(region.getByText("metrics-pull")).toBeInTheDocument();
+
+    fireEvent.click(region.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => expect(region.getByText("acquire")).toBeInTheDocument());
+    expect(region.queryByText("metrics-pull")).not.toBeInTheDocument();
   });
 });

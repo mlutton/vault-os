@@ -136,3 +136,7 @@ The first build slice of v1.0, sized for one executor run:
 - **Testing**: external behavior only — a rendered deck shows the
   stubbed skills; dispatching posts the expected job payload; the shell
   renders its navigation; typecheck passes; no snapshot goldens.
+
+**2026-09-13**: Owner approved per-panel P2 delivery — each v1.0 P2
+panel (live status, run history, metrics strip) ships as its own
+parcel rather than as one combined P2 build, run history first.

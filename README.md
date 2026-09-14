@@ -42,7 +42,7 @@ that too.
 | | | |
 |---|---|---|
 | [`api/`](api/) | the spine | FastAPI + SQLite. Job execution as an auditable record, module contract (ADR-0022), a personal-finance module as the first module held to the contract. **This is the built part.** |
-| [`web/`](web/) | the surface | in progress — the operations cockpit's skill deck is built; live status, run history, metrics, and later panels remain planned |
+| [`web/`](web/) | the surface | in progress — the operations cockpit's skill deck and run history are built; live status, metrics, and later panels remain planned |
 | `plugin/` | the door | planned — an Obsidian plugin: the knowledge vault asks the spine for work and persists the results; how the work happens stays hidden |
 
 The architecture in one sentence: a **brain** (your markdown vault — the

@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { apiUrl } from "../lib/api";
+import { RunHistory } from "../components/RunHistory";
+
 type SkillArgument = { name: string; required: boolean; type: string };
 type Skill = { id: string; label: string; args: SkillArgument[] };
 type SkillsResponse = { skills: Skill[] };
-
-function apiUrl(path: string) {
-  return `${process.env.NEXT_PUBLIC_API_BASE_URL ?? ""}${path}`;
-}
 
 export default function Home() {
   const [skills, setSkills] = useState<Skill[] | null>(null);
@@ -68,42 +67,45 @@ export default function Home() {
   }
 
   return (
-    <section className="skill-deck" aria-labelledby="cockpit-title">
-      <p className="skill-deck__kicker">Operations cockpit</p>
-      <h1 id="cockpit-title">Skill deck</h1>
-      <p className="skill-deck__intro">Dispatch a registered VaultOS skill through the API.</p>
-      {listError ? <p role="alert">{listError}</p> : null}
-      {skills === null && !listError ? <p>Loading registered skills…</p> : null}
-      {skills?.length === 0 ? <p>No registered skills are available.</p> : null}
-      {skills && skills.length > 0 ? (
-        <div className="skill-deck__grid">
-          {skills.map((skill) => (
-            <article className="skill-card" key={skill.id}>
-              <p className="skill-card__id">{skill.id}</p>
-              <h2>{skill.label}</h2>
-              {skill.args.filter((argument) => argument.required).map((argument) => (
-                <label key={argument.name}>
-                  {argument.name}
-                  <input
-                    name={`${skill.id}:${argument.name}`}
-                    onChange={(event) =>
-                      setValues((current) => ({ ...current, [event.target.name]: event.target.value }))
-                    }
-                    required
-                    type="text"
-                    value={values[`${skill.id}:${argument.name}`] ?? ""}
-                  />
-                </label>
-              ))}
-              <button disabled={submitting !== null} onClick={() => void submit(skill)} type="button">
-                {submitting === skill.id ? "Submitting…" : `Dispatch ${skill.label}`}
-              </button>
-            </article>
-          ))}
-        </div>
-      ) : null}
-      {submissionError ? <p role="alert">{submissionError}</p> : null}
-      {submittedJobId ? <p role="status">Job {submittedJobId} submitted.</p> : null}
-    </section>
+    <>
+      <section className="skill-deck" aria-labelledby="cockpit-title">
+        <p className="skill-deck__kicker">Operations cockpit</p>
+        <h1 id="cockpit-title">Skill deck</h1>
+        <p className="skill-deck__intro">Dispatch a registered VaultOS skill through the API.</p>
+        {listError ? <p role="alert">{listError}</p> : null}
+        {skills === null && !listError ? <p>Loading registered skills…</p> : null}
+        {skills?.length === 0 ? <p>No registered skills are available.</p> : null}
+        {skills && skills.length > 0 ? (
+          <div className="skill-deck__grid">
+            {skills.map((skill) => (
+              <article className="skill-card" key={skill.id}>
+                <p className="skill-card__id">{skill.id}</p>
+                <h2>{skill.label}</h2>
+                {skill.args.filter((argument) => argument.required).map((argument) => (
+                  <label key={argument.name}>
+                    {argument.name}
+                    <input
+                      name={`${skill.id}:${argument.name}`}
+                      onChange={(event) =>
+                        setValues((current) => ({ ...current, [event.target.name]: event.target.value }))
+                      }
+                      required
+                      type="text"
+                      value={values[`${skill.id}:${argument.name}`] ?? ""}
+                    />
+                  </label>
+                ))}
+                <button disabled={submitting !== null} onClick={() => void submit(skill)} type="button">
+                  {submitting === skill.id ? "Submitting…" : `Dispatch ${skill.label}`}
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {submissionError ? <p role="alert">{submissionError}</p> : null}
+        {submittedJobId ? <p role="status">Job {submittedJobId} submitted.</p> : null}
+      </section>
+      <RunHistory skills={skills} />
+    </>
   );
 }

@@ -206,20 +206,28 @@ def test_root_mismatch_refused(monkeypatch, vault, tmp_path):
     assert not (override / "runner-status.json").exists()
 
 
-def test_shutdown_releases_in_flight_claim_not_yet_executing(conn, registry, settings, vault):
+def test_shutdown_at_claim_boundary_holds_unresolved_attempt(
+    conn, registry, settings, vault, monkeypatch
+):
     job = _enqueue(conn, vault, registry, "hello-script")
-
     runner = Runner(conn, registry, settings)
-    # Simulate the runner having claimed the job (as run_once() would) but
-    # not yet dispatched it to the engine when the shutdown signal lands.
-    claimed = store.claim_oldest_queued(conn, pid=runner.pid, ts="2026-09-04T00:00:02Z")
-    runner._current_job_id = claimed.id
+    original_claim = store.claim_oldest_queued
 
-    runner.request_shutdown()
+    def claim_then_shutdown(*args, **kwargs):
+        claimed = original_claim(*args, **kwargs)
+        runner.request_shutdown()
+        return claimed
 
-    released = store.get_job(conn, job.id)
-    assert released.status == "queued"
-    assert released.runner_pid is None
+    monkeypatch.setattr(store, "claim_oldest_queued", claim_then_shutdown)
+    assert runner.run_once() is True
+
+    held = store.get_job(conn, job.id)
+    assert held.status == "running"
+    assert held.runner_pid == runner.pid
+    assert runner.unresolved_attempts == [job.id]
+    assert (vault / "system" / "runs" / f"{job.id}.attempt-1.json").exists()
+    assert (vault / "system" / "queue" / f"{job.id}.json").exists()
+    assert not (vault / "system" / "runs" / f"{job.id}.json").exists()
     assert runner._shutdown_event.is_set()
 
 

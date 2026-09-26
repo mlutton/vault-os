@@ -62,7 +62,7 @@ def read_run_record(path: Path) -> RunRecord:
         and not isinstance(data["exit_code"], int)
     ):
         raise KeyError("run exit_code must be an integer")
-    if "attempt_id" not in data and any(path.parent.glob(f"{path.stem}.attempt-*.json")):
+    if "attempt_id" not in data and (path.parent / f"{path.stem}.attempt-1.json").exists():
         raise KeyError("terminal run lacks attempt identity")
     if "attempt_id" in data:
         if data["status"] not in {"ok", "error"} or not data.get("ts_completed"):

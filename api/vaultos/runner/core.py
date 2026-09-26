@@ -102,7 +102,6 @@ class Runner:
 
         # An attempt is durable before the DB claim. Once claimed, shutdown
         # lets the engine finish; an unfinished attempt needs manual recovery.
-        # The release path below remains for an older claim without an attempt.
         self._current_job_id: str | None = None
         self._executing = False
         self._shutdown_event = threading.Event()
@@ -483,13 +482,10 @@ class Runner:
 
     def request_shutdown(self, signum=None, frame=None) -> None:
         """Signal handler (and directly callable). Stops the poll loop from
-        claiming further jobs. A durable attempt is held through completion;
-        a claim made without an attempt can still be released. A live engine
-        finishes before the runner exits."""
+        claiming further jobs. A job claimed at the shutdown boundary is held
+        as an unresolved attempt for manual recovery. A live engine finishes
+        before the runner exits."""
         self._shutdown_event.set()
-        if self._current_job_id is not None and not self._executing:
-            store.release_job(self.conn, job_id=self._current_job_id, ts=utcnow_z())
-            self._current_job_id = None
 
     def _install_signal_handlers(self) -> None:
         signal.signal(signal.SIGTERM, self.request_shutdown)

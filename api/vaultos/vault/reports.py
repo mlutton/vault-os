@@ -108,7 +108,7 @@ def _find_todays_acquire_report(vault_root: Path, tz: str) -> tuple[str, str] | 
             stamp = path.stat().st_mtime
         except (OSError, UnicodeDecodeError):
             continue
-        lines = raw.splitlines()
+        lines = raw.removeprefix("\ufeff").splitlines()
         if lines and lines[0] == "---":
             for line in lines[1:]:
                 if line == "---":

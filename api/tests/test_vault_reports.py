@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -196,7 +197,9 @@ def test_read_lane_briefs_empty_list_when_acquire_not_run_yet(tmp_path):
     assert read_lane_briefs(tmp_path, TZ) == []
 
 
-@pytest.mark.parametrize("case", ["run-at", "legacy", "mtime", "invalid-run-at", "unreadable"])
+@pytest.mark.parametrize(
+    "case", ["run-at", "legacy", "mtime", "invalid-run-at", "unreadable", "bom"]
+)
 def test_acquire_report_selects_newest_readable_report(tmp_path, case):
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
     older = tmp_path / "inbox" / "research" / f"{today}-acquire-ffffffff.md"
@@ -217,6 +220,9 @@ def test_acquire_report_selects_newest_readable_report(tmp_path, case):
 
     _write(older, content(old_stamp, "Older"))
     _write(newer, content(new_stamp, "Newer"))
+    if case == "bom":
+        _write(older, content(None, "Older"))
+        _write(newer, "\ufeff" + content(new_stamp, "Newer"))
     # Timestamp cases deliberately disagree with mtime as well as filename order.
     os.utime(older, (200, 200))
     os.utime(newer, (100, 100))
@@ -229,3 +235,34 @@ def test_acquire_report_selects_newest_readable_report(tmp_path, case):
     assert report.rel == f"inbox/research/{newer.name}"
     assert report.headlines == [Headline("Newer", None)]
     assert read_lane_briefs(tmp_path, TZ)[0].headline == "Newer"
+
+
+@pytest.mark.parametrize("case", ["date-only", "naive-utc", "filename-tie"])
+def test_acquire_report_timestamp_edge_cases(tmp_path, monkeypatch, case):
+    today = datetime.now(ZoneInfo(TZ)).date().isoformat()
+    first = tmp_path / "inbox" / "research" / f"{today}-acquire-00000000.md"
+    selected = first.with_name(f"{today}-acquire-ffffffff.md")
+    stamps = {
+        "date-only": ("2030-01-01", None),
+        "naive-utc": ("2026-09-25T09:00:00", "2026-09-25T10:00:00Z"),
+        "filename-tie": ("2026-09-25T10:00:00Z", "2026-09-25T10:00:00Z"),
+    }
+    for path, stamp, headline in zip(
+        (first, selected), stamps[case], ("First", "Selected"), strict=True
+    ):
+        header = f"---\nrun_at: {stamp}\n---\n" if stamp else ""
+        _write(path, header + f"## ai\n- {headline}\n## leadership\n- {headline}\n")
+        os.utime(path, (100 if path == first else 300,) * 2)
+
+    # A non-UTC process timezone makes an accidental local-time interpretation visible.
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("TZ", "Pacific/Honolulu")
+            time.tzset()
+            report = read_morning_report(tmp_path, TZ)
+            assert report is not None
+            assert report.rel == f"inbox/research/{selected.name}"
+            assert report.headlines == [Headline("Selected", None)]
+            assert read_lane_briefs(tmp_path, TZ)[0].headline == "Selected"
+    finally:
+        time.tzset()

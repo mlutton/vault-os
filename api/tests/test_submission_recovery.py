@@ -467,20 +467,18 @@ def test_runner_projects_child_intent_after_index_failure_without_restart(setup,
     assert store.get_job(conn, child_id).status == "ok"
 
 
-def test_submission_rolls_back_partial_index_write(setup):
+def test_submission_rolls_back_partial_index_write(setup, monkeypatch):
     vault, _, conn, registry, _, _ = setup
+    execute = conn.execute
 
-    class FailingConnection:
-        def __getattr__(self, name):
-            return getattr(conn, name)
+    def failing_execute(sql, parameters=()):
+        result = execute(sql, parameters)
+        if sql.startswith("INSERT OR IGNORE INTO job_events"):
+            raise sqlite3.OperationalError("synthetic partial index failure")
+        return result
 
-        def execute(self, sql, parameters=()):
-            result = conn.execute(sql, parameters)
-            if sql.startswith("INSERT OR IGNORE INTO job_events"):
-                raise sqlite3.OperationalError("synthetic partial index failure")
-            return result
-
-    accepted, _ = jobs.dispatch_skill(FailingConnection(), registry, vault, "sample", {}, "api")
+    monkeypatch.setattr(conn, "execute", failing_execute)
+    accepted, _ = jobs.dispatch_skill(conn, registry, vault, "sample", {}, "api")
     assert (vault / "system" / "queue" / f"{accepted}.json").exists()
     assert not conn.in_transaction
     assert (
@@ -776,17 +774,14 @@ def test_submission_failure_does_not_rollback_concurrent_insert(setup, monkeypat
     finish = threading.Event()
     original_create = store.create_job
     original_get = store.get_job
+    execute = conn.execute
 
-    class PausingConnection:
-        def __getattr__(self, name):
-            return getattr(conn, name)
-
-        def execute(self, sql, parameters=()):
-            result = conn.execute(sql, parameters)
-            if sql.strip().startswith("INSERT INTO jobs"):
-                inserted.set()
-                assert finish.wait(3)
-            return result
+    def pausing_execute(sql, parameters=()):
+        result = execute(sql, parameters)
+        if sql.strip().startswith("INSERT INTO jobs"):
+            inserted.set()
+            assert finish.wait(3)
+        return result
 
     def create(connection, **kwargs):
         if kwargs["job_id"] == "failure":
@@ -801,10 +796,11 @@ def test_submission_failure_does_not_rollback_concurrent_insert(setup, monkeypat
 
     monkeypatch.setattr(store, "create_job", create)
     monkeypatch.setattr(store, "get_job", get)
+    monkeypatch.setattr(conn, "execute", pausing_execute)
     with ThreadPoolExecutor(max_workers=2) as pool:
         successful = pool.submit(
             jobs.dispatch_skill,
-            PausingConnection(),
+            conn,
             registry,
             vault,
             "sample",
@@ -824,23 +820,21 @@ def test_submission_failure_does_not_rollback_concurrent_insert(setup, monkeypat
 
 
 @pytest.mark.parametrize("operation", ["create", "event"])
-def test_store_failure_rolls_back_partial_write(setup, operation):
+def test_store_failure_rolls_back_partial_write(setup, operation, monkeypatch):
     _, _, conn, _, _, _ = setup
+    execute = conn.execute
 
-    class FailingConnection:
-        def __getattr__(self, name):
-            return getattr(conn, name)
+    def failing_execute(sql, parameters=()):
+        result = execute(sql, parameters)
+        if sql.strip().startswith("INSERT INTO jobs"):
+            raise sqlite3.OperationalError("synthetic failure after insert")
+        return result
 
-        def execute(self, sql, parameters=()):
-            result = conn.execute(sql, parameters)
-            if sql.strip().startswith("INSERT INTO jobs"):
-                raise sqlite3.OperationalError("synthetic failure after insert")
-            return result
-
+    monkeypatch.setattr(conn, "execute", failing_execute)
     with pytest.raises(sqlite3.OperationalError):
         if operation == "create":
             store.create_job(
-                FailingConnection(),
+                conn,
                 job_id="partial",
                 skill="sample",
                 args={},
@@ -850,7 +844,7 @@ def test_store_failure_rolls_back_partial_write(setup, operation):
             )
         else:
             store.apply_event(
-                FailingConnection(),
+                conn,
                 job_id="partial",
                 skill="sample",
                 args={},

@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 
 from .config import Settings
-from .db.conn import connect
+from .db.conn import connect, connection_lock
 from .jobs import store
 from .jobs.reconcile import ReconcileResult, reconcile_from_files
 from .pidfile import is_spine_alive, pid_path
@@ -102,9 +102,10 @@ def reindex(vault_root: Path, db_path: Path) -> ReconcileResult:
 
     conn = connect(db_path)
     try:
-        conn.execute("DELETE FROM job_events")
-        conn.execute("DELETE FROM jobs")
-        conn.commit()
+        with connection_lock(conn):
+            conn.execute("DELETE FROM job_events")
+            conn.execute("DELETE FROM jobs")
+            conn.commit()
         return reconcile_from_files(vault_root, conn, registry)
     finally:
         conn.close()

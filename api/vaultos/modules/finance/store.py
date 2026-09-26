@@ -1,17 +1,15 @@
 import json
 import sqlite3
-import threading
 import uuid
 from dataclasses import dataclass
 from datetime import date
 
+from vaultos.db.conn import connection_lock
+
 from . import matching, money
 
-# One table, one lock -- same concurrency story as vaultos/jobs/store.py's
-# _lock (this module is a separate table but shares the same
-# sqlite3.Connection, so it needs its own lock rather than reusing another
-# module's -- see jobs/store.py's docstring for why a lock is needed at all).
-_lock = threading.Lock()
+# Connection synchronization follows vaultos.db.conn. Lock-held code uses
+# private, lock-free helpers rather than public store entry points.
 
 
 @dataclass
@@ -51,12 +49,12 @@ def _clear_existing_primary(conn: sqlite3.Connection) -> None:
 
 
 def get_account(conn: sqlite3.Connection, account_id: str) -> Account | None:
-    with _lock:
+    with connection_lock(conn):
         return _get_account(conn, account_id)
 
 
 def list_accounts(conn: sqlite3.Connection) -> list[Account]:
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute("SELECT * FROM account ORDER BY created_at").fetchall()
         return [_row_to_account(row) for row in rows]
 
@@ -77,7 +75,7 @@ def create_account(
     account held it before, in the same transaction -- the account_primary_unique
     index exists so this can never leave two primaries even under a concurrent
     request, not so callers have to clear the old one themselves first."""
-    with _lock:
+    with connection_lock(conn):
         if is_primary:
             _clear_existing_primary(conn)
         conn.execute(
@@ -112,7 +110,7 @@ def update_account(
     """Every field is optional -- only fields the caller actually passed change;
     everything else keeps its current value. Same primary-swap behavior as
     create_account when is_primary=True is passed."""
-    with _lock:
+    with connection_lock(conn):
         existing = _get_account(conn, account_id)
         if existing is None:
             return None
@@ -373,7 +371,7 @@ def _get_plan_item(conn: sqlite3.Connection, item_id: str) -> PlanItem | None:
 
 
 def get_plan_item(conn: sqlite3.Connection, item_id: str) -> PlanItem | None:
-    with _lock:
+    with connection_lock(conn):
         return _get_plan_item(conn, item_id)
 
 
@@ -385,7 +383,7 @@ def _list_plan_items(conn: sqlite3.Connection) -> list[PlanItem]:
 
 
 def list_plan_items(conn: sqlite3.Connection) -> list[PlanItem]:
-    with _lock:
+    with connection_lock(conn):
         return _list_plan_items(conn)
 
 
@@ -435,7 +433,7 @@ def create_plan_item(
         reset_period,
         match_text,
     )
-    with _lock:
+    with connection_lock(conn):
         try:
             conn.execute(
                 "INSERT INTO plan_item (id, name, estimate_cents, type, payee, day_of_month, cadence, "
@@ -502,7 +500,7 @@ def update_plan_item(conn: sqlite3.Connection, item_id: str, changes: dict) -> P
     which is exactly why this takes an explicit "fields present" dict rather than
     update_account()'s simpler None-means-unchanged kwargs (there, None is never a
     value any field legitimately wants)."""
-    with _lock:
+    with connection_lock(conn):
         existing = _get_plan_item(conn, item_id)
         if existing is None:
             return None
@@ -610,7 +608,7 @@ def _row_to_plan_period(row: sqlite3.Row) -> PlanPeriod:
 def get_plan_periods_for_period(conn: sqlite3.Connection, period: str) -> dict[str, PlanPeriod]:
     """Every existing plan_period row for `period`, keyed by plan_item_id -- a bulk read
     for composing the Plan summary, not the lazy-creation path (see set_ticked)."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute("SELECT * FROM plan_period WHERE period = ?", (period,)).fetchall()
         return {r["plan_item_id"]: _row_to_plan_period(r) for r in rows}
 
@@ -624,7 +622,7 @@ def get_plan_period_for_item(
     recorded under last month's bucket can still be the live one for a date early in
     this month) without paying for a full bulk fetch of a period it otherwise has no
     use for."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT * FROM plan_period WHERE plan_item_id = ? AND period = ?",
             (plan_item_id, period),
@@ -682,7 +680,7 @@ def set_ticked(
     Period yet to violate. See _reject_if_period_closed's own docstring for the
     `last_closed_period`-gated regime change once a real close has happened."""
     _reject_if_period_closed(period, open_period, last_closed_period)
-    with _lock:
+    with connection_lock(conn):
         existing = conn.execute(
             "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?",
             (plan_item_id, period),
@@ -743,7 +741,7 @@ def set_adjusted(
     moment it's set" cutover reference (plan.active_budget_adjustment derives the
     elapsed/forward split from its date)."""
     _reject_if_period_closed(period, open_period, last_closed_period)
-    with _lock:
+    with connection_lock(conn):
         existing = conn.execute(
             "SELECT id FROM plan_period WHERE plan_item_id = ? AND period = ?",
             (plan_item_id, period),
@@ -779,7 +777,7 @@ def sum_matched_transactions_for_period(conn: sqlite3.Connection, period: str) -
     yet -> those transactions simply don't appear in the returned totals, same as
     before this ticket."""
     start, end = money.period_bounds(period)
-    with _lock:
+    with connection_lock(conn):
         catch_all_row = conn.execute("SELECT id FROM plan_item WHERE is_catch_all = 1").fetchone()
         catch_all_id = catch_all_row["id"] if catch_all_row else None
         rows = conn.execute(
@@ -803,7 +801,7 @@ def count_matched_transactions_for_period(conn: sqlite3.Connection, period: str)
     occurrences in chronological order (earliest occurrence first) as a lightweight
     stand-in for genuine per-occurrence tracking, without a plan_period schema change."""
     start, end = money.period_bounds(period)
-    with _lock:
+    with connection_lock(conn):
         catch_all_row = conn.execute("SELECT id FROM plan_item WHERE is_catch_all = 1").fetchone()
         catch_all_id = catch_all_row["id"] if catch_all_row else None
         rows = conn.execute(
@@ -823,7 +821,7 @@ def any_transactions_for_period(conn: sqlite3.Connection, period: str) -> bool:
     imported for this month" (this returns False) from "imports exist but this specific
     item never matched" (a genuine, separately-displayed $0/no-match state)."""
     start, end = money.period_bounds(period)
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT EXISTS(SELECT 1 FROM txn WHERE date >= ? AND date < ?)", (start, end)
         ).fetchone()
@@ -838,19 +836,19 @@ def any_transactions_for_period(conn: sqlite3.Connection, period: str) -> bool:
 def get_primary_account(conn: sqlite3.Connection) -> Account | None:
     """The one account whose balance seeds the projection -- None means no account has
     been marked primary yet, the Cash flow screen's first empty-state trigger."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute("SELECT * FROM account WHERE is_primary = 1").fetchone()
         return _row_to_account(row) if row else None
 
 
 def get_floor_cents(conn: sqlite3.Connection) -> int:
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute("SELECT floor_cents FROM finance_settings WHERE id = 1").fetchone()
         return row["floor_cents"]
 
 
 def set_floor_cents(conn: sqlite3.Connection, floor_cents: int) -> int:
-    with _lock:
+    with connection_lock(conn):
         conn.execute("UPDATE finance_settings SET floor_cents = ? WHERE id = 1", (floor_cents,))
         conn.commit()
         return floor_cents
@@ -880,7 +878,7 @@ def get_open_period(conn: sqlite3.Connection, today_period: str) -> str:
     write, not a Month-End Close. Stable after that: a later call with a DIFFERENT
     today_period (the calendar has moved on) does NOT re-derive it -- only Month-End
     Close (ticket #20) will ever advance it once that ticket exists."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute("SELECT open_period FROM finance_settings WHERE id = 1").fetchone()
         if row["open_period"] is not None:
             return row["open_period"]
@@ -892,7 +890,7 @@ def get_open_period(conn: sqlite3.Connection, today_period: str) -> str:
 def get_last_closed_period(conn: sqlite3.Connection) -> str | None:
     """NULL until the very first real Month-End Close runs (ticket #24) -- the
     "has real closing begun at all" signal _reject_if_period_closed branches on."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT last_closed_period FROM finance_settings WHERE id = 1"
         ).fetchone()
@@ -936,7 +934,7 @@ def list_planned_postings_for_period(conn: sqlite3.Connection, period: str) -> l
     ordered by effective date (Deferred-aware, ticket #22) -- the Plan screen's own
     source of truth once Month-End Close has run for a period, instead of computing
     occurrences fresh."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             f"SELECT * FROM planned_posting WHERE period = ? ORDER BY {_EFFECTIVE_DATE_SQL}",
             (period,),
@@ -947,7 +945,7 @@ def list_planned_postings_for_period(conn: sqlite3.Connection, period: str) -> l
 def list_planned_postings_for_item_period(
     conn: sqlite3.Connection, plan_item_id: str, period: str
 ) -> list[PlannedPosting]:
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             f"SELECT * FROM planned_posting WHERE plan_item_id = ? AND period = ? ORDER BY {_EFFECTIVE_DATE_SQL}",
             (plan_item_id, period),
@@ -965,7 +963,7 @@ def list_unreconciled_planned_postings_for_period(
     marked done by hand (no real transaction to match, plan_period.ticked=1) would
     wrongly carry forward as still-overdue, even though the Plan screen itself already
     shows it as fully processed."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             f"SELECT * FROM planned_posting WHERE period = ? AND matched_txn_id IS NULL "
             f"AND plan_item_id NOT IN (SELECT plan_item_id FROM plan_period WHERE period = ? AND ticked = 1) "
@@ -990,7 +988,7 @@ def carry_forward_planned_postings(
     from the old one."""
     if not posting_ids:
         return []
-    with _lock:
+    with connection_lock(conn):
         placeholders = ", ".join("?" for _ in posting_ids)
         conn.execute(
             f"UPDATE planned_posting SET period = ? WHERE id IN ({placeholders})",
@@ -1012,7 +1010,7 @@ def close_period(conn: sqlite3.Connection, closed_period: str, new_open_period: 
     advanced it finds a mismatch and is rejected via the same PeriodClosedError every
     other closed-period write already raises, rather than silently closing whatever
     period happens to be open now."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute("SELECT open_period FROM finance_settings WHERE id = 1").fetchone()
         if row["open_period"] != closed_period:
             raise PeriodClosedError(
@@ -1039,7 +1037,7 @@ def create_planned_posting(
     matching migration 0010's UNIQUE index. Returns None when a row for this exact
     occurrence already existed (close.py's Month-End Close treats a repeat run as a
     safe no-op, not an error -- ticket #20's own acceptance criterion)."""
-    with _lock:
+    with connection_lock(conn):
         cur = conn.execute(
             "INSERT OR IGNORE INTO planned_posting "
             "(id, plan_item_id, period, expected_date, expected_amount_cents, created_at) "
@@ -1082,7 +1080,7 @@ def update_planned_posting(
     for ticking -- CONTEXT.md's own invariant ("any edit path... that doesn't check the
     target period is still Open... a Closed Period must stay closed") applied to this
     sibling endpoint too, a gap caught in code review."""
-    with _lock:
+    with connection_lock(conn):
         existing = conn.execute(
             "SELECT * FROM planned_posting WHERE id = ?", (posting_id,)
         ).fetchone()
@@ -1102,7 +1100,7 @@ def update_planned_posting(
 
 
 def get_planned_posting(conn: sqlite3.Connection, posting_id: str) -> PlannedPosting | None:
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute("SELECT * FROM planned_posting WHERE id = ?", (posting_id,)).fetchone()
         return _row_to_planned_posting(row) if row else None
 
@@ -1114,9 +1112,9 @@ def _attribute_transaction_to_planned_posting(
     txn_id: str,
 ) -> PlannedPosting | None:
     """Lock-free core -- callable from inside a caller (commit_import, update_transaction)
-    that already holds `_lock`, same _get_account/_list_plan_items-style private-core
-    pattern this module already uses elsewhere. See the public wrapper below for the
-    real docstring; does NOT commit -- the caller's own transaction boundary owns that."""
+    that already holds connection_lock(conn), following the private-core pattern of
+    _get_account/_list_plan_items. See the public wrapper below for the real docstring;
+    does NOT commit -- the caller's own transaction boundary owns that."""
     period = txn_date[:7]
     candidate = conn.execute(
         f"SELECT id FROM planned_posting WHERE plan_item_id = ? AND period = ? AND matched_txn_id IS NULL "
@@ -1153,7 +1151,7 @@ def attribute_transaction_to_planned_posting(
     nothing has been materialized there yet, or every occurrence is already matched) --
     the caller falls back to the old count-based pairing for that item/period, exactly
     as before ticket #20 existed at all."""
-    with _lock:
+    with connection_lock(conn):
         result = _attribute_transaction_to_planned_posting(conn, plan_item_id, txn_date, txn_id)
         conn.commit()
         return result
@@ -1172,7 +1170,7 @@ def unattribute_transaction_from_planned_posting(conn: sqlite3.Connection, txn_i
     to close reverts to open (Overdue again, if its date has passed) rather than
     staying stuck closed against a match that no longer holds. A no-op if `txn_id`
     never closed anything (most transactions never do)."""
-    with _lock:
+    with connection_lock(conn):
         _unattribute_transaction_from_planned_posting(conn, txn_id)
         conn.commit()
 
@@ -1191,7 +1189,7 @@ def reconcile_existing_transactions_for_item_period(
     itself uses, just walking pre-existing transactions instead of waiting for a
     future import/PATCH to trigger attribution."""
     start, end = money.period_bounds(period)
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT id, date FROM txn WHERE plan_item_id = ? AND date >= ? AND date < ? "
             "AND id NOT IN (SELECT matched_txn_id FROM planned_posting WHERE matched_txn_id IS NOT NULL) "
@@ -1210,7 +1208,7 @@ def transactions_for_account_between(
     inclusive) -- the raw material for reconstructing the actual daily-balance arc by
     walking forward from the period's opening balance, the same way the reference
     prototype does it (not backward from today; see cashflow.py)."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT date, amount_cents FROM txn WHERE account_id = ? AND date >= ? AND date <= ? ORDER BY date",
             (account_id, start_date, end_date),
@@ -1256,7 +1254,7 @@ def create_balance_adjustment(
     means something if the account's own balance_cents (what every other read in this
     module treats as ground truth) actually changes too, not just a historical record."""
     difference_cents = real_balance_cents - plan_predicted_cents
-    with _lock:
+    with connection_lock(conn):
         conn.execute(
             "INSERT INTO balance_adjustment (id, account_id, as_of_date, real_balance_cents, "
             "plan_predicted_cents, difference_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1284,7 +1282,7 @@ def list_balance_adjustments_between(
     conn: sqlite3.Connection, account_id: str, start_date: str, end_date: str
 ) -> list[BalanceAdjustment]:
     """Chart markers (the hollow square at each hand-set date) -- both bounds inclusive."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT * FROM balance_adjustment WHERE account_id = ? AND as_of_date >= ? AND as_of_date <= ? "
             "ORDER BY as_of_date",
@@ -1298,7 +1296,7 @@ def get_latest_balance_adjustment(
 ) -> BalanceAdjustment | None:
     """For the "last reconciled" footer note -- the most recent hand-set balance ever
     recorded for this account, regardless of month."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT * FROM balance_adjustment WHERE account_id = ? ORDER BY as_of_date DESC, created_at DESC LIMIT 1",
             (account_id,),
@@ -1337,7 +1335,7 @@ def _row_to_column_mapping(row: sqlite3.Row) -> ColumnMapping:
 
 
 def get_column_mapping(conn: sqlite3.Connection, account_id: str) -> ColumnMapping | None:
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT * FROM column_mapping WHERE account_id = ?", (account_id,)
         ).fetchone()
@@ -1378,7 +1376,7 @@ def create_column_mapping(
     for the same account (see DuplicateColumnMappingError). Writes the row and points
     the account at it, atomically, same shape as create_balance_adjustment re-anchoring
     account.balance_cents in one transaction."""
-    with _lock:
+    with connection_lock(conn):
         try:
             conn.execute(
                 "INSERT INTO column_mapping (id, account_id, source_date, source_merchant, source_amount, "
@@ -1428,7 +1426,7 @@ def _row_to_import(row: sqlite3.Row) -> Import:
 
 
 def list_imports_for_account(conn: sqlite3.Connection, account_id: str) -> list[Import]:
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT * FROM import WHERE account_id = ? ORDER BY imported_at DESC", (account_id,)
         ).fetchall()
@@ -1439,13 +1437,13 @@ def list_all_imports(conn: sqlite3.Connection) -> list[Import]:
     """Every import across every account -- the Ledger screen's "imported" static
     provenance field (README field spec) needs to look up each transaction's own
     import record regardless of which account it landed on."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute("SELECT * FROM import").fetchall()
         return [_row_to_import(r) for r in rows]
 
 
 def existing_dedupe_hashes(conn: sqlite3.Connection, account_id: str) -> set[str]:
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT dedupe_hash FROM txn WHERE account_id = ?", (account_id,)
         ).fetchall()
@@ -1474,7 +1472,7 @@ def commit_import(
     sqlite_errorcode-over-exception-subclass check as _is_catch_all_conflict, since this
     codebase has already seen sqlite3 raise the broader DatabaseError for a UNIQUE
     violation on the real long-lived connection."""
-    with _lock:
+    with connection_lock(conn):
         candidates = _list_plan_items(conn)
         # ticket #21: sorted by date before attribution runs -- _attribute_transaction_to_
         # planned_posting always grabs the chronologically-earliest still-open occurrence
@@ -1584,7 +1582,7 @@ def _get_txn(conn: sqlite3.Connection, txn_id: str) -> Txn | None:
 
 
 def get_transaction(conn: sqlite3.Connection, txn_id: str) -> Txn | None:
-    with _lock:
+    with connection_lock(conn):
         return _get_txn(conn, txn_id)
 
 
@@ -1617,7 +1615,7 @@ def list_transactions(conn: sqlite3.Connection, ledger_filter: str | None = None
         if clause is None:
             raise ValueError(f"unknown ledger filter: {ledger_filter!r}")
         where = f"WHERE {clause}"
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(f"SELECT * FROM txn {where} ORDER BY date DESC, rowid DESC").fetchall()
         return [_row_to_txn(r) for r in rows]
 
@@ -1627,7 +1625,7 @@ def count_match_states(conn: sqlite3.Connection) -> dict:
     always over the WHOLE ledger regardless of whichever filter is currently narrowing
     the visible row list -- the footer is meant to answer "how much needs attention in
     total," not "how much of what I'm looking at right now.\""""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT "
             "SUM(CASE WHEN match_source = 'auto' THEN 1 ELSE 0 END) AS guessed, "
@@ -1664,7 +1662,7 @@ def update_transaction(
     its current value even when that value is itself None. date/amount_cents/
     merchant_raw are never settable here -- "immutable after import" (README); this
     function has no parameter for them at all."""
-    with _lock:
+    with connection_lock(conn):
         existing = _get_txn(conn, txn_id)
         if existing is None:
             return None

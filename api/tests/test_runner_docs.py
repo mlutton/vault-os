@@ -20,3 +20,20 @@ def test_skill_job_authority_docs_link_runner_and_web():
     assert "2026-09-25-skill-job-authority.md" in web
     assert "ENGINE_REGISTRY" in adr
     assert "nothing in this repo ever branches on it" not in adr
+
+
+def test_submission_recovery_docs_define_the_file_authority_contract():
+    repo = Path(__file__).resolve().parents[2]
+    authority = (repo / "docs/specs/2026-09-25-skill-job-authority.md").read_text()
+    runner = (repo / "docs/specs/2026-09-04-runner-engine-registry-design.md").read_text()
+    adr = (repo / "api/docs/adr/0016-jobs-can-auto-chain-a-followup-via-chain-map.md").read_text()
+    for spec in (authority, runner):
+        assert "201" in spec
+        assert "uuid5" in spec
+        assert "transitions: [{rule_id, rule_version, child_id, child_skill}]" in spec
+        assert "before every" in spec
+        assert "rebuild never enqueues work" in spec
+        assert "settle-intents" in spec
+        assert "settled_from_index: true" in spec
+    assert "file dedupe is" in adr
+    assert "2026-09-25-skill-job-authority.md" in adr

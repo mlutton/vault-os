@@ -1,0 +1,628 @@
+"""Submission and chain crash proofs use synthetic files, SQLite and fake engines."""
+
+import json
+import os
+import sqlite3
+import stat
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pytest
+
+import vaultos.api.jobs as jobs
+import vaultos.runner.core as core
+import vaultos.vault.durable as durable
+from vaultos.cli import main, reindex, settle_intents
+from vaultos.config import Settings
+from vaultos.db.conn import connect
+from vaultos.jobs import store
+from vaultos.jobs.reconcile import reconcile_from_files
+from vaultos.registry import load_registry
+from vaultos.runner.core import Runner
+from vaultos.runner.engines import EngineResult
+from vaultos.runner.records import write_record
+from vaultos.vault.intents import write_intent
+
+
+class FakeEngine:
+    def __init__(self):
+        self.skills = []
+
+    def run(self, *, job, **kwargs):
+        self.skills.append(job.skill)
+        return EngineResult(success=True, exit_code=0, summary="complete")
+
+
+@pytest.fixture
+def setup(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    root = vault / "system"
+    (root / "queue").mkdir(parents=True)
+    (root / "runs").mkdir()
+    (root / "skills.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "skills": [
+                    {"id": name, "label": name, "deck": True, "engine": "fake"}
+                    for name in (
+                        "acquire",
+                        "daily-topic-digest",
+                        "deep-research",
+                        "research-into-draft",
+                        "sample",
+                    )
+                ],
+            }
+        )
+    )
+    monkeypatch.setenv("VAULT_ROOT", str(vault))
+    monkeypatch.setenv("VAULTOS_DB", str(tmp_path / "jobs.db"))
+    monkeypatch.delenv("VAULTOS_STATE_ROOT", raising=False)
+    settings = Settings()
+    conn = connect(settings.db_path)
+    registry = load_registry(vault)
+    engine = FakeEngine()
+    runner = Runner(conn, registry, settings, engines={"fake": engine})
+    yield vault, settings, conn, registry, engine, runner
+    conn.close()
+
+
+def submit(setup, skill="acquire"):
+    vault, _, conn, registry, _, _ = setup
+    return jobs.dispatch_skill(conn, registry, vault, skill, {}, "api")[0]
+
+
+def terminal_path(vault, job_id):
+    return vault / "system" / "runs" / f"{job_id}.json"
+
+
+def intents(vault):
+    return sorted((vault / "system" / "queue").glob("*.json"))
+
+
+def crash_parent(setup, monkeypatch, stage):
+    vault, _, conn, _, _, runner = setup
+    job_id = submit(setup)
+    with monkeypatch.context() as patch:
+        if stage == "before_intent_removal":
+            original = core.write_record
+
+            def crash_after_terminal(path, record):
+                original(path, record)
+                if path == terminal_path(vault, job_id):
+                    raise SystemExit("simulated crash")
+
+            patch.setattr(core, "write_record", crash_after_terminal)
+        elif stage == "before_index_event":
+            original = core.remove_intent
+
+            def crash_after_removal(path):
+                original(path)
+                raise SystemExit("simulated crash")
+
+            patch.setattr(core, "remove_intent", crash_after_removal)
+        else:
+
+            def crash_before_dispatch(*args, **kwargs):
+                assert store.get_job(conn, job_id).status == "ok"
+                raise SystemExit("simulated crash")
+
+            patch.setattr(jobs, "dispatch_skill", crash_before_dispatch)
+        with pytest.raises(SystemExit, match="simulated crash"):
+            runner.run_once()
+    return job_id
+
+
+@pytest.mark.parametrize(
+    "stage", ["before_intent_removal", "before_index_event", "before_child_dispatch"]
+)
+def test_crash_between_terminal_and_chain_dispatch_yields_one_child(setup, monkeypatch, stage):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, stage)
+    record = json.loads(terminal_path(vault, parent_id).read_text())
+    derived = jobs.child_job_id(record["attempt_id"], "acquire->daily-topic-digest", 1)
+    assert record["transitions"] == [
+        {
+            "rule_id": "acquire->daily-topic-digest",
+            "rule_version": 1,
+            "child_id": derived,
+            "child_skill": "daily-topic-digest",
+        }
+    ]
+    runner.recover()
+    runner.recover()
+    assert [path.stem for path in intents(vault)] == [derived]
+    assert store.get_job(conn, parent_id).status == "ok"
+    children = store.list_jobs(conn, statuses=["queued"])
+    assert [child.id for child in children] == [derived]
+    assert children[0].source == f"chain:acquire:{parent_id}"
+    child_intent = json.loads(intents(vault)[0].read_text())
+    assert child_intent["chain"]["parent_attempt_id"] == record["attempt_id"]
+    assert runner.run_once() is True
+    assert runner.run_once() is False
+    assert engine.skills == ["acquire", "daily-topic-digest"]
+    assert json.loads(terminal_path(vault, derived).read_text())["chain"] == child_intent["chain"]
+
+
+@pytest.mark.parametrize("child_state", ["pending_transition", "intent", "terminal"])
+def test_replay_twice_after_index_loss_yields_one_child(setup, monkeypatch, child_state):
+    vault, settings, conn, registry, engine, runner = setup
+    if child_state == "pending_transition":
+        parent_id = crash_parent(setup, monkeypatch, "before_child_dispatch")
+    else:
+        parent_id = submit(setup)
+        assert runner.run_once()
+    record = json.loads(terminal_path(vault, parent_id).read_text())
+    child_id = record["transitions"][0]["child_id"]
+    if child_state == "terminal":
+        assert runner.run_once()
+    conn.close()
+    settings.db_path.unlink()
+    fresh = connect(settings.db_path)
+    try:
+        reconcile_from_files(vault, fresh, registry)
+        recovered = Runner(fresh, registry, settings, engines={"fake": engine})
+        recovered.recover()
+        recovered.recover()
+        children = [
+            job
+            for job in store.list_jobs(fresh, statuses=["queued", "ok"])
+            if job.skill == "daily-topic-digest"
+        ]
+        assert [job.id for job in children] == [child_id]
+        assert len([path for path in intents(vault) if path.stem == child_id]) == (
+            child_state != "terminal"
+        )
+        if child_state == "terminal":
+            assert recovered.run_once() is False
+        else:
+            assert recovered.run_once()
+        assert engine.skills == ["acquire", "daily-topic-digest"]
+    finally:
+        fresh.close()
+
+
+def test_db_only_row_without_intent_never_executes(setup):
+    vault, _, conn, _, engine, runner = setup
+    store.create_job(
+        conn, job_id="db-only", skill="sample", args={}, source="api", engine="fake", ts_queued="t0"
+    )
+    assert runner.run_once() is False
+    assert engine.skills == []
+    assert store.get_job(conn, "db-only").status == "queued"
+    assert not intents(vault)
+    assert not list((vault / "system" / "runs").glob("*.json"))
+
+
+def test_rebuild_never_enqueues_work(setup, monkeypatch):
+    vault, settings, conn, _, _, _ = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_intent_removal")
+    before = {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("index rebuild dispatched work")
+
+    monkeypatch.setattr(jobs, "dispatch_skill", forbidden)
+    result = reindex(vault, settings.db_path)
+    assert result.run_files_seen == 1
+    assert store.get_job(conn, parent_id).status == "ok"
+    assert before == {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+    assert not [
+        job
+        for job in store.list_jobs(conn, statuses=["queued"])
+        if job.skill == "daily-topic-digest"
+    ]
+
+
+def test_submission_writes_intent_before_row(setup, monkeypatch):
+    vault, _, conn, registry, _, _ = setup
+    original = store.create_job
+    observed = []
+
+    def fail_index(*args, **kwargs):
+        path = vault / "system" / "queue" / f"{kwargs['job_id']}.json"
+        observed.append(json.loads(path.read_text()))
+        assert store.get_job(conn, kwargs["job_id"]) is None
+        raise sqlite3.OperationalError("synthetic index failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(store, "create_job", fail_index)
+        job_id = submit(setup, "sample")
+    assert len(observed) == 1 and observed[0]["id"] == job_id
+    assert store.get_job(conn, job_id) is None
+    reconcile_from_files(vault, conn, registry)
+    reconcile_from_files(vault, conn, registry)
+    assert [job.id for job in store.list_jobs(conn, statuses=["queued"])] == [job_id]
+    assert (
+        conn.execute("SELECT count(*) FROM job_events WHERE job_id = ?", (job_id,)).fetchone()[0]
+        == 1
+    )
+    assert store.create_job is original
+
+
+@pytest.mark.parametrize("existing", ["intent", "terminal", "attempt"])
+def test_chain_dispatch_dedupes_from_files(setup, monkeypatch, existing):
+    vault, _, conn, registry, _, _ = setup
+    child_id = jobs.child_job_id("parent-attempt", "acquire->daily-topic-digest", 1)
+    if existing == "intent":
+        write_intent(
+            vault,
+            job_id=child_id,
+            skill="daily-topic-digest",
+            args={},
+            ts="t0",
+            source="chain:acquire:parent",
+        )
+        path = vault / "system" / "queue" / f"{child_id}.json"
+    else:
+        path = (
+            terminal_path(vault, child_id)
+            if existing == "terminal"
+            else vault / "system" / "runs" / f"{child_id}.attempt-1.json"
+        )
+        write_record(path, {"id": child_id, "skill": "daily-topic-digest", "status": "ok"})
+    before = path.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("deduped dispatch attempted an index insert")
+
+    monkeypatch.setattr(store, "create_job", forbidden)
+    assert (
+        jobs.dispatch_skill(
+            conn, registry, vault, "daily-topic-digest", {}, "chain:acquire:parent", job_id=child_id
+        )[0]
+        == child_id
+    )
+    assert path.read_bytes() == before
+    assert store.get_job(conn, child_id) is None
+    assert len(intents(vault)) == (existing == "intent")
+
+
+def test_child_id_is_deterministic():
+    child = jobs.child_job_id("parent-attempt", "acquire->daily-topic-digest", 1)
+    assert child == jobs.child_job_id("parent-attempt", "acquire->daily-topic-digest", 1)
+    assert child != jobs.child_job_id("parent-attempt", "acquire->daily-topic-digest", 2)
+    assert child != jobs.child_job_id("other-attempt", "acquire->daily-topic-digest", 1)
+    assert child != jobs.child_job_id("parent-attempt", "other-rule", 1)
+
+
+def test_db_only_legacy_chain_owner_does_not_discard_acknowledged_intent(setup):
+    vault, settings, conn, registry, engine, runner = setup
+    source = "chain:acquire:parent"
+    store.create_job(
+        conn,
+        job_id="legacy-child",
+        skill="daily-topic-digest",
+        args={},
+        source=source,
+        engine="fake",
+        ts_queued="t0",
+    )
+    child_id = jobs.child_job_id("attempt", "acquire->daily-topic-digest", 1)
+    accepted, _ = jobs.dispatch_skill(
+        conn, registry, vault, "daily-topic-digest", {}, source, job_id=child_id
+    )
+    assert accepted == child_id
+    assert [path.stem for path in intents(vault)] == [child_id]
+    assert runner.run_once() is False
+    assert engine.skills == []
+    reindex(vault, settings.db_path)
+    assert store.get_job(conn, "legacy-child") is None
+    assert runner.run_once() is True
+    assert engine.skills == ["daily-topic-digest"]
+
+
+def test_legacy_event_child_identity_uses_parent_job_id(setup):
+    vault, _, conn, registry, _, _ = setup
+    parent_id = submit(setup)
+    for _ in range(2):
+        jobs.apply_event_and_chain(conn, registry, vault, job_id=parent_id, status="ok", ts="t1")
+    expected = jobs.child_job_id(parent_id, "acquire->daily-topic-digest", 1)
+    children = store.list_jobs(conn, statuses=["queued"])
+    assert [child.id for child in children] == [expected]
+
+
+def test_http_replay_after_index_loss_uses_recorded_attempt_identity(setup):
+    vault, settings, conn, registry, _, runner = setup
+    parent_id = submit(setup)
+    assert runner.run_once()
+    record = json.loads(terminal_path(vault, parent_id).read_text())
+    expected = record["transitions"][0]["child_id"]
+    reindex(vault, settings.db_path)
+    jobs.apply_event_and_chain(conn, registry, vault, job_id=parent_id, status="ok", ts="t1")
+    runner.recover()
+    assert [path.stem for path in intents(vault)] == [expected]
+
+
+def test_submission_acknowledges_durable_intent_when_index_write_fails(setup, monkeypatch):
+    vault, settings, conn, registry, _, _ = setup
+
+    def fail_index(*args, **kwargs):
+        raise sqlite3.OperationalError("synthetic index failure")
+
+    monkeypatch.setattr(store, "create_job", fail_index)
+    response = jobs.submit_job(jobs.JobCreate(skill="sample"), conn, registry, settings)
+    assert response["status"] == "queued"
+    assert [path.stem for path in intents(vault)] == [response["id"]]
+    assert store.get_job(conn, response["id"]) is None
+
+
+def test_recovery_is_idempotent(setup, monkeypatch):
+    vault, _, conn, _, engine, runner = setup
+    crash_parent(setup, monkeypatch, "before_intent_removal")
+    runner.recover()
+    before = {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+    rows = [tuple(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")]
+    events = [tuple(row) for row in conn.execute("SELECT * FROM job_events ORDER BY id")]
+    runner.recover()
+    assert before == {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+    assert rows == [tuple(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")]
+    assert events == [tuple(row) for row in conn.execute("SELECT * FROM job_events ORDER BY id")]
+    assert engine.skills == ["acquire"]
+
+
+def test_recovery_runs_before_claim_and_at_daemon_startup(setup, monkeypatch):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_intent_removal")
+    monkeypatch.setattr(runner, "_install_signal_handlers", lambda: None)
+
+    def stop_before_claim():
+        assert store.get_job(conn, parent_id).status == "ok"
+        assert len(intents(vault)) == 1
+        runner.request_shutdown()
+        return False
+
+    monkeypatch.setattr(runner, "run_once", stop_before_claim)
+    runner.run_forever()
+    assert engine.skills == ["acquire"]
+
+
+def test_recovery_runs_before_each_claim(setup, monkeypatch):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_index_event")
+    assert runner.run_once() is True
+    assert store.get_job(conn, parent_id).status == "ok"
+    assert engine.skills == ["acquire", "daily-topic-digest"]
+    assert runner.run_once() is False
+    assert not intents(vault)
+
+
+def test_recovery_replaces_orphan_assessment_with_durable_outcome(setup, monkeypatch):
+    _, _, conn, _, _, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_index_event")
+    store.apply_event(conn, job_id=parent_id, status="orphaned", ts="t1", received_at="t1")
+    runner.recover()
+    assert store.get_job(conn, parent_id).status == "ok"
+    assert len(store.list_jobs(conn, statuses=["queued"])) == 1
+
+
+def test_recovery_replays_recorded_rule_after_current_rules_change(setup, monkeypatch):
+    vault, _, conn, _, _, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_child_dispatch")
+    recorded = json.loads(terminal_path(vault, parent_id).read_text())["transitions"][0]
+    monkeypatch.setattr(jobs, "CHAIN_MAP", {})
+    runner.recover()
+    child = store.list_jobs(conn, statuses=["queued"])[0]
+    assert child.id == recorded["child_id"]
+    assert child.skill == recorded["child_skill"]
+    assert json.loads(intents(vault)[0].read_text())["chain"]["rule_version"] == 1
+
+
+def test_recovery_retains_pending_transition_until_child_is_registered(setup, monkeypatch):
+    vault, _, conn, registry, _, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_child_dispatch")
+    expected = json.loads(terminal_path(vault, parent_id).read_text())["transitions"][0]["child_id"]
+    original_get = registry.get
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            type(registry),
+            "get",
+            lambda self, skill_id: (
+                None if skill_id == "daily-topic-digest" else original_get(skill_id)
+            ),
+        )
+        runner.recover()
+        assert store.get_job(conn, parent_id).status == "ok"
+        assert not intents(vault)
+    runner.recover()
+    assert [path.stem for path in intents(vault)] == [expected]
+
+
+@pytest.mark.parametrize(
+    "damage", ["legacy", "partial", "wrong_child", "bad_version", "error_transition"]
+)
+def test_recovery_does_not_consume_invalid_or_legacy_terminal(setup, monkeypatch, damage):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_intent_removal")
+    path = terminal_path(vault, parent_id)
+    record = json.loads(path.read_text())
+    if damage == "legacy":
+        record.pop("attempt_id")
+        record.pop("attempt_ids")
+        (vault / "system" / "runs" / f"{parent_id}.attempt-1.json").unlink()
+    elif damage == "partial":
+        record.pop("completion_evidence")
+    elif damage == "wrong_child":
+        record["transitions"][0]["child_id"] = "../outside"
+    elif damage == "bad_version":
+        record["transitions"][0]["rule_version"] = True
+    else:
+        record["status"] = "error"
+    path.write_text(json.dumps(record))
+    runner.recover()
+    assert [path.stem for path in intents(vault)] == [parent_id]
+    assert store.get_job(conn, parent_id).status == "running"
+    assert engine.skills == ["acquire"]
+
+
+def test_settle_intents_reports_by_default_and_applies_only_terminal(setup, capsys):
+    vault, _, conn, _, _, runner = setup
+    ids = {}
+    for status in ("queued", "running", "ok", "error", "orphaned", "attempt", "record"):
+        job_id = submit(setup, "sample")
+        ids[status] = job_id
+        if status != "queued":
+            store.apply_event(
+                conn,
+                job_id=job_id,
+                status="ok" if status in {"attempt", "record"} else status,
+                ts="t1",
+                received_at="t1",
+            )
+        if status == "attempt":
+            write_record(
+                vault / "system" / "runs" / f"{job_id}.attempt-2.json", {"attempt_id": "held"}
+            )
+        elif status == "record":
+            write_record(
+                terminal_path(vault, job_id), {"id": job_id, "skill": "sample", "status": "ok"}
+            )
+    before = {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+    assert main(["settle-intents"]) == 0
+    report = capsys.readouterr().out
+    for status in ("ok", "error"):
+        assert ids[status] in report
+    for status in ("queued", "running", "orphaned", "attempt", "record"):
+        assert ids[status] not in report
+    assert before == {path: path.read_bytes() for path in (vault / "system").rglob("*.json")}
+    assert main(["settle-intents", "--apply"]) == 0
+    assert {path.stem for path in intents(vault)} == {
+        ids[status] for status in ("queued", "running", "orphaned", "attempt", "record")
+    }
+    for status in ("ok", "error"):
+        record = json.loads(terminal_path(vault, ids[status]).read_text())
+        assert record["settled_from_index"] is True
+        assert record["status"] == status
+        assert "attempt_id" not in record
+    assert settle_intents(vault, conn, apply=True) == []
+    with runner._runner_lock():
+        with pytest.raises(BlockingIOError):
+            settle_intents(vault, conn, apply=True)
+
+
+def test_ordinary_submissions_always_create_new_jobs(setup):
+    first = submit(setup, "sample")
+    second = submit(setup, "sample")
+    assert first != second
+    assert len(intents(setup[0])) == 2
+
+
+def test_concurrent_chain_dispatch_creates_one_intent_and_row(setup):
+    vault, _, conn, registry, _, _ = setup
+    child_id = jobs.child_job_id("attempt", "acquire->daily-topic-digest", 1)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(
+            executor.map(
+                lambda _: jobs.dispatch_skill(
+                    conn,
+                    registry,
+                    vault,
+                    "daily-topic-digest",
+                    {},
+                    "chain:acquire:parent",
+                    job_id=child_id,
+                )[0],
+                range(16),
+            )
+        )
+    assert set(results) == {child_id}
+    assert [path.stem for path in intents(vault)] == [child_id]
+    assert [job.id for job in store.list_jobs(conn, statuses=["queued"])] == [child_id]
+
+
+def test_chain_duplicate_is_durable_before_acknowledgment(setup, monkeypatch):
+    vault, _, conn, registry, _, _ = setup
+    child_id = jobs.child_job_id("attempt", "acquire->daily-topic-digest", 1)
+    linked = threading.Event()
+    finish = threading.Event()
+    publisher_ident = []
+    acknowledged_syncs = []
+    results = []
+    original_fsync = durable.os.fsync
+
+    def fsync(fd):
+        is_directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+        if threading.get_ident() == publisher_ident[0]:
+            if is_directory:
+                linked.set()
+                assert finish.wait(2)
+        else:
+            acknowledged_syncs.append("directory" if is_directory else "file")
+        original_fsync(fd)
+
+    def dispatch():
+        return jobs.dispatch_skill(
+            conn, registry, vault, "daily-topic-digest", {}, "chain:acquire:parent", job_id=child_id
+        )[0]
+
+    def publish():
+        publisher_ident.append(threading.get_ident())
+        results.append(dispatch())
+
+    monkeypatch.setattr(durable.os, "fsync", fsync)
+    worker = threading.Thread(target=publish)
+    worker.start()
+    try:
+        assert linked.wait(2)
+        assert dispatch() == child_id
+        assert acknowledged_syncs == ["file", "directory"]
+        assert store.get_job(conn, child_id) is None
+    finally:
+        finish.set()
+        worker.join(timeout=3)
+    assert not worker.is_alive()
+    assert results == [child_id]
+    assert [path.stem for path in intents(vault)] == [child_id]
+    assert [job.id for job in store.list_jobs(conn, statuses=["queued"])] == [child_id]
+
+
+def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
+    calls = []
+    original_fsync = durable.os.fsync
+    original_replace = durable.os.replace
+    path = tmp_path / "system" / "queue" / "job.json"
+
+    def fsync(fd):
+        calls.append("fsync")
+        return original_fsync(fd)
+
+    def replace(source, target):
+        assert not Path(target).exists()
+        assert json.loads(Path(source).read_text())["id"] == "job"
+        assert calls == ["fsync"]
+        calls.append("publish")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(durable.os, "fsync", fsync)
+    monkeypatch.setattr(durable.os, "replace", replace)
+    write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t0", source="api")
+    assert calls == ["fsync", "publish", "fsync"]
+    assert json.loads(path.read_text())["id"] == "job"
+    assert not list(path.parent.glob(".*.tmp"))
+
+
+def test_exclusive_intent_does_not_replace_existing_payload(tmp_path):
+    path = write_intent(
+        tmp_path,
+        job_id="job",
+        skill="sample",
+        args={"first": True},
+        ts="t0",
+        source="chain:sample:parent",
+        exclusive=True,
+    )
+    before = path.read_bytes()
+    with pytest.raises(FileExistsError):
+        write_intent(
+            tmp_path,
+            job_id="job",
+            skill="sample",
+            args={},
+            ts="t1",
+            source="chain:sample:parent",
+            exclusive=True,
+        )
+    assert path.read_bytes() == before
+    assert not list(path.parent.glob(".*.tmp"))

@@ -154,7 +154,15 @@ def test_chain_map_fires_through_runner_terminal_event(
 ):
     import vaultos.api.jobs as jobs_module
 
-    monkeypatch.setattr(jobs_module, "CHAIN_MAP", {"hello-script": "chained-target"})
+    monkeypatch.setattr(
+        jobs_module,
+        "CHAIN_MAP",
+        {
+            "hello-script": jobs_module.ChainRule(
+                "hello-script->chained-target", 1, "chained-target"
+            )
+        },
+    )
 
     job = _enqueue(conn, vault, registry, "hello-script")
     runner = Runner(conn, registry, settings)

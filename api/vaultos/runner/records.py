@@ -2,29 +2,10 @@
 
 import json
 import os
-import uuid
 from pathlib import Path
 
+from ..vault.durable import write_record  # noqa: F401 - runner compatibility export
 from ..vault.runs import read_run_record
-
-
-def write_record(path: Path, record: dict) -> None:
-    """Publish a complete JSON record, including its directory entry."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("x") as stream:
-            json.dump(record, stream, indent=2)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def remove_intent(path: Path) -> None:

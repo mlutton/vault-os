@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..jobs.chains import child_job_id
 from ..state import resolve_state_root
 
 
@@ -19,6 +20,8 @@ class RunRecord:
     summary: str | None
     md_path: str | None
     deliverable_path: str | None
+    attempt_id: str | None = None
+    transitions: tuple[dict, ...] = ()
 
 
 def read_run_log(vault_root: Path, job_id: str) -> str | None:
@@ -105,6 +108,24 @@ def read_run_record(path: Path) -> RunRecord:
             or evidence.get("deliverable_path") != data.get("deliverable_path")
         ):
             raise KeyError("terminal run lacks matching completion evidence")
+        transitions = data.get("transitions", [])
+        if not isinstance(transitions, list) or (data["status"] != "ok" and transitions):
+            raise KeyError("terminal transitions must be a list for a successful run")
+        for transition in transitions:
+            if (
+                not isinstance(transition, dict)
+                or not all(
+                    isinstance(transition.get(key), str) and transition[key]
+                    for key in ("rule_id", "child_id", "child_skill")
+                )
+                or type(transition.get("rule_version")) is not int
+                or transition["rule_version"] < 1
+            ):
+                raise KeyError("terminal transition lacks rule or child identity")
+            if transition["child_id"] != child_job_id(
+                data["attempt_id"], transition["rule_id"], transition["rule_version"]
+            ):
+                raise KeyError("transition child differs from derived identity")
     return RunRecord(
         id=data.get("id") or path.stem,
         skill=data["skill"],
@@ -118,4 +139,6 @@ def read_run_record(path: Path) -> RunRecord:
         summary=data.get("summary"),
         md_path=data.get("md_path"),
         deliverable_path=data.get("deliverable_path"),
+        attempt_id=data.get("attempt_id"),
+        transitions=tuple(data.get("transitions", [])) if "attempt_id" in data else (),
     )

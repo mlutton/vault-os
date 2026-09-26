@@ -1,4 +1,5 @@
 import argparse
+import fcntl
 import json
 import os
 import sys
@@ -7,9 +8,12 @@ from pathlib import Path
 
 from .config import Settings
 from .db.conn import connect
+from .jobs import store
 from .jobs.reconcile import ReconcileResult, reconcile_from_files
 from .pidfile import is_spine_alive, pid_path
 from .registry import load_registry
+from .runner.records import remove_intent, write_record
+from .state import resolve_state_root
 from .timeutil import utcnow_z
 from .vault.calendar import parse_ical_events
 
@@ -23,6 +27,64 @@ class ReindexRefused(RuntimeError):
 class CalendarPullFailed(RuntimeError):
     """The iCal feed could not be fetched or parsed -- any existing
     calendar-today.json is left untouched, not wiped."""
+
+
+def settle_intents(vault_root: Path, conn, *, apply: bool = False) -> list[str]:
+    """Report or settle only pre-attempt intents backed by terminal index rows.
+
+    This one-shot DB-to-file exception is for pre-S1a state only. Applying
+    holds the runner lock so an attempt cannot appear between check and write.
+    """
+    root = resolve_state_root(vault_root)
+    fd = None
+    if apply:
+        root.mkdir(parents=True, exist_ok=True)
+        fd = os.open(root / "runner.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        if fd is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        eligible = []
+        for path in sorted((root / "queue").glob("*.json")):
+            job_id = path.stem
+            if (root / "runs" / f"{job_id}.json").exists() or any(
+                (root / "runs").glob(f"{job_id}.attempt-*.json")
+            ):
+                continue
+            try:
+                intent = json.loads(path.read_text())
+                if not isinstance(intent, dict) or intent.get("id", job_id) != job_id:
+                    continue
+            except (OSError, ValueError):
+                continue
+            job = store.get_job(conn, job_id)
+            if job is None or job.status not in {"ok", "error"}:
+                continue
+            eligible.append(job_id)
+            if apply:
+                write_record(
+                    root / "runs" / f"{job_id}.json",
+                    {
+                        "id": job.id,
+                        "skill": job.skill,
+                        "args": job.args,
+                        "source": job.source,
+                        "ts_queued": job.ts_queued,
+                        "ts_started": job.ts_started,
+                        "ts_completed": job.ts_completed,
+                        "status": job.status,
+                        "exit_code": job.exit_code,
+                        "summary": job.summary,
+                        "md_path": job.md_path,
+                        "deliverable_path": job.deliverable_path,
+                        "settled_from_index": True,
+                    },
+                    exclusive=True,
+                )
+                remove_intent(path)
+        return eligible
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def reindex(vault_root: Path, db_path: Path) -> ReconcileResult:
@@ -85,10 +147,30 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m vaultos.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("reindex", help="drop and rebuild the database from vault files")
+    settle = subparsers.add_parser("settle-intents", help="report pre-attempt terminal intents")
+    settle.add_argument(
+        "--apply", action="store_true", help="write terminal files and remove intents"
+    )
     subparsers.add_parser(
         "calendar-pull", help="fetch the configured iCal feed and write today's events"
     )
     args = parser.parse_args(argv)
+
+    if args.command == "settle-intents":
+        settings = Settings()
+        conn = connect(settings.db_path)
+        try:
+            jobs = settle_intents(settings.vault_root, conn, apply=args.apply)
+        except OSError as exc:
+            print(f"settle-intents: refused or failed -- {exc}", file=sys.stderr)
+            return 1
+        finally:
+            conn.close()
+        for job_id in jobs:
+            print(job_id)
+        action = "settled" if args.apply else "eligible"
+        print(f"settle-intents: {len(jobs)} {action} intent(s)")
+        return 0
 
     if args.command == "reindex":
         settings = Settings()

@@ -76,8 +76,10 @@ def child_record_path(vault_root: Path, job_id: str) -> Path | None:
     for path in (
         root / "runs" / f"{job_id}.json",
         root / "queue" / f"{job_id}.json",
-        *(root / "runs").glob(f"{job_id}.attempt-*.json"),
     ):
+        if path.exists():
+            return path
+    for path in (root / "runs").glob(f"{job_id}.attempt-*.json"):
         if path.exists():
             return path
     return None
@@ -187,7 +189,7 @@ def dispatch_skill(
     """Accept a durable intent before indexing it; files dedupe chain children.
 
     SQLite failure after publication still accepts the submission (HTTP 201).
-    The intent remains authoritative and a later reconcile indexes it. File
+    The intent remains authoritative; runner recovery or reconcile indexes it. File
     publication failures propagate and are never acknowledged as accepted.
     """
     skill = validate_submission(registry, skill_id, args)
@@ -233,6 +235,7 @@ def dispatch_skill(
             ts_queued=ts,
         )
     except sqlite3.Error:
+        conn.rollback()
         logger.exception("submission %s accepted in files; index update failed", job_id)
     else:
         if job.id != job_id:

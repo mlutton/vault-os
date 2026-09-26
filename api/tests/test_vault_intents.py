@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from vaultos.vault.durable import write_record
+from vaultos.vault.durable import ensure_durable_dir, sync_record, write_record
 from vaultos.vault.intents import write_intent
 
 
@@ -76,7 +76,7 @@ def test_first_publication_syncs_new_directory_parents(
 
 
 @pytest.mark.parametrize("directory", ["queue", "runs"])
-def test_existing_directories_add_no_extra_parent_sync(tmp_path, directory_events, directory):
+def test_publication_syncs_existing_directory_parent(tmp_path, directory_events, directory):
     parent = tmp_path / "system" / directory
     parent.mkdir(parents=True)
     directory_events.clear()
@@ -84,7 +84,25 @@ def test_existing_directories_add_no_extra_parent_sync(tmp_path, directory_event
         write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t", source="api")
     else:
         write_record(parent / "job.json", {"id": "job"})
-    assert directory_events == [("sync", parent)]
+    assert directory_events == [("sync", parent.parent), ("sync", parent)]
+
+
+def test_existing_directory_syncs_parent_before_return(tmp_path, directory_events):
+    directory = tmp_path / "queue"
+    directory.mkdir()
+    directory_events.clear()
+    ensure_durable_dir(directory)
+    assert ("sync", tmp_path) in directory_events
+
+
+def test_duplicate_record_syncs_directory_parent_before_return(tmp_path, directory_events):
+    directory = tmp_path / "queue"
+    directory.mkdir()
+    record = directory / "job.json"
+    record.write_text("{}")
+    directory_events.clear()
+    sync_record(record)
+    assert directory_events == [("sync", directory), ("sync", tmp_path)]
 
 
 def test_write_intent_creates_queue_file(tmp_path):

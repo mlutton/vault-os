@@ -296,6 +296,20 @@ def test_child_id_is_deterministic():
     assert child != jobs.child_job_id("parent-attempt", "other-rule", 1)
 
 
+@pytest.mark.parametrize("record_kind", ["terminal", "intent"])
+def test_child_record_path_does_not_glob_when_record_exists(tmp_path, monkeypatch, record_kind):
+    directory = tmp_path / "system" / ("runs" if record_kind == "terminal" else "queue")
+    directory.mkdir(parents=True)
+    path = directory / "child.json"
+    path.write_text("{}")
+
+    def unexpected_glob(*args, **kwargs):
+        pytest.fail("attempt glob called despite existing child record")
+
+    monkeypatch.setattr(Path, "glob", unexpected_glob)
+    assert jobs.child_record_path(tmp_path, "child") == path
+
+
 def test_db_only_legacy_chain_owner_does_not_discard_acknowledged_intent(setup):
     vault, settings, conn, registry, engine, runner = setup
     source = "chain:acquire:parent"
@@ -320,6 +334,73 @@ def test_db_only_legacy_chain_owner_does_not_discard_acknowledged_intent(setup):
     assert store.get_job(conn, "legacy-child") is None
     assert runner.run_once() is True
     assert engine.skills == ["daily-topic-digest"]
+
+
+@pytest.mark.parametrize("record_kind", ["queue", "run"])
+@pytest.mark.parametrize("projector", ["reconcile", "recovery"])
+def test_reconcile_skips_chain_source_collision_and_continues(
+    setup, caplog, record_kind, projector
+):
+    vault, _, conn, registry, engine, runner = setup
+    source = "chain:acquire:parent"
+    store.create_job(
+        conn,
+        job_id="legacy-child",
+        skill="daily-topic-digest",
+        args={},
+        source=source,
+        engine="fake",
+        ts_queued="t0",
+    )
+    child_id = jobs.child_job_id("attempt", "acquire->daily-topic-digest", 1)
+    jobs.dispatch_skill(conn, registry, vault, "daily-topic-digest", {}, source, job_id=child_id)
+    collision_path = vault / "system" / "queue" / f"{child_id}.json"
+    if record_kind == "run":
+        collision_path.unlink()
+        collision_path = terminal_path(vault, child_id)
+        write_record(
+            collision_path,
+            {
+                "id": child_id,
+                "skill": "daily-topic-digest",
+                "args": {},
+                "source": source,
+                "ts_queued": "t1",
+                "ts_started": "t2",
+                "status": "ok",
+                "ts_completed": "t3",
+                "attempt_id": "child-attempt",
+                "attempt_ids": ["child-attempt"],
+                "exit_code": 0,
+                "summary": "complete",
+                "deliverable_path": None,
+                "completion_evidence": {
+                    "engine": "fake",
+                    "exit_code": 0,
+                    "summary": "complete",
+                    "deliverable_path": None,
+                },
+                "transitions": [],
+            },
+        )
+    write_intent(vault, job_id="zz-unrelated", skill="sample", args={}, ts="t3", source="api")
+
+    if projector == "reconcile":
+        result = reconcile_from_files(vault, conn, registry)
+        assert result.skipped == 1
+    else:
+        runner.recover()
+
+    assert engine.skills == []
+    assert store.get_job(conn, "zz-unrelated").status == "queued"
+    assert store.get_job(conn, child_id) is None
+    assert collision_path.name in caplog.text
+    assert "legacy-child" in caplog.text
+    assert not conn.in_transaction
+    assert (
+        conn.execute("SELECT COUNT(*) FROM job_events WHERE job_id = ?", (child_id,)).fetchone()[0]
+        == 0
+    )
 
 
 def test_legacy_event_child_identity_uses_parent_job_id(setup):
@@ -355,6 +436,49 @@ def test_submission_acknowledges_durable_intent_when_index_write_fails(setup, mo
     assert response["status"] == "queued"
     assert [path.stem for path in intents(vault)] == [response["id"]]
     assert store.get_job(conn, response["id"]) is None
+
+
+def test_runner_projects_child_intent_after_index_failure_without_restart(setup, monkeypatch):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = submit(setup)
+    original = store.create_job
+
+    def fail_child(conn, **kwargs):
+        if kwargs["skill"] == "daily-topic-digest":
+            raise sqlite3.OperationalError("synthetic child index failure")
+        return original(conn, **kwargs)
+
+    monkeypatch.setattr(store, "create_job", fail_child)
+    assert runner.run_once() is True
+    assert store.get_job(conn, parent_id).status == "ok"
+    child_id = json.loads(terminal_path(vault, parent_id).read_text())["transitions"][0]["child_id"]
+    assert (vault / "system" / "queue" / f"{child_id}.json").exists()
+    assert store.get_job(conn, child_id) is None
+
+    assert runner.run_once() is True
+    assert runner.run_once() is False
+    assert engine.skills == ["acquire", "daily-topic-digest"]
+    assert store.get_job(conn, child_id).status == "ok"
+
+
+def test_submission_rolls_back_partial_index_write(setup, monkeypatch):
+    vault, _, conn, registry, _, _ = setup
+
+    def fail_after_event(conn, **kwargs):
+        conn.execute(
+            "INSERT INTO job_events (job_id, status, ts, detail, received_at) VALUES (?, 'queued', 't0', '{}', 't0')",
+            (kwargs["job_id"],),
+        )
+        raise sqlite3.OperationalError("synthetic partial index failure")
+
+    monkeypatch.setattr(store, "create_job", fail_after_event)
+    accepted, _ = jobs.dispatch_skill(conn, registry, vault, "sample", {}, "api")
+    assert (vault / "system" / "queue" / f"{accepted}.json").exists()
+    assert not conn.in_transaction
+    assert (
+        conn.execute("SELECT COUNT(*) FROM job_events WHERE job_id = ?", (accepted,)).fetchone()[0]
+        == 0
+    )
 
 
 def test_recovery_is_idempotent(setup, monkeypatch):
@@ -553,7 +677,7 @@ def test_chain_duplicate_is_durable_before_acknowledgment(setup, monkeypatch):
     def fsync(fd):
         is_directory = stat.S_ISDIR(os.fstat(fd).st_mode)
         if threading.get_ident() == publisher_ident[0]:
-            if is_directory:
+            if is_directory and (vault / "system" / "queue" / f"{child_id}.json").exists():
                 linked.set()
                 assert finish.wait(2)
         else:
@@ -575,7 +699,7 @@ def test_chain_duplicate_is_durable_before_acknowledgment(setup, monkeypatch):
     try:
         assert linked.wait(2)
         assert dispatch() == child_id
-        assert acknowledged_syncs == ["file", "directory"]
+        assert acknowledged_syncs == ["file", "directory", "directory"]
         assert store.get_job(conn, child_id) is None
     finally:
         finish.set()
@@ -591,7 +715,7 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     original_fsync = durable.os.fsync
     original_replace = durable.os.replace
     path = tmp_path / "system" / "queue" / "job.json"
-    # First-use directory durability is covered separately; isolate publication here.
+    # Existing directories still need their parent entry synced before publication.
     path.parent.mkdir(parents=True)
 
     def fsync(fd):
@@ -601,14 +725,14 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     def replace(source, target):
         assert not Path(target).exists()
         assert json.loads(Path(source).read_text())["id"] == "job"
-        assert calls == ["fsync"]
+        assert calls == ["fsync", "fsync"]
         calls.append("publish")
         return original_replace(source, target)
 
     monkeypatch.setattr(durable.os, "fsync", fsync)
     monkeypatch.setattr(durable.os, "replace", replace)
     write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t0", source="api")
-    assert calls == ["fsync", "publish", "fsync"]
+    assert calls == ["fsync", "fsync", "publish", "fsync"]
     assert json.loads(path.read_text())["id"] == "job"
     assert not list(path.parent.glob(".*.tmp"))
 

@@ -7,10 +7,9 @@ from pathlib import Path
 
 
 def ensure_durable_dir(path: Path) -> None:
-    """Create missing ancestors top down and persist each new directory entry."""
-    if path.is_dir():
-        return
-    ensure_durable_dir(path.parent)
+    """Create missing ancestors and persist the entry even for an existing leaf."""
+    if not path.parent.is_dir():
+        ensure_durable_dir(path.parent)
     path.mkdir(exist_ok=True)
     parent = os.open(path.parent, os.O_RDONLY)
     try:
@@ -32,6 +31,11 @@ def sync_record(path: Path) -> None:
         os.fsync(directory)
     finally:
         os.close(directory)
+    parent = os.open(path.parent.parent, os.O_RDONLY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def write_record(path: Path, record: dict, *, exclusive: bool = False) -> None:

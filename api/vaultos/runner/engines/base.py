@@ -28,6 +28,7 @@ class EngineContext:
     state_root: Path
     settings: Settings
     emit: Callable[[dict], None]
+    parent_deliverable: str | None = None
 
 
 @dataclass(frozen=True)

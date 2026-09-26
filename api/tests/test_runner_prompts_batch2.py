@@ -12,6 +12,8 @@ registered, excluded set unchanged) live in `test_runner_prompts.py`.
 """
 
 import json
+from dataclasses import replace
+from datetime import datetime, timezone
 
 import pytest
 
@@ -57,7 +59,7 @@ def test_acquire(ctx):
     built = PROMPT_BUILDER_REGISTRY["acquire"]({}, ctx)
     assert built is not None
     date = today_date(ctx.settings)
-    assert built.deliverable_path == f"inbox/research/{date}-acquire.md"
+    assert built.deliverable_path == f"inbox/research/{date}-acquire-{id8(ctx.job_id)}.md"
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "Step 1 -- fetch AND synthesize" in built.prompt
     assert "Step 2 -- assemble the report" in built.prompt
@@ -125,10 +127,13 @@ def test_daily_topic_digest(ctx):
     assert built is not None
     date = today_date(ctx.settings)
     assert (
-        built.deliverable_path == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
+        built.deliverable_path
+        == f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest-{id8(ctx.job_id)}.md"
     )
     assert AUTONOMOUS_PREFIX in built.prompt
     assert "Step 1 -- gather everything not yet attached to a topic" in built.prompt
+    assert "Then scan: (1) sources/ -- every file; (2) inbox/research/*.md" in built.prompt
+    assert "This chained run" not in built.prompt
     # Fix round 1: Steps 2/3/5/6 were unasserted -- a validator proved this
     # hollow by deleting them from the built prompt with every existing
     # assertion still green. One load-bearing marker per step now.
@@ -303,3 +308,44 @@ def test_research_persona_fanout(ctx):
     assert '{"persona": "<this persona' in built.prompt
     assert "{{" not in built.prompt and "}}" not in built.prompt
     assert f"SAVED {built.deliverable_path}" in built.prompt
+
+
+@pytest.fixture
+def fixed_clock(monkeypatch):
+    import vaultos.runner.prompts.base as base
+    import vaultos.runner.prompts.batch2 as batch2
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 26, 4, 34, tzinfo=timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr(base, "datetime", FixedDatetime)
+    monkeypatch.setattr(batch2, "datetime", FixedDatetime, raising=False)
+
+
+@pytest.mark.parametrize("skill", ["acquire", "daily-topic-digest"])
+def test_same_date_reruns_get_distinct_deliverables(ctx, fixed_clock, skill):
+    other = replace(ctx, job_id="fedcba9876543210")
+    first = get_builder(skill)({}, ctx)
+    second = get_builder(skill)({}, other)
+    assert first.deliverable_path != second.deliverable_path
+    assert first.deliverable_path.endswith("-01234567.md")
+    assert second.deliverable_path.endswith("-fedcba98.md")
+
+
+@pytest.mark.parametrize("skill", ["acquire", "daily-topic-digest"])
+def test_same_job_rebuild_is_stable(ctx, fixed_clock, skill):
+    first = get_builder(skill)({}, ctx)
+    second = get_builder(skill)({}, ctx)
+    assert first.deliverable_path == second.deliverable_path
+    assert first.deliverable_path.endswith("-01234567.md")
+
+
+@pytest.mark.parametrize("skill", ["acquire", "daily-topic-digest"])
+def test_output_date_is_local_operator_day(ctx, fixed_clock, skill):
+    ctx.settings.hud_tz = "America/Chicago"
+    built = get_builder(skill)({}, ctx)
+    assert "/2026-09-25-" in built.deliverable_path
+    assert "run_at: 2026-09-26T04:34:00Z" in built.prompt
+    assert "job_id: 0123456789abcdef" in built.prompt

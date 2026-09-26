@@ -29,9 +29,17 @@ class FakeEngine:
     def __init__(self):
         self.skills = []
 
-    def run(self, *, job, **kwargs):
+    def run(self, *, job, ctx, **kwargs):
         self.skills.append(job.skill)
-        return EngineResult(success=True, exit_code=0, summary="complete")
+        deliverable = None
+        if job.skill == "acquire":
+            deliverable = f"inbox/research/acquire-{job.id}.md"
+            path = ctx.vault_root / deliverable
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# Acquired evidence\n")
+        return EngineResult(
+            success=True, exit_code=0, summary="complete", deliverable_path=deliverable
+        )
 
 
 @pytest.fixture

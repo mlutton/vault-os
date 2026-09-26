@@ -1,5 +1,8 @@
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from vaultos.vault.reports import (
     Headline,
@@ -191,3 +194,38 @@ def test_read_lane_briefs_lane_with_nothing_kept_has_null_headline(tmp_path):
 def test_read_lane_briefs_empty_list_when_acquire_not_run_yet(tmp_path):
     (tmp_path / "inbox" / "research").mkdir(parents=True)
     assert read_lane_briefs(tmp_path, TZ) == []
+
+
+@pytest.mark.parametrize("case", ["run-at", "legacy", "mtime", "invalid-run-at", "unreadable"])
+def test_acquire_report_selects_newest_readable_report(tmp_path, case):
+    today = datetime.now(ZoneInfo(TZ)).date().isoformat()
+    older = tmp_path / "inbox" / "research" / f"{today}-acquire-ffffffff.md"
+    newer = older.with_name(f"{today}-acquire-00000000.md")
+    if case == "legacy":
+        newer = older.with_name(f"{today}-acquire.md")
+        older, newer = newer, older
+    old_stamp = "2026-09-25T08:00:00Z"
+    new_stamp = "2026-09-25T10:00:00+01:00"
+    if case == "mtime":
+        old_stamp = new_stamp = None
+    elif case == "invalid-run-at":
+        old_stamp = new_stamp = "not-a-timestamp"
+
+    def content(stamp, headline):
+        header = f"---\nrun_at: '{stamp}'\n---\n" if stamp else ""
+        return header + f"## ai\n- {headline}\n## leadership\n- {headline}\n"
+
+    _write(older, content(old_stamp, "Older"))
+    _write(newer, content(new_stamp, "Newer"))
+    # Timestamp cases deliberately disagree with mtime as well as filename order.
+    os.utime(older, (200, 200))
+    os.utime(newer, (100, 100))
+    if case in ("mtime", "invalid-run-at"):
+        os.utime(newer, (300, 300))
+    elif case == "unreadable":
+        older.write_bytes(b"\xff")
+    report = read_morning_report(tmp_path, TZ)
+    assert report is not None
+    assert report.rel == f"inbox/research/{newer.name}"
+    assert report.headlines == [Headline("Newer", None)]
+    assert read_lane_briefs(tmp_path, TZ)[0].headline == "Newer"

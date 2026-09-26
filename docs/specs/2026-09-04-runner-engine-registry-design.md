@@ -251,9 +251,12 @@ both chain rules retain their IDs and versions. Before invoking an engine,
 the runner reads `runs/<chain.parent_job_id>.json` under the state root and
 requires a nonempty relative path with no `..` component. It resolves that
 path against the vault root, checks that the resolved file is inside
-`inbox/research/` even through symlinks, and requires an existing regular
-file. A missing or unreadable parent record, invalid path, or missing or
-non-regular file produces a terminal error naming the failed check; it
+the vault's literal `inbox/research/` even through symlinks, and requires an
+existing regular file. A symlinked `inbox/` or `inbox/research/` directory
+is rejected: containment is checked against the literal directory, not its
+resolved target. The value handed to the engine is the validated file's
+canonical vault-relative path. A missing or unreadable parent record, invalid
+path, or missing or non-regular file produces a terminal error naming the failed check; it
 never falls back to scanning all evidence. Both CLI adapters forward the
 validated path, and the digest names and reads that report in full in step 1.
 Manual digests keep the existing scan-all behavior. The recorded parent

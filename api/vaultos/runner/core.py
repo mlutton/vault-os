@@ -404,7 +404,7 @@ class Runner:
             raise ParentDeliverableError("parent deliverable file cannot be inspected") from exc
         if not stat.S_ISREG(mode):
             raise ParentDeliverableError("parent deliverable must be a regular file")
-        return deliverable
+        return resolved.relative_to(vault_root).as_posix()
 
     def _run_with_check(self, job, skill, engine, ctx: EngineContext):
         """Run `engine` once, then -- if it succeeded and `skill` declares a

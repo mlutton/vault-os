@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..timeutil import today_in_tz
@@ -90,25 +91,44 @@ def _find_todays_acquire_report(vault_root: Path, tz: str) -> tuple[str, str] | 
     separate files (five lane-brief skills + ai-wire's own
     inbox/reports/morning/ file) read before the 2026-08-11 acquire
     consolidation. Returns (filename, raw content), or None if acquire
-    hasn't run yet today."""
+    hasn't run yet today. Selects the newest readable report by frontmatter
+    run_at, falling back to mtime for missing or invalid timestamps."""
     directory = vault_root / "inbox" / "research"
     today = today_in_tz(tz)
+    newest: tuple[float, str, str] | None = None
     try:
-        names = sorted(
-            f.name
-            for f in directory.iterdir()
-            if f.name.startswith(f"{today}-acquire") and f.name.endswith(".md")
-        )
+        paths = list(directory.iterdir())
     except OSError:
         return None
-    if not names:
-        return None
-    filename = names[-1]
-    try:
-        raw = (directory / filename).read_text()
-    except (OSError, UnicodeDecodeError):
-        return None
-    return filename, raw
+    for path in paths:
+        if not (path.name.startswith(f"{today}-acquire") and path.name.endswith(".md")):
+            continue
+        try:
+            raw = path.read_text()
+            stamp = path.stat().st_mtime
+        except (OSError, UnicodeDecodeError):
+            continue
+        lines = raw.splitlines()
+        if lines and lines[0] == "---":
+            for line in lines[1:]:
+                if line == "---":
+                    break
+                if line.startswith("run_at:"):
+                    value = line.partition(":")[2].strip().strip("\"'")
+                    try:
+                        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                        if len(value) <= 10:
+                            raise ValueError("run_at must include a time")
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=timezone.utc)
+                        stamp = parsed.timestamp()
+                    except (ValueError, OverflowError, OSError):
+                        pass
+                    break
+        candidate = (stamp, path.name, raw)
+        if newest is None or candidate[:2] > newest[:2]:
+            newest = candidate
+    return (newest[1], newest[2]) if newest is not None else None
 
 
 def read_morning_report(vault_root: Path, tz: str, max: int = 4) -> MorningReport | None:

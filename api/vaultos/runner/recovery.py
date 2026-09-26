@@ -80,6 +80,7 @@ def recover_terminal_records(conn, registry, vault_root, *, reported_skips=None)
             warn_once(path, "recovery: skipping terminal projection %s: %s", exc)
             continue
 
+        reported_skips.discard(path)
         for transition in record.transitions:
             if child_has_record(vault_root, transition["child_id"]):
                 continue
@@ -124,6 +125,7 @@ def recover_terminal_records(conn, registry, vault_root, *, reported_skips=None)
             continue
         try:
             if store.get_job(conn, job_id) is not None:
+                reported_skips.discard(path)
                 continue
             skill_def = registry.get(skill)
             store.apply_event(
@@ -141,3 +143,5 @@ def recover_terminal_records(conn, registry, vault_root, *, reported_skips=None)
             collision_once(path, data.get("source", "api"), exc)
         except sqlite3.Error as exc:
             warn_once(path, "recovery: skipping intent projection %s: %s", exc)
+        else:
+            reported_skips.discard(path)

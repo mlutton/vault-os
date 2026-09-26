@@ -723,8 +723,7 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     original_fsync = durable.os.fsync
     original_replace = durable.os.replace
     path = tmp_path / "system" / "queue" / "job.json"
-    # Treat the fixture root as durable; both uncached ancestors need syncing.
-    monkeypatch.setattr(durable, "_durable_directories", {tmp_path.resolve()})
+    monkeypatch.setattr(durable, "_durable_directories", set())
     path.parent.mkdir(parents=True)
 
     def fsync(fd):
@@ -734,14 +733,14 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     def replace(source, target):
         assert not Path(target).exists()
         assert json.loads(Path(source).read_text())["id"] == "job"
-        assert calls == ["fsync", "fsync", "fsync"]
+        assert calls == ["fsync", "fsync"]
         calls.append("publish")
         return original_replace(source, target)
 
     monkeypatch.setattr(durable.os, "fsync", fsync)
     monkeypatch.setattr(durable.os, "replace", replace)
     write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t0", source="api")
-    assert calls == ["fsync", "fsync", "fsync", "publish", "fsync"]
+    assert calls == ["fsync", "fsync", "publish", "fsync"]
     assert json.loads(path.read_text())["id"] == "job"
     assert not list(path.parent.glob(".*.tmp"))
 
@@ -948,6 +947,31 @@ def test_runner_reports_invalid_file_once(setup, caplog, directory):
         assert runner.run_once() is False
     warnings = [r for r in caplog.records if "skipping invalid" in r.getMessage()]
     assert len(warnings) == 1
+
+
+@pytest.mark.parametrize("directory", ["queue", "runs"])
+def test_recovery_reports_new_failure_after_success(setup, caplog, directory):
+    from vaultos.runner.recovery import recover_terminal_records
+
+    vault, _, conn, registry, _, runner = setup
+    job_id = submit(setup, "sample")
+    if directory == "runs":
+        assert runner.run_once() is True
+    path = vault / "system" / directory / f"{job_id}.json"
+    valid = path.read_text()
+    path.write_text("{")
+    reported = set()
+    recover_terminal_records(conn, registry, vault, reported_skips=reported)
+    path.write_text(valid)
+    if directory == "queue":
+        conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        conn.commit()
+    recover_terminal_records(conn, registry, vault, reported_skips=reported)
+    assert store.get_job(conn, job_id) is not None
+    path.write_text("[]")
+    recover_terminal_records(conn, registry, vault, reported_skips=reported)
+    warnings = [r for r in caplog.records if "skipping invalid" in r.getMessage()]
+    assert len(warnings) == 2
 
 
 def test_runner_continues_after_terminal_projection_sqlite_error(setup, monkeypatch, caplog):

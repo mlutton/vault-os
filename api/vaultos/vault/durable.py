@@ -1,4 +1,8 @@
-"""Atomic, durable publication of authoritative JSON files."""
+"""Atomic, durable publication of authoritative JSON files.
+
+On first use of a fresh state root, an existing ancestor created by another
+process but not yet made durable is not re-synced.
+"""
 
 import json
 import os
@@ -9,11 +13,13 @@ _durable_directories: set[Path] = set()
 
 
 def ensure_durable_dir(path: Path) -> None:
-    """Persist uncached ancestor entries once, including existing directories."""
+    """Persist the requested entry and missing ancestors; cache while present."""
     path = path.resolve()
     if path in _durable_directories:
-        return
-    if path.parent != path:
+        if path.is_dir():
+            return
+        _durable_directories.discard(path)
+    if not path.parent.is_dir():
         ensure_durable_dir(path.parent)
     path.mkdir(exist_ok=True)
     parent = os.open(path.parent, os.O_RDONLY)

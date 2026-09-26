@@ -11,7 +11,7 @@ from vaultos.vault.intents import write_intent
 
 @pytest.fixture
 def directory_events(monkeypatch, tmp_path):
-    monkeypatch.setattr(durable, "_durable_directories", {tmp_path.resolve()})
+    monkeypatch.setattr(durable, "_durable_directories", set())
     events = []
     directories = {}
     original_open = os.open
@@ -72,7 +72,7 @@ def test_first_publication_syncs_new_directory_parents(
     expected = []
     if not state_root_exists:
         expected.append(("mkdir", root))
-    expected.append(("sync", tmp_path))
+        expected.append(("sync", tmp_path))
     expected.extend([("mkdir", path.parent), ("sync", root), ("sync", path.parent)])
     assert directory_events == expected
     assert json.loads(path.read_text())["id"] == "job"
@@ -87,7 +87,7 @@ def test_publication_syncs_existing_directory_parent(tmp_path, directory_events,
         write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t", source="api")
     else:
         write_record(parent / "job.json", {"id": "job"})
-    assert directory_events == [("sync", tmp_path), ("sync", parent.parent), ("sync", parent)]
+    assert directory_events == [("sync", parent.parent), ("sync", parent)]
 
 
 def test_existing_directory_syncs_parent_before_return(tmp_path, directory_events):
@@ -142,9 +142,61 @@ def test_durable_directory_second_call_does_no_fsync(tmp_path, directory_events)
     assert directory_events == []
 
 
-def test_uncached_existing_ancestor_parent_is_synced(tmp_path, directory_events):
+def test_existing_ancestor_is_not_resynced(tmp_path, directory_events):
     root = tmp_path / "system"
     root.mkdir()
     directory_events.clear()
     ensure_durable_dir(root / "queue")
-    assert ("sync", tmp_path) in directory_events
+    assert directory_events == [("mkdir", root / "queue"), ("sync", root)]
+
+
+@pytest.mark.parametrize("queue_exists", [False, True])
+def test_publication_under_traverse_only_ancestor(tmp_path, monkeypatch, queue_exists):
+    ancestor = tmp_path / "traverse-only"
+    vault = ancestor / "vault"
+    vault.mkdir(parents=True)
+    path = vault / "system" / "queue" / "job.json"
+    if queue_exists:
+        path.parent.mkdir(parents=True)
+    monkeypatch.setattr(durable, "_durable_directories", set())
+    ancestor.chmod(0o111)
+    try:
+        write_record(path, {"id": "job"})
+        assert json.loads(path.read_text()) == {"id": "job"}
+    finally:
+        ancestor.chmod(0o700)
+
+
+@pytest.mark.parametrize("queue_exists", [False, True])
+def test_first_directory_call_opens_only_required_parents(tmp_path, monkeypatch, queue_exists):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    queue = vault / "system" / "queue"
+    if queue_exists:
+        queue.mkdir(parents=True)
+    monkeypatch.setattr(durable, "_durable_directories", set())
+    opened = []
+    original_open = os.open
+
+    def observed_open(path, flags, *args, **kwargs):
+        opened.append(Path(path))
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", observed_open)
+    ensure_durable_dir(queue)
+    assert opened == ([queue.parent] if queue_exists else [vault, queue.parent])
+
+
+def test_publication_recreates_removed_cached_directory(tmp_path, directory_events):
+    path = tmp_path / "system" / "queue" / "job.json"
+    write_record(path, {"id": "job"})
+    path.unlink()
+    path.parent.rmdir()
+    directory_events.clear()
+    write_record(path, {"id": "next"})
+    assert json.loads(path.read_text()) == {"id": "next"}
+    assert directory_events == [
+        ("mkdir", path.parent),
+        ("sync", path.parent.parent),
+        ("sync", path.parent),
+    ]

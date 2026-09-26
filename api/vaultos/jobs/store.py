@@ -214,7 +214,7 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
             )
             conn.commit()
             return _get_job(conn, job_id)
-        except sqlite3.Error:
+        except BaseException:
             conn.rollback()
             raise
 
@@ -422,6 +422,6 @@ def apply_event(
 
             conn.commit()
             return _get_job(conn, job_id)
-        except sqlite3.Error:
+        except BaseException:
             conn.rollback()
             raise

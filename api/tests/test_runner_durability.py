@@ -137,6 +137,40 @@ def test_long_job_survives_orphan_sweep(setup, monkeypatch):
     assert store.get_job(conn, job.id).status == "ok"
 
 
+@pytest.mark.parametrize("mode", ["once", "forever"])
+def test_claim_boundary_heartbeat_prevents_false_orphan(setup, monkeypatch, mode):
+    vault, settings, conn, registry, job = setup
+    runner = Runner(conn, registry, settings, engines={"fake": FakeEngine()})
+    original_claim = core.store.claim_oldest_queued
+    observed = []
+
+    def claim_then_sweep(*args, **kwargs):
+        claimed = original_claim(*args, **kwargs)
+        assert claimed is not None
+        heartbeat = read_heartbeat(vault)
+        assert heartbeat is not None and heartbeat.pid == runner.pid and heartbeat.alive
+        observed.append(detect_orphans(conn, heartbeat))
+        return claimed
+
+    monkeypatch.setattr(core.store, "claim_oldest_queued", claim_then_sweep)
+    if mode == "once":
+        assert runner.run_once() is True
+    else:
+        monkeypatch.setattr(runner, "_install_signal_handlers", lambda: None)
+        original_run_once = runner.run_once
+
+        def run_once_then_stop():
+            claimed = original_run_once()
+            runner.request_shutdown()
+            return claimed
+
+        monkeypatch.setattr(runner, "run_once", run_once_then_stop)
+        runner.run_forever()
+
+    assert observed == [[]]
+    assert store.get_job(conn, job.id).status == "ok"
+
+
 @pytest.mark.parametrize("step", ["attempt", "terminal", "intent_removed"])
 def test_crash_at_each_durable_step_rebuilds(setup, monkeypatch, tmp_path, step):
     vault, settings, conn, registry, job = setup

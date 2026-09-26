@@ -37,6 +37,31 @@ def list_run_files(vault_root: Path) -> list[Path]:
 
 def read_run_record(path: Path) -> RunRecord:
     data = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise KeyError("run record must be an object")
+    if not isinstance(data.get("skill"), str) or not isinstance(data.get("status"), str):
+        raise KeyError("run record lacks string skill or status")
+    if "id" in data and not isinstance(data["id"], str):
+        raise KeyError("run id must be a string")
+    if "args" in data and not isinstance(data["args"], dict):
+        raise KeyError("run args must be an object")
+    for field in (
+        "source",
+        "ts_queued",
+        "ts_started",
+        "ts_completed",
+        "summary",
+        "md_path",
+        "deliverable_path",
+    ):
+        if field in data and data[field] is not None and not isinstance(data[field], str):
+            raise KeyError(f"run {field} must be a string")
+    if (
+        "exit_code" in data
+        and data["exit_code"] is not None
+        and not isinstance(data["exit_code"], int)
+    ):
+        raise KeyError("run exit_code must be an integer")
     if "attempt_id" not in data and any(path.parent.glob(f"{path.stem}.attempt-*.json")):
         raise KeyError("terminal run lacks attempt identity")
     if "attempt_id" in data:
@@ -63,16 +88,18 @@ def read_run_record(path: Path) -> RunRecord:
         evidence = data.get("completion_evidence")
         if (
             data["id"] != path.stem
+            or not isinstance(data["attempt_id"], str)
             or not data["attempt_id"]
             or not isinstance(data["attempt_ids"], list)
+            or not all(isinstance(attempt_id, str) for attempt_id in data["attempt_ids"])
             or data["attempt_id"] not in data["attempt_ids"]
             or not isinstance(data["args"], dict)
             or not isinstance(data["source"], str)
             or not data["ts_queued"]
             or not data["ts_started"]
-            or data["status"] not in {"ok", "error"}
             or not isinstance(evidence, dict)
-            or evidence.get("engine") is None
+            or not isinstance(evidence.get("engine"), str)
+            or not evidence["engine"]
             or evidence.get("summary") != data.get("summary")
             or evidence.get("exit_code") != data.get("exit_code")
             or evidence.get("deliverable_path") != data.get("deliverable_path")

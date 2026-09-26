@@ -225,6 +225,7 @@ class Runner:
                 return None
             self._attempt_ids = []
             started = self._write_attempt(job, attempt_number=1)
+            self.write_heartbeat()
             claimed = store.claim_oldest_queued(
                 self.conn,
                 pid=self.pid,

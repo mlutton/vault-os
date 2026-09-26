@@ -7,6 +7,7 @@ from vaultos.db.conn import connect
 from vaultos.jobs import store
 from vaultos.jobs.reconcile import reconcile_from_files
 from vaultos.registry import load_registry
+from vaultos.runner.records import unresolved_attempts
 from vaultos.vault.runs import read_run_record
 
 
@@ -218,6 +219,24 @@ def test_reconcile_partial_terminal_does_not_report_success(tmp_vault, conn, reg
     assert store.get_job(conn, "partial") is None
 
 
+def test_type_malformed_terminal_is_skipped_and_attempt_unresolved(tmp_vault, tmp_path, registry):
+    runs = tmp_vault / "system" / "runs"
+    (runs / "malformed.attempt-1.json").write_text(
+        json.dumps({"id": "malformed", "attempt_id": "a"})
+    )
+    (runs / "malformed.json").write_text(json.dumps({"attempt_id": "a", "status": []}))
+
+    fresh = connect(tmp_path / "fresh-malformed.db")
+    try:
+        result = reconcile_from_files(tmp_vault, fresh, registry)
+        assert result.skipped == 1
+        assert result.run_files_seen == 0
+        assert store.get_job(fresh, "malformed") is None
+        assert unresolved_attempts(tmp_vault / "system") == ["malformed"]
+    finally:
+        fresh.close()
+
+
 def test_legacy_terminal_without_source_reads_and_rebuilds(tmp_vault, tmp_path, registry):
     path = tmp_vault / "system" / "runs" / "legacy.json"
     path.write_text(
@@ -267,6 +286,14 @@ def test_legacy_running_record_reads_with_optional_fields_missing(tmp_vault):
     assert record.source is None
     assert record.ts_started is None
     assert record.ts_completed is None
+
+
+def test_legacy_record_rejects_non_string_status(tmp_vault):
+    path = tmp_vault / "system" / "runs" / "legacy-invalid.json"
+    path.write_text(json.dumps({"skill": "metrics-pull", "status": []}))
+
+    with pytest.raises(KeyError, match="status"):
+        read_run_record(path)
 
 
 def test_legacy_terminal_without_completion_time_reads_and_rebuilds(tmp_vault, tmp_path, registry):

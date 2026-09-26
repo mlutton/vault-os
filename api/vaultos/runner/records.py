@@ -47,10 +47,17 @@ def unresolved_attempts(state_root: Path) -> list[str]:
         try:
             terminal = read_run_record(terminal_path)
             terminal_data = json.loads(terminal_path.read_text())
+            attempt_data = json.loads(path.read_text())
+            if not isinstance(terminal_data, dict):
+                raise KeyError("terminal record must be an object")
+            if not isinstance(attempt_data, dict) or not isinstance(
+                attempt_data.get("attempt_id"), str
+            ):
+                raise KeyError("attempt record lacks string attempt identity")
             resolved = (
                 terminal.id == job_id
                 and terminal.status in {"ok", "error"}
-                and json.loads(path.read_text()).get("attempt_id")
+                and attempt_data["attempt_id"]
                 in terminal_data.get("attempt_ids", [terminal_data.get("attempt_id")])
             )
         except (OSError, ValueError, KeyError, json.JSONDecodeError):

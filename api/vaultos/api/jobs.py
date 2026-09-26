@@ -1,5 +1,6 @@
 import logging
 import re
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import Literal
@@ -9,14 +10,19 @@ from pydantic import BaseModel, Field
 
 from .. import seen
 from ..jobs import store
+from ..jobs.chains import ChainRule, child_job_id
 from ..registry import Registry, SubmissionError, validate_submission
+from ..state import resolve_state_root
 from ..timeutil import utcnow_z
+from ..vault.durable import sync_record
 from ..vault.intents import write_intent
 from ..vault.runner import read_heartbeat
+from ..vault.runs import read_run_record
 from .deps import get_conn, get_registry, get_settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
 
 # Skill completion -> follow-up skill to auto-dispatch, one hop only (no
 # entry here is itself a key, so there's no risk of a chain loop). Added
@@ -26,11 +32,8 @@ logger = logging.getLogger(__name__)
 # itself now that this exists. Design record:
 # docs/adr/0016-jobs-can-auto-chain-a-followup-via-chain-map.md
 #
-# A retried/duplicate terminal event for the same parent job is safe: the
-# dispatch below tags its source with the parent job's id, and
-# store.create_job()'s partial unique index on chain: sources makes a
-# second dispatch for that same parent a no-op rather than a second job.
-# See ADR-0016's Consequences for what this closes.
+# Files dedupe deterministic child ids across index loss. The chain source
+# retains the parent job id for the index's secondary uniqueness guard.
 #
 # "deep-research": "research-into-draft" added 2026-08-11 for the content-flow
 # design's auto-fired research path (Review Topics -> Create Draft -> auto
@@ -44,7 +47,53 @@ logger = logging.getLogger(__name__)
 # chain dispatch itself. inbox/deep-research/ was split out from
 # inbox/research/ on 2026-08-11 to keep deep-research's per-topic reports a
 # clean candidate list for the wiki-ingest skill.
-CHAIN_MAP = {"acquire": "daily-topic-digest", "deep-research": "research-into-draft"}
+CHAIN_MAP = {
+    "acquire": ChainRule("acquire->daily-topic-digest", 1, "daily-topic-digest"),
+    "deep-research": ChainRule("deep-research->research-into-draft", 1, "research-into-draft"),
+}
+
+
+def chain_transitions(skill: str, parent_job_id: str, attempt_id: str | None) -> list[dict]:
+    rule = CHAIN_MAP.get(skill)
+    if rule is None:
+        return []
+    return [
+        {
+            "rule_id": rule.rule_id,
+            "rule_version": rule.rule_version,
+            "child_id": child_job_id(attempt_id or parent_job_id, rule.rule_id, rule.rule_version),
+            "child_skill": rule.child_skill,
+        }
+    ]
+
+
+def child_has_record(vault_root: Path, job_id: str) -> bool:
+    return child_record_path(vault_root, job_id) is not None
+
+
+def child_record_path(vault_root: Path, job_id: str) -> Path | None:
+    root = resolve_state_root(vault_root)
+    for path in (
+        root / "runs" / f"{job_id}.json",
+        root / "queue" / f"{job_id}.json",
+        *(root / "runs").glob(f"{job_id}.attempt-*.json"),
+    ):
+        if path.exists():
+            return path
+    return None
+
+
+def acknowledge_existing_child(vault_root: Path, job_id: str) -> bool:
+    while (path := child_record_path(vault_root, job_id)) is not None:
+        try:
+            sync_record(path)
+        except FileNotFoundError:
+            # The runner publishes its terminal record before removing the
+            # intent; re-observe the new file if that removal raced us.
+            continue
+        return True
+    return False
+
 
 # Same allowlisted-prefix + resolved-path-must-start-with-vault-root guard as
 # /daily's path-traversal fix -- deliverable_path comes from runner-written
@@ -94,6 +143,7 @@ class JobEvent(BaseModel):
     deliverable_path: str | None = None
     md_path: str | None = None
     pid: int | None = None
+    attempt_id: str | None = None
 
 
 def _job_to_dict(job, vault_root: Path, conn) -> dict:
@@ -124,36 +174,82 @@ def _job_to_dict(job, vault_root: Path, conn) -> dict:
 
 
 def dispatch_skill(
-    conn, registry: Registry, vault_root: Path, skill_id: str, args: dict, source: str
+    conn,
+    registry: Registry,
+    vault_root: Path,
+    skill_id: str,
+    args: dict,
+    source: str,
+    *,
+    job_id: str | None = None,
+    chain: dict | None = None,
 ):
-    """Validate + create_job + write_intent, shared by /jobs and the voice
-    router (/route) -- both submission paths must go through the same
-    registry validation and land in the same Jobs store. Raises
-    SubmissionError on an invalid skill/args; callers decide how to surface
-    that (a 400 for /jobs, a classification-fallback for /route).
+    """Accept a durable intent before indexing it; files dedupe chain children.
 
-    create_job() runs first: for a `chain:` source (ADR-0016) it's
-    idempotent, so a duplicate dispatch for the same parent job returns the
-    already-existing job instead of creating a new one. write_intent() --
-    which is what actually causes the runner daemon to execute the skill --
-    only fires when create_job() confirms this call was the one that created
-    the row; a deduped call intentionally does nothing further. Ordinary
-    (non-chain) sources always create a fresh job, same as before."""
+    SQLite failure after publication still accepts the submission (HTTP 201).
+    The intent remains authoritative and a later reconcile indexes it. File
+    publication failures propagate and are never acknowledged as accepted.
+    """
     skill = validate_submission(registry, skill_id, args)
-    job_id = str(uuid.uuid4())
+    is_chain = source.startswith("chain:")
+    if job_id is None:
+        if is_chain:
+            parts = source.split(":", 2)
+            parent_skill, parent_id = parts[1], parts[2] if len(parts) == 3 else source
+            rule = CHAIN_MAP.get(parent_skill)
+            rule_id = rule.rule_id if rule else f"{parent_skill}->{skill_id}"
+            version = rule.rule_version if rule else 1
+            job_id = child_job_id(parent_id, rule_id, version)
+        else:
+            job_id = str(uuid.uuid4())
+    if is_chain and acknowledge_existing_child(vault_root, job_id):
+        return job_id, skill
     ts = utcnow_z()
-    job = store.create_job(
-        conn,
-        job_id=job_id,
-        skill=skill.id,
-        args=args,
-        source=source,
-        engine=skill.engine,
-        ts_queued=ts,
-    )
-    if job.id == job_id:
-        write_intent(vault_root, job_id=job_id, skill=skill.id, args=args, ts=ts, source=source)
-    return job.id, skill
+    try:
+        write_intent(
+            vault_root,
+            job_id=job_id,
+            skill=skill.id,
+            args=args,
+            ts=ts,
+            source=source,
+            exclusive=is_chain,
+            chain=chain,
+        )
+    except FileExistsError:
+        if not is_chain:
+            raise
+        if not acknowledge_existing_child(vault_root, job_id):
+            raise
+        return job_id, skill
+    try:
+        job = store.create_job(
+            conn,
+            job_id=job_id,
+            skill=skill.id,
+            args=args,
+            source=source,
+            engine=skill.engine,
+            ts_queued=ts,
+        )
+    except sqlite3.Error:
+        logger.exception("submission %s accepted in files; index update failed", job_id)
+    else:
+        if job.id != job_id:
+            # A legacy source can own a different id. Only authoritative
+            # files justify dropping the new intent; a DB-only owner must
+            # not turn this acknowledged submission into lost work.
+            if acknowledge_existing_child(vault_root, job.id):
+                from ..runner.records import remove_intent
+
+                remove_intent(resolve_state_root(vault_root) / "queue" / f"{job_id}.json")
+                return job.id, skill
+            logger.warning(
+                "submission %s accepted in files; DB-only chain owner %s requires reindex",
+                job_id,
+                job.id,
+            )
+    return job_id, skill
 
 
 @router.post("/jobs", status_code=201)
@@ -220,6 +316,8 @@ def apply_event_and_chain(
     deliverable_path: str | None = None,
     md_path: str | None = None,
     pid: int | None = None,
+    attempt_id: str | None = None,
+    transitions: list[dict] | None = None,
 ):
     """Post one job event through store.apply_event and, on a terminal `ok`
     that CHAIN_MAP maps, auto-dispatch the follow-up skill -- the same two
@@ -256,22 +354,50 @@ def apply_event_and_chain(
     if job is None:
         return None
 
-    chained_skill = CHAIN_MAP.get(job.skill)
-    if chained_skill and job.status == "ok":
-        # source embeds the parent job's id so a retried/duplicate terminal
-        # event for the same parent can't double-dispatch -- create_job()'s
-        # partial unique index on chain: sources (migration 0003) makes this
-        # call idempotent; a duplicate call here is a safe no-op, not
-        # something this call site needs to guard against itself.
-        chain_source = f"chain:{job.skill}:{job.id}"
+    if job.status == "ok" and transitions is None:
+        # A legacy HTTP replay of a runner completion must use the durable
+        # attempt identity too, including after the jobs index is rebuilt.
+        path = resolve_state_root(vault_root) / "runs" / f"{job.id}.json"
         try:
-            dispatch_skill(conn, registry, vault_root, chained_skill, {}, source=chain_source)
-        except SubmissionError as exc:
-            # Don't fail the triggering job's own event just because its
-            # chained follow-up couldn't be dispatched (e.g. the follow-up
-            # skill isn't registered yet) -- that's a real gap worth seeing
-            # in the logs, not a reason to 500 an otherwise-successful event.
-            logger.warning("chain dispatch %s -> %s failed: %s", job.skill, chained_skill, exc)
+            if Path(job.id).name != job.id:
+                raise KeyError("job id is not a filename")
+            record = read_run_record(path)
+        except (OSError, ValueError, KeyError):
+            record = None
+        if record is not None and record.attempt_id is not None:
+            attempt_id = record.attempt_id
+            transitions = list(record.transitions)
+    pending = (
+        transitions if transitions is not None else chain_transitions(job.skill, job.id, attempt_id)
+    )
+    if job.status == "ok":
+        # Files are the primary dedupe; the source index remains a guard.
+        chain_source = f"chain:{job.skill}:{job.id}"
+        for transition in pending:
+            try:
+                dispatch_skill(
+                    conn,
+                    registry,
+                    vault_root,
+                    transition["child_skill"],
+                    {},
+                    source=chain_source,
+                    job_id=transition["child_id"],
+                    chain={
+                        "parent_job_id": job.id,
+                        "parent_attempt_id": attempt_id or job.id,
+                        "rule_id": transition["rule_id"],
+                        "rule_version": transition["rule_version"],
+                    },
+                )
+            except (SubmissionError, OSError) as exc:
+                # Don't fail the triggering job's own event just because its
+                # chained follow-up couldn't be dispatched (e.g. the follow-up
+                # skill isn't registered yet) -- that's a real gap worth seeing
+                # in the logs, not a reason to 500 an otherwise-successful event.
+                logger.warning(
+                    "chain dispatch %s -> %s failed: %s", job.skill, transition["child_skill"], exc
+                )
 
     return job
 
@@ -299,6 +425,7 @@ def post_job_event(
         deliverable_path=body.deliverable_path,
         md_path=body.md_path,
         pid=body.pid,
+        attempt_id=body.attempt_id,
     )
     if job is None:
         raise HTTPException(

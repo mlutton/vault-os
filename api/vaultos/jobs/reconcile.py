@@ -31,7 +31,8 @@ def reconcile_from_files(
 ) -> ReconcileResult:
     """Walk system/queue/ + system/runs/ and apply each file's state via apply_event() --
     the same monotonic transition logic live events use (ADR-0001). Unparseable files are
-    skipped and logged, never fatal to the rest of the pass."""
+    skipped and logged, never fatal to the rest of the pass. This projection
+    never enqueues work or consumes recorded chain transitions."""
     received_at = utcnow_z()
     queue_files_seen = 0
     run_files_seen = 0

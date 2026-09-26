@@ -124,7 +124,11 @@ def test_unknown_engine_job_left_queued_via_runner(client, tmp_vault):
 def test_chaining_triggers_after_runner_posts_terminal_event(client, tmp_vault, monkeypatch):
     import vaultos.api.jobs as jobs_module
 
-    monkeypatch.setattr(jobs_module, "CHAIN_MAP", {"hello-script": "metrics-pull"})
+    monkeypatch.setattr(
+        jobs_module,
+        "CHAIN_MAP",
+        {"hello-script": jobs_module.ChainRule("hello-script->metrics-pull", 1, "metrics-pull")},
+    )
 
     res = client.post("/jobs", json={"skill": "hello-script", "args": {"who": "world"}})
     job_id = res.json()["id"]

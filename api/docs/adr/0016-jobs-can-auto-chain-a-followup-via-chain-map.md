@@ -24,3 +24,18 @@ The spine already has everything needed to create a job from inside another code
 The chained `daily-topic-digest` run re-reads its evidence from scratch instead of reusing `acquire`'s in-context session — a real cost, accepted because the skill is read-only with no WebSearch (cheap relative to `acquire`'s own WebSearch-heavy fan-out). Adding a second chain relationship later means adding a second `CHAIN_MAP` entry, not new machinery — but if a real multi-hop or conditional-chaining need ever shows up, that's a new decision, not a silent extension of this one-dict mechanism's contract. A chain-dispatch failure (e.g. the follow-up skill somehow isn't registered) is caught and logged, not raised — it must never fail the triggering job's own otherwise-successful completion event.
 
 **2026-08-12 amendment — idempotent dispatch:** the original design gated the chain dispatch on the completed job's *current* status (`job.status == "ok"`), not on whether this specific event was the one that caused the transition. A retried or duplicated terminal event for an already-`ok` job would re-enter this branch and dispatch a second follow-up — worse, since `dispatch_skill()` wrote the queue intent file before creating the DB row, even a DB-level dedup on the job row alone wouldn't have stopped the runner daemon from actually executing the follow-up skill twice. Fixed by: (1) tagging the chained job's `source` as `chain:{parent_skill}:{parent_job_id}` (see `CONTEXT.md`'s **Chained Job** entry) instead of just `chain:{parent_skill}`, so it's specific to the one triggering job; (2) a partial unique index, `jobs_chain_source` (migration `0003_chain_source_unique.sql`), scoped to `source LIKE 'chain:%'` — ordinary jobs are unaffected, since they share source values like `api` by design; (3) `store.create_job()` uses `INSERT OR IGNORE` for chain sources and returns the existing owner on a collision; (4) `dispatch_skill()` reorders to create the job row first and only writes the queue intent file if its own call was the one that created it (`returned_job.id == job_id`). The "only ever one hop" guarantee now holds under retry, not just on the happy path.
+
+**2026-09-26 amendment — file-backed dedupe and recovery:** file dedupe is
+now the primary mechanism. Each edge has a rule ID and version; the child
+ID is a UUID5 derived from the parent attempt (or legacy parent job ID),
+rule ID and version. A successful parent's terminal file durably records
+its pending transition before removing the intent. Dispatch exclusively
+publishes the child intent before indexing it, and an existing child intent
+or run record prevents redispatch even after index loss. The source remains
+`chain:<parent skill>:<parent job id>` and its partial unique index is a
+secondary guard. An explicit runner recovery pass replays pending
+transitions under the runner lock; index rebuild never enqueues work. See
+[the skill-job authority contract](../../../docs/specs/2026-09-25-skill-job-authority.md)
+for submission acknowledgment, recovery, and the pre-attempt one-shot
+`settle-intents` exception. This supersedes the 2026-08-12 row-first
+submission ordering while retaining both fixed edges and their empty args.

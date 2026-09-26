@@ -19,15 +19,17 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import replace
 
-from ..api.jobs import apply_event_and_chain
+from ..api.jobs import apply_event_and_chain, chain_transitions
 from ..config import Settings
 from ..jobs import store
 from ..registry import Registry
 from ..state import resolve_state_root
 from ..timeutil import utcnow_z
+from ..vault.durable import ensure_durable_dir
 from .engines import ENGINE_REGISTRY, EngineContext, EngineResult
 from .heartbeat import RUNNER_VERSION, write_heartbeat
 from .records import remove_intent, unresolved_attempts, write_record
+from .recovery import recover_terminal_records
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +101,7 @@ class Runner:
         self._reported_skips: set[str] = set()
         self._attempt_id: str | None = None
         self._attempt_ids: list[str] = []
+        self._chain_origin: dict | None = None
 
         # An attempt is durable before the DB claim. Once claimed, shutdown
         # lets the engine finish; an unfinished attempt needs manual recovery.
@@ -115,6 +118,7 @@ class Runner:
         with self._runner_lock():
             if self._shutdown_event.is_set():
                 return False
+            self.recover()
             observed = unresolved_attempts(self.state_root)
             for job_id in set(observed) - set(self.unresolved_attempts):
                 logger.warning(
@@ -158,7 +162,7 @@ class Runner:
                 raise RunnerLockHeldError("another call holds the runner lock")
             yield
             return
-        self.state_root.mkdir(parents=True, exist_ok=True)
+        ensure_durable_dir(self.state_root)
         fd = os.open(self.state_root / "runner.lock", os.O_CREAT | os.O_RDWR, 0o600)
         try:
             try:
@@ -213,6 +217,7 @@ class Runner:
                     ts_queued=intent["ts"],
                     engine=engine_name,
                 )
+                self._chain_origin = intent.get("chain")
             except (OSError, ValueError, KeyError) as exc:
                 if candidate.id not in self._reported_skips:
                     logger.warning(
@@ -424,6 +429,9 @@ class Runner:
         self, job, *, status, exit_code, summary, deliverable_path=None, check_outcome=None
     ) -> None:
         ts = utcnow_z()
+        transitions = (
+            chain_transitions(job.skill, job.id, self._attempt_id) if status == "ok" else []
+        )
         write_record(
             self.state_root / "runs" / f"{job.id}.json",
             {
@@ -440,6 +448,8 @@ class Runner:
                 "exit_code": exit_code,
                 "summary": summary,
                 "deliverable_path": deliverable_path,
+                "transitions": transitions,
+                **({"chain": self._chain_origin} if self._chain_origin is not None else {}),
                 "completion_evidence": {
                     "engine": job.engine,
                     "exit_code": exit_code,
@@ -461,7 +471,14 @@ class Runner:
             summary=summary,
             deliverable_path=deliverable_path,
             pid=self.pid,
+            attempt_id=self._attempt_id,
+            transitions=transitions,
         )
+
+    def recover(self) -> None:
+        """Repair durable terminal observations under the same lock as claims."""
+        with self._runner_lock():
+            recover_terminal_records(self.conn, self.registry, self.settings.vault_root)
 
     # -- heartbeat -----------------------------------------------------
 
@@ -496,6 +513,7 @@ class Runner:
     def run_forever(self) -> None:
         with self._runner_lock():
             self._install_signal_handlers()
+            self.recover()
             while not self._shutdown_event.is_set():
                 claimed = self.run_once()
                 self.write_heartbeat()

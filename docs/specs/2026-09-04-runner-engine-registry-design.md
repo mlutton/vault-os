@@ -73,7 +73,35 @@ and emits eval events through a `ctx` hook that defaults to logging.
 - **File-backed claim loop**: one runner holds an exclusive state-root lock,
   selects `queued` candidates from the index, re-reads each intent, records
   the attempt before execution, then updates the index. The terminal file
-  precedes intent removal and event posting; chaining remains unchanged.
+  precedes intent removal and event posting. Successful fixed-chain edges
+  persist their child transition in that terminal file before removal.
+- **Intent-first submission**: durable, atomic intent publication precedes
+  the index row and acknowledgment. A later index failure still returns
+  HTTP 201 with the accepted ID; reconcile restores the row from the intent.
+  File-write failure is not accepted. Ordinary calls each create a new job.
+- **Deterministic chain identity**: the unchanged fixed edges have IDs and
+  versions, starting at 1. The child ID is
+  `uuid5(CHAIN_NAMESPACE, "<parent attempt>:<rule id>:<rule version>")`;
+  a legacy event without an attempt uses the parent job ID. The successful
+  terminal record includes
+  `transitions: [{rule_id, rule_version, child_id, child_skill}]`. Child
+  intents and terminal records retain parent/rule provenance. Exclusive
+  child-intent publication and existing intent/run files dedupe dispatch
+  even after index loss; the chain source unique index is a secondary guard.
+- **Explicit runner recovery**: at startup and before every claim, under the
+  runner lock, consume strict attempt-bearing terminal files: remove a
+  remaining intent, restore a missing terminal index event, then dispatch
+  absent children using their recorded IDs and rules. Recovery is idempotent
+  and never reruns the parent. Unresolved attempts stay held for manual
+  recovery. A DB-only row without a valid intent never executes.
+- **The rebuild never enqueues work**: reconcile and `reindex` project
+  files only. Orphan marking stays index-derived and never triggers retry.
+- **Pre-S1a settlement**: `settle-intents` reports by default. With `--apply`
+  it holds the runner lock, derives terminal files from terminal index rows,
+  marks them `settled_from_index: true`, then removes the intents. It excludes
+  queued/running rows and any intent with an attempt or terminal record.
+  This report-first, operator-run one-shot is the only bounded DB-to-file
+  exception, as detailed in the skill-job authority spec.
 - **Engine registry**: a mapping from `engine` key to adapter. v1
   adapters: `claude-cli` (headless CLI, one-shot prompt), `cursor-cli`
   (headless CLI, requires its trust flag; binary resolved by absolute

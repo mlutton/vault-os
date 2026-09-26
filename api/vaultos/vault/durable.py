@@ -1,22 +1,33 @@
-"""Atomic, durable publication of authoritative JSON files."""
+"""Atomic, durable publication of authoritative JSON files.
+
+On first use of a fresh state root, an existing ancestor created by another
+process but not yet made durable is not re-synced.
+"""
 
 import json
 import os
 import uuid
 from pathlib import Path
 
+_durable_directories: set[Path] = set()
+
 
 def ensure_durable_dir(path: Path) -> None:
-    """Create missing ancestors top down and persist each new directory entry."""
-    if path.is_dir():
-        return
-    ensure_durable_dir(path.parent)
+    """Persist the requested entry and missing ancestors; cache while present."""
+    path = path.resolve()
+    if path in _durable_directories:
+        if path.is_dir():
+            return
+        _durable_directories.discard(path)
+    if not path.parent.is_dir():
+        ensure_durable_dir(path.parent)
     path.mkdir(exist_ok=True)
     parent = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(parent)
     finally:
         os.close(parent)
+    _durable_directories.add(path)
 
 
 def sync_record(path: Path) -> None:
@@ -32,6 +43,11 @@ def sync_record(path: Path) -> None:
         os.fsync(directory)
     finally:
         os.close(directory)
+    parent = os.open(path.parent.parent, os.O_RDONLY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def write_record(path: Path, record: dict, *, exclusive: bool = False) -> None:

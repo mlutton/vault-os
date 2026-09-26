@@ -179,38 +179,44 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
     sources (api/voice/vault-hud/obsidian) are never constrained by that
     index -- they intentionally share source values across many jobs."""
     with _lock:
-        if source.startswith("chain:"):
-            cur = conn.execute(
-                """
-                INSERT OR IGNORE INTO jobs (id, skill, args, source, engine, status, ts_queued, last_event_ts)
-                VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-                """,
-                (job_id, skill, json.dumps(args), source, engine, ts_queued, ts_queued),
-            )
-            if cur.rowcount == 0:
-                existing = conn.execute("SELECT * FROM jobs WHERE source = ?", (source,)).fetchone()
-                conn.commit()
-                return _row_to_job(existing)
-        else:
+        try:
+            if source.startswith("chain:"):
+                cur = conn.execute(
+                    """
+                    INSERT OR IGNORE INTO jobs (id, skill, args, source, engine, status, ts_queued, last_event_ts)
+                    VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+                    """,
+                    (job_id, skill, json.dumps(args), source, engine, ts_queued, ts_queued),
+                )
+                if cur.rowcount == 0:
+                    existing = conn.execute(
+                        "SELECT * FROM jobs WHERE source = ?", (source,)
+                    ).fetchone()
+                    conn.commit()
+                    return _row_to_job(existing)
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO jobs (id, skill, args, source, engine, status, ts_queued, last_event_ts)
+                    VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+                    """,
+                    (job_id, skill, json.dumps(args), source, engine, ts_queued, ts_queued),
+                )
             conn.execute(
-                """
-                INSERT INTO jobs (id, skill, args, source, engine, status, ts_queued, last_event_ts)
-                VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-                """,
-                (job_id, skill, json.dumps(args), source, engine, ts_queued, ts_queued),
+                "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) "
+                "VALUES (?, 'queued', ?, ?, ?)",
+                (
+                    job_id,
+                    ts_queued,
+                    json.dumps({"skill": skill, "args": args, "source": source}),
+                    ts_queued,
+                ),
             )
-        conn.execute(
-            "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) "
-            "VALUES (?, 'queued', ?, ?, ?)",
-            (
-                job_id,
-                ts_queued,
-                json.dumps({"skill": skill, "args": args, "source": source}),
-                ts_queued,
-            ),
-        )
-        conn.commit()
-        return _get_job(conn, job_id)
+            conn.commit()
+            return _get_job(conn, job_id)
+        except BaseException:
+            conn.rollback()
+            raise
 
 
 def queued_candidates(conn: sqlite3.Connection) -> list[Job]:
@@ -321,97 +327,101 @@ def apply_event(
     pid=None,
 ) -> Job | None:
     with _lock:
-        detail = {
-            k: v
-            for k, v in dict(
-                skill=skill,
-                args=args,
-                source=source,
-                exit_code=exit_code,
-                summary=summary,
-                deliverable_path=deliverable_path,
-                md_path=md_path,
-                pid=pid,
-            ).items()
-            if v is not None
-        }
-        # Note: job_events insertion happens before jobs row exists for on-the-fly creation.
-        # This is safe because foreign_keys PRAGMA is not enabled; if FK enforcement is added
-        # in future, on-the-fly paths must create jobs before recording events.
-        conn.execute(
-            "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) VALUES (?, ?, ?, ?, ?)",
-            (job_id, status, ts, json.dumps(detail), received_at),
-        )
-
-        job = _get_job(conn, job_id)
-        created = job is None
-        if created:
-            if skill is None:
-                conn.commit()
-                return None
+        try:
+            detail = {
+                k: v
+                for k, v in dict(
+                    skill=skill,
+                    args=args,
+                    source=source,
+                    exit_code=exit_code,
+                    summary=summary,
+                    deliverable_path=deliverable_path,
+                    md_path=md_path,
+                    pid=pid,
+                ).items()
+                if v is not None
+            }
+            # Note: job_events insertion happens before jobs row exists for on-the-fly creation.
+            # This is safe because foreign_keys PRAGMA is not enabled; if FK enforcement is added
+            # in future, on-the-fly paths must create jobs before recording events.
             conn.execute(
-                "INSERT INTO jobs (id, skill, args, source, engine, status, last_event_ts) "
-                "VALUES (?, ?, ?, ?, ?, 'queued', ?)",
-                (job_id, skill, json.dumps(args or {}), source or "api", engine, ts),
+                "INSERT OR IGNORE INTO job_events (job_id, status, ts, detail, received_at) VALUES (?, ?, ?, ?, ?)",
+                (job_id, status, ts, json.dumps(detail), received_at),
             )
+
             job = _get_job(conn, job_id)
+            created = job is None
+            if created:
+                if skill is None:
+                    conn.commit()
+                    return None
+                conn.execute(
+                    "INSERT INTO jobs (id, skill, args, source, engine, status, last_event_ts) "
+                    "VALUES (?, ?, ?, ?, ?, 'queued', ?)",
+                    (job_id, skill, json.dumps(args or {}), source or "api", engine, ts),
+                )
+                job = _get_job(conn, job_id)
 
-        # Unconditionally backfill ts_queued for queued events, independent of status-rank gate.
-        # This ensures that regardless of event arrival order, the first queued event to arrive
-        # sets ts_queued, even if the job was created by a higher-rank event.
-        if status == "queued":
-            conn.execute(
-                "UPDATE jobs SET ts_queued = COALESCE(ts_queued, ?) WHERE id = ?",
-                (ts, job_id),
-            )
+            # Unconditionally backfill ts_queued for queued events, independent of status-rank gate.
+            # This ensures that regardless of event arrival order, the first queued event to arrive
+            # sets ts_queued, even if the job was created by a higher-rank event.
+            if status == "queued":
+                conn.execute(
+                    "UPDATE jobs SET ts_queued = COALESCE(ts_queued, ?) WHERE id = ?",
+                    (ts, job_id),
+                )
 
-        # Unconditionally backfill metadata fields captured whenever we first learn them,
-        # independent of the status-rank gate. These represent facts observed at a point in
-        # time (e.g. "the runner reported this pid"), not "the current authoritative state",
-        # so a late-arriving event must not lose them just because a terminal event already
-        # advanced the status. First-write-wins via COALESCE: never overwritten once set.
-        if status == "running":
-            conn.execute(
-                "UPDATE jobs SET ts_started = COALESCE(ts_started, ?) WHERE id = ?",
-                (ts, job_id),
-            )
-        if pid is not None:
-            conn.execute(
-                "UPDATE jobs SET runner_pid = COALESCE(runner_pid, ?) WHERE id = ?",
-                (pid, job_id),
-            )
-        if md_path is not None:
-            conn.execute(
-                "UPDATE jobs SET md_path = COALESCE(md_path, ?) WHERE id = ?",
-                (md_path, job_id),
-            )
-        if deliverable_path is not None:
-            conn.execute(
-                "UPDATE jobs SET deliverable_path = COALESCE(deliverable_path, ?) WHERE id = ?",
-                (deliverable_path, job_id),
-            )
+            # Unconditionally backfill metadata fields captured whenever we first learn them,
+            # independent of the status-rank gate. These represent facts observed at a point in
+            # time (e.g. "the runner reported this pid"), not "the current authoritative state",
+            # so a late-arriving event must not lose them just because a terminal event already
+            # advanced the status. First-write-wins via COALESCE: never overwritten once set.
+            if status == "running":
+                conn.execute(
+                    "UPDATE jobs SET ts_started = COALESCE(ts_started, ?) WHERE id = ?",
+                    (ts, job_id),
+                )
+            if pid is not None:
+                conn.execute(
+                    "UPDATE jobs SET runner_pid = COALESCE(runner_pid, ?) WHERE id = ?",
+                    (pid, job_id),
+                )
+            if md_path is not None:
+                conn.execute(
+                    "UPDATE jobs SET md_path = COALESCE(md_path, ?) WHERE id = ?",
+                    (md_path, job_id),
+                )
+            if deliverable_path is not None:
+                conn.execute(
+                    "UPDATE jobs SET deliverable_path = COALESCE(deliverable_path, ?) WHERE id = ?",
+                    (deliverable_path, job_id),
+                )
 
-        should_apply = (
-            created
-            or STATUS_RANK[status] > STATUS_RANK[job.status]
-            or (status in ("ok", "error") and job.status == "orphaned")
-        )
-        if should_apply:
-            fields = ["status = ?", "last_event_ts = ?"]
-            values: list = [status, ts]
-            # Note: ts_queued, ts_started, runner_pid, md_path, deliverable_path are no longer
-            # set here; they're unconditionally backfilled above regardless of arrival order.
-            if status in ("ok", "error"):
-                fields.append("ts_completed = ?")
-                values.append(ts)
-            if exit_code is not None:
-                fields.append("exit_code = ?")
-                values.append(exit_code)
-            if summary is not None:
-                fields.append("summary = ?")
-                values.append(summary)
-            values.append(job_id)
-            conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+            should_apply = (
+                created
+                or STATUS_RANK[status] > STATUS_RANK[job.status]
+                or (status in ("ok", "error") and job.status == "orphaned")
+            )
+            if should_apply:
+                fields = ["status = ?", "last_event_ts = ?"]
+                values: list = [status, ts]
+                # Note: ts_queued, ts_started, runner_pid, md_path, deliverable_path are no longer
+                # set here; they're unconditionally backfilled above regardless of arrival order.
+                if status in ("ok", "error"):
+                    fields.append("ts_completed = ?")
+                    values.append(ts)
+                if exit_code is not None:
+                    fields.append("exit_code = ?")
+                    values.append(exit_code)
+                if summary is not None:
+                    fields.append("summary = ?")
+                    values.append(summary)
+                values.append(job_id)
+                conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
 
-        conn.commit()
-        return _get_job(conn, job_id)
+            conn.commit()
+            return _get_job(conn, job_id)
+        except BaseException:
+            conn.rollback()
+            raise

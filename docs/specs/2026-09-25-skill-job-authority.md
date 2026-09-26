@@ -30,11 +30,20 @@ Submission validates the skill and arguments, publishes the intent atomically
 and durably (fsynced file, atomic publication, fsynced directory), then creates
 the queued index row. Acknowledgment follows durable publication. If SQLite
 fails after the intent is published, `POST /jobs` still returns **201** with
-the accepted job ID and `status: queued`; the failure is logged and a later
-reconcile restores its index row. The intent stays in place. Until then a
+the accepted job ID and `status: queued`; the failure is logged and the failed
+index transaction is rolled back under the store lock. If recovery already
+projected the accepted ID, submission logs at debug level instead of error.
+Runner recovery projects the intent into the index before the next claim,
+without an API restart; startup reconcile can also restore its row.
+The intent stays in place. Until then a
 detail lookup can return 404 because clients read the index. A file-write
 failure is not acknowledged as an accepted submission. Every ordinary
 submission creates a new job.
+
+Directory publication syncs the requested directory's parent and the parents
+of missing ancestors it creates, caching resolved directories while they exist.
+On first use of a fresh state root, an existing ancestor created by another
+process but not yet made durable is not re-synced; this is an accepted residual.
 
 The existing edges remain `acquire -> daily-topic-digest` and
 `deep-research -> research-into-draft`, with empty child arguments. Each edge
@@ -65,8 +74,8 @@ dedupes the dispatch.
 
 An explicit runner recovery pass runs at daemon startup and before every
 claim, under the same single-runner lock as execution. Only strict,
-attempt-bearing terminal records are consumed. Recovery validates recorded
-child identity, then:
+attempt-bearing terminal records are consumed as outcomes. Recovery validates
+recorded child identity, then:
 
 1. Removes a remaining parent intent.
 2. Posts the recorded terminal event if the index lacks a completed outcome,
@@ -74,6 +83,23 @@ child identity, then:
    assessment can be replaced by the durable outcome.
 3. Dispatches each recorded transition whose child has neither an intent nor
    a run record, using the recorded child ID, skill, rule ID and version.
+4. Projects every queue intent with no index row as `queued`, including child
+   intents published before a failed index write. This only updates the index;
+   execution uses the normal claim, which re-reads the intent and still blocks
+   unresolved attempts. Before projection, `id`, `skill` and `ts` must be
+   non-empty strings; `args` must be an object and `source` a string when
+   present. Malformed intents and SQLite projection failures are skipped
+   with a warning so other queued work can run.
+
+Reconcile and recovery skip a file whose projection collides with another
+row's chain source, roll back its failed projection, and log the file and owning
+row. Rollback happens under the store lock. Other files in the pass continue;
+the authoritative file remains in place. Recovery reports collision and
+invalid-file warnings once per file until successful projection clears the
+warning suppression; subsequent passes still retry projection. A later failure
+at that path is reported again. A colliding terminal record's recorded transitions
+wait until its collision is resolved. Reconcile runs once at startup and
+reports each skipped file during that pass.
 
 Each step is idempotent; repeating recovery changes nothing. Missing
 child skills and file-write failures are logged as pending and

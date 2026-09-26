@@ -31,6 +31,57 @@ def test_get_job_missing_returns_none(conn):
     assert store.get_job(conn, "nope") is None
 
 
+@pytest.mark.parametrize("operation", ["create", "event"])
+def test_non_sqlite_failure_leaves_no_transaction(conn, operation):
+    if operation == "create":
+
+        class FailingConnection:
+            def execute(self, *args, **kwargs):
+                conn.execute(*args, **kwargs)
+                raise ValueError("synthetic failure after insert")
+
+            def __getattr__(self, name):
+                return getattr(conn, name)
+
+        with pytest.raises(ValueError, match="synthetic failure"):
+            store.create_job(
+                FailingConnection(),
+                job_id="bad",
+                skill="sample",
+                args={},
+                source="api",
+                engine="script",
+                ts_queued="t0",
+            )
+    else:
+        store.create_job(
+            conn,
+            job_id="bad",
+            skill="sample",
+            args={},
+            source="api",
+            engine="script",
+            ts_queued="t0",
+        )
+        with pytest.raises(KeyError, match="unknown"):
+            store.apply_event(
+                conn,
+                job_id="bad",
+                status="unknown",
+                ts="t1",
+                received_at="t1",
+            )
+    assert not conn.in_transaction
+    if operation == "create":
+        assert store.get_job(conn, "bad") is None
+    else:
+        assert store.get_job(conn, "bad").status == "queued"
+        assert (
+            conn.execute("SELECT COUNT(*) FROM job_events WHERE status = 'unknown'").fetchone()[0]
+            == 0
+        )
+
+
 def test_create_job_chain_source_is_idempotent(conn):
     first = store.create_job(
         conn,

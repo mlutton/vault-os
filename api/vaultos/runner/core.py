@@ -105,6 +105,7 @@ class Runner:
         self._lock_fd = None
         self._lock_owner: int | None = None
         self._reported_skips: set[str] = set()
+        self._reported_recovery_skips: set[Path] = set()
         self._attempt_id: str | None = None
         self._attempt_ids: list[str] = []
         self._chain_origin: dict | None = None
@@ -537,7 +538,12 @@ class Runner:
     def recover(self) -> None:
         """Repair durable terminal observations under the same lock as claims."""
         with self._runner_lock():
-            recover_terminal_records(self.conn, self.registry, self.settings.vault_root)
+            recover_terminal_records(
+                self.conn,
+                self.registry,
+                self.settings.vault_root,
+                reported_skips=self._reported_recovery_skips,
+            )
 
     # -- heartbeat -----------------------------------------------------
 

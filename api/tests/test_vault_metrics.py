@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from vaultos.vault.metrics import (
     MetricSample,
     compute_delta,
     compute_delta_week,
     latest_metrics,
+    latest_sample,
     parse_ts,
     read_last_pull,
     read_metrics_csv,
@@ -189,3 +192,53 @@ def test_read_last_pull_parses_per_source_status(tmp_path):
     assert result["vault"].status == "ok"
     assert result["vault"].ts == "2026-08-09T08:40:01Z"
     assert result["vault"].error == ""
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_read_metrics_csv_keeps_blank_error_as_latest(tmp_path, blank):
+    _write_csv(
+        tmp_path,
+        [
+            "2026-08-09T08:00:00Z,ai_wire,items_today,7,ok,\n",
+            f"2026-08-09T09:00:00Z,ai_wire,items_today,{blank},error,unreadable report\n",
+        ],
+    )
+    samples = read_metrics_csv(tmp_path)
+    assert [s.value for s in samples] == [7.0, None]
+    assert latest_metrics(samples) == [samples[1]]
+    assert latest_sample(samples, source="ai_wire", metric="items_today") == samples[1]
+    assert samples[1].status == "error"
+    assert samples[1].error == "unreadable report"
+
+
+@pytest.mark.parametrize("status", ["ok", "", "unknown", "ERROR"])
+def test_read_metrics_csv_skips_blank_non_error(tmp_path, status):
+    _write_csv(tmp_path, [f"2026-08-09T09:00:00Z,ai_wire,items_today,   ,{status},\n"])
+    assert read_metrics_csv(tmp_path) == []
+
+
+@pytest.mark.parametrize("weekly", [False, True])
+@pytest.mark.parametrize(
+    "values, expected", [([7, None, 9], 2), ([7, None], None), ([None, 9], None)]
+)
+def test_deltas_skip_missing_values(weekly, values, expected):
+    now = datetime.now(timezone.utc)
+    samples = [
+        MetricSample(
+            _iso(now - timedelta(days=10 - i)),
+            "ai_wire",
+            "items_today",
+            value,
+            "error" if value is None else "ok",
+            "",
+        )
+        for i, value in enumerate(values)
+    ]
+    calculate = compute_delta_week if weekly else compute_delta
+    assert calculate(samples, "ai_wire", "items_today") == expected
+
+
+@pytest.mark.parametrize("value", ["not-a-number", "nan", "inf", "-infinity"])
+def test_read_metrics_csv_skips_invalid_error_values(tmp_path, value):
+    _write_csv(tmp_path, [f"2026-08-09T09:00:00Z,ai_wire,items_today,{value},error,pull failed\n"])
+    assert read_metrics_csv(tmp_path) == []

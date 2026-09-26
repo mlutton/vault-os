@@ -44,11 +44,11 @@ An external system that reports numeric data into the spine's observability set 
 _Avoid_: conflating with Skill.
 
 **Metric**:
-A named, append-only time series of numeric observations recorded for a Source (e.g. Source `claude_code`, Metric `tokens_5h`). "The current value" always means the most recently recorded point.
+A named, append-only time series of numeric observations and pull errors with missing values recorded for a Source (e.g. Source `claude_code`, Metric `tokens_5h`). "The current value" always means the most recently recorded point.
 _Avoid_: treating a Metric as a single value rather than a series.
 
 **Delta / Delta Week**:
-Delta is a Metric's current value minus its immediately preceding recorded value. Delta Week is the current value minus the closest value recorded at or before seven days ago; absent, not zero, when a Metric has under a week of history.
+Delta is a Metric's current value minus its most recent earlier numeric value; Delta Week uses the closest earlier numeric value recorded at or before seven days ago. Both are absent, not zero, when the current value is missing or no eligible earlier value exists.
 _Avoid_: reading Delta Week as a rolling average — it's a two-point comparison.
 
 **Token Burn**:

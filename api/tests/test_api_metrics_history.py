@@ -64,3 +64,25 @@ def test_history_response_shape(client, tmp_vault):
     res = client.get("/metrics/vault/new_files_24h/history", params={"days": 365})
     entry = res.json()[0]
     assert set(entry.keys()) == {"timestamp", "value", "status", "error"}
+
+
+def test_history_keeps_blank_error_row(client, tmp_vault):
+    day = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    _write_csv(
+        tmp_vault,
+        [
+            f"{day}T08:00:00Z,ai_wire,items_today,7,ok,\n",
+            f"{day}T09:00:00Z,ai_wire,items_today,,error,unreadable report\n",
+        ],
+    )
+    res = client.get("/metrics/ai_wire/items_today/history")
+    assert res.status_code == 200
+    assert res.json() == [
+        {"timestamp": f"{day}T08:00:00Z", "value": 7.0, "status": "ok", "error": ""},
+        {
+            "timestamp": f"{day}T09:00:00Z",
+            "value": None,
+            "status": "error",
+            "error": "unreadable report",
+        },
+    ]

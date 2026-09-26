@@ -254,6 +254,16 @@ def test_acquire_report_timestamp_edge_cases(tmp_path, monkeypatch, case):
         _write(path, header + f"## ai\n- {headline}\n## leadership\n- {headline}\n")
         os.utime(path, (100 if path == first else 300,) * 2)
 
+    if case == "filename-tie":
+        # Force the smaller name first regardless of filesystem directory order.
+        original_iterdir = type(first).iterdir
+
+        def ordered_iterdir(path):
+            entries = original_iterdir(path)
+            return iter(sorted(entries)) if path == first.parent else entries
+
+        monkeypatch.setattr(type(first), "iterdir", ordered_iterdir)
+
     # A non-UTC process timezone makes an accidental local-time interpretation visible.
     try:
         with monkeypatch.context() as env:

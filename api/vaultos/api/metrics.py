@@ -92,7 +92,7 @@ def token_burn(settings=Depends(get_settings)):
     recent_cost = [
         (parse_ts(s.timestamp), s.value)
         for s in samples
-        if s.source == TOKEN_BURN_SOURCE and s.metric == "cost_5h_usd"
+        if s.source == TOKEN_BURN_SOURCE and s.metric == "cost_5h_usd" and s.value is not None
     ]
     recent_cost = [item for item in recent_cost if item[0] is not None and item[0] >= trend_cutoff]
     projection = project_trend(recent_cost, PROJECTION_HORIZON)

@@ -18,6 +18,7 @@ def _runner_to_dict(heartbeat) -> dict:
             "busy": False,
             "max_concurrent": None,
             "heartbeat_age_s": None,
+            "unresolved_attempts": [],
         }
     return {
         "ts": heartbeat.ts,
@@ -29,6 +30,7 @@ def _runner_to_dict(heartbeat) -> dict:
         "busy": heartbeat.busy,
         "max_concurrent": heartbeat.max_concurrent,
         "heartbeat_age_s": heartbeat.heartbeat_age_s,
+        "unresolved_attempts": list(heartbeat.unresolved_attempts),
     }
 
 

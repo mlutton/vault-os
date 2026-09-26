@@ -146,8 +146,8 @@ def duration_s(ts_started: str | None, ts_completed: str | None) -> int | None:
 
 def compute_skill_etas(conn: sqlite3.Connection, *, limit: int = 200) -> dict[str, int]:
     """Median completed duration per skill, from the most recent `limit` ok runs.
-    DB-sourced (the jobs table is the reconciled source of truth since Stage 2),
-    not a re-parse of system/runs/*.json files."""
+    DB-sourced from the rebuildable jobs index, not a per-request parse of
+    run files."""
     with _lock:
         rows = conn.execute(
             "SELECT skill, ts_started, ts_completed FROM jobs "
@@ -213,7 +213,26 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
         return _get_job(conn, job_id)
 
 
-def claim_oldest_queued(conn: sqlite3.Connection, *, pid: int, ts: str) -> "Job | None":
+def queued_candidates(conn: sqlite3.Connection) -> list[Job]:
+    """Read queue order without changing durable job state."""
+    with _lock:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE status = 'queued' ORDER BY ts_queued ASC, id ASC"
+        ).fetchall()
+        return [_row_to_job(row) for row in rows]
+
+
+def claim_oldest_queued(
+    conn: sqlite3.Connection,
+    *,
+    pid: int,
+    ts: str,
+    job_id: str | None = None,
+    args: dict | None = None,
+    source: str | None = None,
+    engine: str | None = None,
+    queued_ts: str | None = None,
+) -> "Job | None":
     """Atomically claim the oldest `queued` job for execution: picks the
     oldest candidate, then flips it to `running` with an UPDATE whose WHERE
     clause re-checks `status = 'queued'` in the same statement and reports
@@ -227,15 +246,28 @@ def claim_oldest_queued(conn: sqlite3.Connection, *, pid: int, ts: str) -> "Job 
     than immediately hunting for a second candidate)."""
     with _lock:
         row = conn.execute(
-            "SELECT id FROM jobs WHERE status = 'queued' ORDER BY ts_queued ASC, id ASC LIMIT 1"
+            "SELECT id FROM jobs WHERE status = 'queued' AND (? IS NULL OR id = ?) "
+            "ORDER BY ts_queued ASC, id ASC LIMIT 1",
+            (job_id, job_id),
         ).fetchone()
         if row is None:
             return None
         job_id = row["id"]
         cur = conn.execute(
             "UPDATE jobs SET status = 'running', ts_started = COALESCE(ts_started, ?), "
-            "runner_pid = ?, last_event_ts = ? WHERE id = ? AND status = 'queued'",
-            (ts, pid, ts, job_id),
+            "runner_pid = ?, last_event_ts = ?, args = COALESCE(?, args), "
+            "source = COALESCE(?, source), engine = COALESCE(?, engine), "
+            "ts_queued = COALESCE(?, ts_queued) WHERE id = ? AND status = 'queued'",
+            (
+                ts,
+                pid,
+                ts,
+                json.dumps(args) if args is not None else None,
+                source,
+                engine,
+                queued_ts,
+                job_id,
+            ),
         )
         if cur.rowcount == 0:
             conn.commit()

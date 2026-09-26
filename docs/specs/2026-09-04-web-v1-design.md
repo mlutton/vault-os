@@ -20,7 +20,7 @@ screen there.
 - **Thin client, strictly** (ADR-0021): every read and write goes
   through the published HTTP API. No direct database access, no direct
   vault/file access, no domain logic in the client.
-- **No client datastore in v1**: the API is the single source of truth;
+- **No client datastore in v1**: the API is the sole client interface;
   view preferences live in browser storage. The seam for web-native
   state stays declared (ADR-0020) but unused — adding a store later is
   additive.
@@ -32,9 +32,9 @@ screen there.
   network, not the app. Auth becomes real work only if a deployment
   ever leaves the LAN. Runs on its own port beside the legacy dashboard
   until retirement.
-- **Job system**: binds to the API's job/run endpoints (service-
-  canonical — the database owns job state), so the runner
-  implementation beneath can change without touching the web.
+- **Job system**: binds to the API's job/run endpoints. The API serves a
+  rebuildable jobs index; [skill-job files are authoritative](2026-09-25-skill-job-authority.md).
+  The runner implementation beneath can change without touching the web.
 
 ## Staged scope
 

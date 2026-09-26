@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..state import resolve_state_root
+
 
 @dataclass(frozen=True)
 class RunnerHeartbeat:
@@ -15,10 +17,11 @@ class RunnerHeartbeat:
     busy: bool = False
     max_concurrent: int = 0
     heartbeat_age_s: float | None = None
+    unresolved_attempts: tuple[str, ...] = ()
 
 
 def read_heartbeat(vault_root: Path, *, stale_after_s: float = 120.0) -> RunnerHeartbeat | None:
-    path = vault_root / "system" / "runner-status.json"
+    path = resolve_state_root(vault_root) / "runner-status.json"
     if not path.exists():
         return None
     try:
@@ -45,4 +48,5 @@ def read_heartbeat(vault_root: Path, *, stale_after_s: float = 120.0) -> RunnerH
         busy=bool(data.get("busy", False)),
         max_concurrent=data.get("max_concurrent", 0),
         heartbeat_age_s=age,
+        unresolved_attempts=tuple(data.get("unresolved_attempts", [])),
     )

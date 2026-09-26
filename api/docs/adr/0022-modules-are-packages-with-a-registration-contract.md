@@ -6,7 +6,7 @@
 
 ADR-0017 put finance's data, migrations, and matching engine in this repo, and finance has since grown to dominate it: 22 of 45 endpoints, 11 of 14 migrations, and a 1,537-line `finance/store.py`. Nothing about that growth was wrong, but it happened without a stated contract, so "what a module is allowed to own" has never been written down. Meanwhile the platform direction (see [ADR-0020](0020-core-client-boundary.md)) commits to more domains arriving — commitment tracking next, and the finance skeleton is explicitly the template — and to modules eventually being installable as separate packages so the platform can be adopted without adopting one operator's finance schema.
 
-Two facts make this urgent rather than tidy. First, `finance/` currently reaches into the same connection, the same global migration sequence, and the same `vaultos/api/` namespace as everything else, with no boundary a reviewer could point at. Second, the registry's `engine` field is already a warning shot: it carries real values (`claude` on 15 skills, `script` on one) and is faithfully stored on the job row and echoed by `GET /skills` and `GET /jobs` — but nothing in this repo ever branches on it. The runner does have a genuine two-engine branch; it keys off its own local `SCRIPT_SKILLS` constant instead. So we already have one contract-shaped field that duplicates a dispatch decision rather than driving it, and no rule that would have caught it.
+Two facts make this urgent rather than tidy. First, `finance/` currently reaches into the same connection, the same global migration sequence, and the same `vaultos/api/` namespace as everything else, with no boundary a reviewer could point at. Second, the registry's `engine` field carries real values and drives the current runner's adapter selection. Before the engine registry landed, the legacy runner used its own local skill list instead. That earlier gap showed why contract fields need explicit consumers; the module boundary keeps dispatch decisions in platform infrastructure.
 
 ## Decided
 
@@ -21,7 +21,7 @@ Everything else is **infrastructure**, owned by the platform and injected via `c
 
 Modules stay **in one process** until one demonstrably earns separation — a distinct scaling profile, a distinct failure domain, or a distinct deployment boundary. "It feels big" is not a reason. This is a modular monolith on purpose: the contract exists so that lifting a module out later is mechanical, not so that it happens early.
 
-The contract is enforced by a test, not by good intentions: a conformance test asserts that every registered module exposes `register()`, that its tables all carry its prefix, that its migrations live in its own directory, and — closing the `engine`-field gap directly — that any contract field the platform carries is either consumed by the platform or deleted from it.
+The contract is enforced by a test, not by good intentions: a conformance test asserts that every registered module exposes `register()`, that its tables all carry its prefix, that its migrations live in its own directory, and that any contract field the platform carries is either consumed by the platform or deleted from it.
 
 ## Considered Options
 
@@ -41,7 +41,7 @@ The contract is enforced by a test, not by good intentions: a conformance test a
 
 - **Finance becomes the first conformant module** by moving `vaultos/finance/` and `vaultos/api/finance.py` to `vaultos/modules/finance/`. Its tables are renamed with a `finance_` prefix in a migration. This is a large, mechanical, well-tested diff — the existing suite covers finance heavily, so the rename either passes or fails loudly. It should land as its own change, separate from the runner rewrite.
 
-- **The `engine` field gets resolved rather than inherited.** Under the conformance rule it is currently non-compliant: the platform carries it but never consumes it. It is either promoted into a real dispatch decision the platform makes, or removed from `Skill` and the `jobs` table and left to the runner's own constant. That choice belongs to the provider-seam work (`vaultos/llm/`), not here — this ADR only establishes that "carried but never read" stops being an acceptable state.
+- **The `engine` field is consumed by the platform.** The runner selects an adapter from the skill's registry entry through `ENGINE_REGISTRY`. Modules do not duplicate that dispatch decision. Future changes to the engine contract belong to the provider seam; the conformance rule continues to reject fields that are carried but never read.
 
 - **`CONTEXT.md` gains Module, Infrastructure, and Event Log as glossary entries**, with an `_Avoid_:` note that Module is not a service and not a skill — both confusions are already available given `system/skills.json` uses "skill" for something else entirely.
 

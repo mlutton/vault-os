@@ -42,6 +42,7 @@ class Skill:
     # adapter) runs it. Absent/None means no check; engine success alone is
     # job success (unchanged from #22).
     check: str | None = None
+    repeatable: bool = True
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ def load_registry(vault_root: Path) -> Registry:
             engine=s.get("engine"),
             engine_config=s.get("engine_config", {}),
             check=s.get("check"),
+            repeatable=s.get("repeatable", True),
             args=tuple(
                 SkillArg(
                     name=a["name"],

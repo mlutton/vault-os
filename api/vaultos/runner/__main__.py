@@ -1,13 +1,12 @@
-"""`python -m vaultos.runner` -- the runner process entrypoint. Long-running;
-treat as a daemon (see api/CLAUDE.md's note on Fable-Os-Web's runner.js for
-the legacy equivalent this replaces)."""
+"""`python -m vaultos.runner` -- the long-running runner entrypoint."""
 
 import logging
+import sys
 
 from ..config import Settings
 from ..db.conn import connect
 from ..registry import load_registry
-from .core import Runner
+from .core import Runner, RunnerLockHeldError
 
 
 def main() -> int:
@@ -15,9 +14,15 @@ def main() -> int:
     settings = Settings()
     conn = connect(settings.db_path)
     registry = load_registry(settings.vault_root)
-    runner = Runner(conn, registry, settings)
-    runner.run_forever()
-    return 0
+    try:
+        runner = Runner(conn, registry, settings)
+        runner.run_forever()
+        return 0
+    except (RunnerLockHeldError, ValueError) as exc:
+        print(f"runner: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

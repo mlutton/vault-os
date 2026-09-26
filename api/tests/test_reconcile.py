@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -7,6 +8,8 @@ from vaultos.db.conn import connect
 from vaultos.jobs import store
 from vaultos.jobs.reconcile import reconcile_from_files
 from vaultos.registry import load_registry
+from vaultos.runner.records import unresolved_attempts
+from vaultos.vault.runs import list_run_files, read_run_record
 
 
 @pytest.fixture
@@ -169,3 +172,182 @@ def test_reconcile_handles_missing_queue_and_runs_dirs(tmp_path, conn, registry)
     assert result.queue_files_seen == 0
     assert result.run_files_seen == 0
     assert result.skipped == 0
+
+
+def test_reconcile_ignores_attempt_files(tmp_vault, conn, registry):
+    attempt = tmp_vault / "system" / "runs" / "job-a.attempt-1.json"
+    attempt.write_text(
+        json.dumps(
+            {
+                "id": "job-a",
+                "attempt_id": "attempt-a",
+                "skill": "metrics-pull",
+                "args": {},
+                "source": "api",
+                "ts_started": "2026-08-09T00:00:01Z",
+                "runner_pid": 123,
+                "engine": "claude",
+            }
+        )
+    )
+
+    result = reconcile_from_files(tmp_vault, conn, registry)
+
+    assert result.run_files_seen == 0
+    assert result.skipped == 0
+    assert store.get_job(conn, "job-a") is None
+
+
+def test_reconcile_partial_terminal_does_not_report_success(tmp_vault, conn, registry):
+    partial = tmp_vault / "system" / "runs" / "partial.json"
+    (tmp_vault / "system" / "runs" / "partial.attempt-1.json").write_text(
+        json.dumps({"id": "partial", "attempt_id": "attempt-1"})
+    )
+    partial.write_text(
+        json.dumps(
+            {
+                "id": "partial",
+                "skill": "metrics-pull",
+                "status": "ok",
+                "ts_completed": "2026-08-09T00:00:05Z",
+            }
+        )
+    )
+
+    result = reconcile_from_files(tmp_vault, conn, registry)
+
+    assert result.skipped == 1
+    assert store.get_job(conn, "partial") is None
+
+
+@pytest.mark.parametrize(
+    "job_id,other_id", [("legacy*", "legacy-other"), ("legacy[ab]", "legacya")]
+)
+def test_legacy_job_id_is_not_an_attempt_glob(tmp_vault, job_id, other_id):
+    runs = tmp_vault / "system" / "runs"
+    (runs / f"{other_id}.attempt-1.json").write_text(json.dumps({"attempt_id": "other"}))
+    terminal = runs / f"{job_id}.json"
+    terminal.write_text(json.dumps({"id": job_id, "skill": "metrics-pull", "status": "ok"}))
+
+    assert read_run_record(terminal).id == job_id
+
+
+def test_legacy_run_reads_scale_to_three_thousand(tmp_vault):
+    runs = tmp_vault / "system" / "runs"
+    for number in range(3000):
+        (runs / f"legacy-{number}.json").write_text(
+            json.dumps({"skill": "metrics-pull", "status": "ok"})
+        )
+
+    started = time.perf_counter()
+    records = [read_run_record(path) for path in list_run_files(tmp_vault)]
+    elapsed = time.perf_counter() - started
+
+    assert len(records) == 3000
+    assert elapsed < 1.0, f"legacy reads took {elapsed:.3f}s"
+
+
+def test_type_malformed_terminal_is_skipped_and_attempt_unresolved(tmp_vault, tmp_path, registry):
+    runs = tmp_vault / "system" / "runs"
+    (runs / "malformed.attempt-1.json").write_text(
+        json.dumps({"id": "malformed", "attempt_id": "a"})
+    )
+    (runs / "malformed.json").write_text(json.dumps({"attempt_id": "a", "status": []}))
+
+    fresh = connect(tmp_path / "fresh-malformed.db")
+    try:
+        result = reconcile_from_files(tmp_vault, fresh, registry)
+        assert result.skipped == 1
+        assert result.run_files_seen == 0
+        assert store.get_job(fresh, "malformed") is None
+        assert unresolved_attempts(tmp_vault / "system") == ["malformed"]
+    finally:
+        fresh.close()
+
+
+def test_legacy_terminal_without_source_reads_and_rebuilds(tmp_vault, tmp_path, registry):
+    path = tmp_vault / "system" / "runs" / "legacy.json"
+    path.write_text(
+        json.dumps(
+            {
+                "id": "legacy",
+                "skill": "metrics-pull",
+                "args": {"sample": "value"},
+                "ts_queued": "2026-08-09T00:00:00Z",
+                "ts_started": "2026-08-09T00:00:01Z",
+                "ts_completed": "2026-08-09T00:00:05Z",
+                "status": "ok",
+                "exit_code": 0,
+                "summary": "complete",
+            }
+        )
+    )
+
+    record = read_run_record(path)
+    assert record.id == "legacy"
+    assert record.source is None
+    assert record.status == "ok"
+
+    fresh = connect(tmp_path / "fresh-legacy.db")
+    try:
+        result = reconcile_from_files(tmp_vault, fresh, registry)
+        job = store.get_job(fresh, "legacy")
+        assert result.run_files_seen == 1
+        assert job is not None
+        assert job.status == "ok"
+        assert job.source == "api"
+        assert job.args == {"sample": "value"}
+        assert job.ts_completed == "2026-08-09T00:00:05Z"
+    finally:
+        fresh.close()
+
+
+def test_legacy_running_record_reads_with_optional_fields_missing(tmp_vault):
+    path = tmp_vault / "system" / "runs" / "legacy-running.json"
+    path.write_text(json.dumps({"skill": "metrics-pull", "status": "running"}))
+
+    record = read_run_record(path)
+
+    assert record.id == "legacy-running"
+    assert record.status == "running"
+    assert record.args == {}
+    assert record.source is None
+    assert record.ts_started is None
+    assert record.ts_completed is None
+
+
+def test_legacy_record_rejects_non_string_status(tmp_vault):
+    path = tmp_vault / "system" / "runs" / "legacy-invalid.json"
+    path.write_text(json.dumps({"skill": "metrics-pull", "status": []}))
+
+    with pytest.raises(KeyError, match="status"):
+        read_run_record(path)
+
+
+def test_legacy_terminal_without_completion_time_reads_and_rebuilds(tmp_vault, tmp_path, registry):
+    path = tmp_vault / "system" / "runs" / "legacy-no-completion.json"
+    path.write_text(
+        json.dumps(
+            {
+                "skill": "metrics-pull",
+                "status": "ok",
+                "ts_queued": "2026-08-09T00:00:00Z",
+                "ts_started": "2026-08-09T00:00:01Z",
+            }
+        )
+    )
+
+    record = read_run_record(path)
+    assert record.ts_completed is None
+    assert record.status == "ok"
+
+    fresh = connect(tmp_path / "fresh-no-completion.db")
+    try:
+        result = reconcile_from_files(tmp_vault, fresh, registry)
+        job = store.get_job(fresh, "legacy-no-completion")
+        assert result.run_files_seen == 1
+        assert job is not None
+        assert job.status == "ok"
+        assert job.ts_completed == record.ts_started
+    finally:
+        fresh.close()

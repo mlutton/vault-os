@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..registry import Registry
+from ..state import resolve_state_root
 from ..timeutil import utcnow_z
 from ..vault.runner import RunnerHeartbeat
 from ..vault.runs import list_run_files, read_run_record
@@ -36,7 +37,7 @@ def reconcile_from_files(
     run_files_seen = 0
     skipped = 0
 
-    queue_dir = vault_root / "system" / "queue"
+    queue_dir = resolve_state_root(vault_root) / "queue"
     if queue_dir.is_dir():
         for path in sorted(queue_dir.glob("*.json")):
             try:

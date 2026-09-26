@@ -45,11 +45,19 @@ def test_get_runner_no_heartbeat_file_not_reporting(client):
     assert body["busy"] is False
     assert body["max_concurrent"] is None
     assert body["heartbeat_age_s"] is None
+    assert body["unresolved_attempts"] == []
 
 
-def test_get_runner_response_has_exactly_nine_fields(client, tmp_vault):
+def test_get_runner_response_includes_unresolved_attempts(client, tmp_vault):
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    _write_status(tmp_vault, ts, busy=True, version="1.0.1", max_concurrent=3, in_flight=[])
+    _write_status(
+        tmp_vault,
+        ts,
+        busy=True,
+        version="1.0.1",
+        max_concurrent=3,
+        unresolved_attempts=["job-a"],
+    )
 
     res = client.get("/runner")
     body = res.json()
@@ -63,7 +71,9 @@ def test_get_runner_response_has_exactly_nine_fields(client, tmp_vault):
         "busy",
         "max_concurrent",
         "heartbeat_age_s",
+        "unresolved_attempts",
     }
+    assert body["unresolved_attempts"] == ["job-a"]
 
 
 def test_get_runner_reports_version_busy_max_concurrent_and_age(client, tmp_vault):

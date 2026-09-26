@@ -108,17 +108,17 @@ def test_script_job_events_recorded_and_visible_via_runs_style_query(client, tmp
     assert job.runner_pid is not None
 
 
-def test_unknown_engine_job_fails_fast_via_runner(client, tmp_vault):
+def test_unknown_engine_job_left_queued_via_runner(client, tmp_vault):
     res = client.post("/jobs", json={"skill": "unavailable-engine-skill"})
     job_id = res.json()["id"]
 
     from vaultos.main import app
 
-    Runner(app.state.conn, app.state.registry, app.state.settings).run_once()
+    assert Runner(app.state.conn, app.state.registry, app.state.settings).run_once() is False
 
     detail = client.get(f"/jobs/{job_id}").json()
-    assert detail["status"] == "error"
-    assert "nonexistent-engine" in detail["summary"]
+    assert detail["status"] == "queued"
+    assert not list((tmp_vault / "system" / "runs").glob(f"{job_id}.attempt-*.json"))
 
 
 def test_chaining_triggers_after_runner_posts_terminal_event(client, tmp_vault, monkeypatch):

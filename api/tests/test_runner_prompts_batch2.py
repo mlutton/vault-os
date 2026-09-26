@@ -158,6 +158,28 @@ def test_daily_topic_digest_ignores_args_no_required_arg_gate(ctx):
     assert built is not None
 
 
+def test_chained_digest_scans_sources_and_reads_only_parent_report(ctx):
+    parent = "inbox/research/2026-09-25-acquire-a1b2c3d4.md"
+    built = get_builder("daily-topic-digest")({}, replace(ctx, parent_deliverable=parent))
+    assert built is not None
+    step_one = built.prompt.split("Step 1 --", 1)[1].split("Step 2 --", 1)[0]
+    assert "Then scan: (1) sources/ -- every file; (2)" in step_one
+    assert f"This chained run is for the parent report {parent}." in step_one
+    assert f"Read {parent} in full" in step_one
+    assert "inbox/research/*.md" not in built.prompt
+
+
+def test_chained_digest_stops_only_when_no_evidence_is_new(ctx):
+    parent = "inbox/research/2026-09-25-acquire-a1b2c3d4.md"
+    built = get_builder("daily-topic-digest")({}, replace(ctx, parent_deliverable=parent))
+    assert built is not None
+    assert "If nothing is new, say so plainly in your final reply and stop" in built.prompt
+    closing = built.prompt.rsplit("\n\n", 1)[1]
+    assert "stop" not in closing
+    assert "don't exist yet or are empty" not in closing
+    assert "Never invent evidence" in closing
+
+
 def test_get_builder_returns_a_callable_for_deep_research():
     assert callable(get_builder("deep-research"))
 

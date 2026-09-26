@@ -113,7 +113,8 @@ def test_chained_digest_receives_parent_deliverable(chain_runner):
     step_one = prompt.split("Step 1 --", 1)[1].split("Step 2 --", 1)[0]
     assert f"This chained run is for the parent report {report}." in step_one
     assert f"Read {report} in full" in step_one
-    assert "Then scan: (1) sources/" not in step_one
+    assert "Then scan: (1) sources/ -- every file; (2)" in step_one
+    assert "inbox/research/*.md" not in prompt
 
 
 @pytest.mark.parametrize(

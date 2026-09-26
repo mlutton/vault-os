@@ -124,6 +124,8 @@ def test_chained_digest_receives_parent_deliverable(chain_runner):
         ("traversal", "must not contain '..'"),
         ("other-directory", "outside inbox/research"),
         ("escaping-symlink", "outside inbox/research"),
+        ("symlinked-research-directory", "outside inbox/research"),
+        ("symlinked-inbox-directory", "outside inbox/research"),
         ("directory", "must be a regular file"),
         ("missing-file", "file is missing"),
         ("missing-record", "parent record is missing"),
@@ -153,6 +155,16 @@ def test_chained_digest_rejects_unsafe_parent_deliverable(chain_runner, case, fa
         link = vault / "inbox" / "research" / "linked.md"
         link.symlink_to(target)
         record["deliverable_path"] = "inbox/research/linked.md"
+    elif case == "symlinked-research-directory":
+        research = vault / "inbox" / "research"
+        target = vault / "relocated-research"
+        research.rename(target)
+        research.symlink_to(target, target_is_directory=True)
+    elif case == "symlinked-inbox-directory":
+        inbox = vault / "inbox"
+        target = vault / "relocated-inbox"
+        inbox.rename(target)
+        inbox.symlink_to(target, target_is_directory=True)
     elif case == "directory":
         record["deliverable_path"] = "inbox/research"
     elif case == "missing-file":
@@ -177,3 +189,26 @@ def test_chained_digest_rejects_unsafe_parent_deliverable(chain_runner, case, fa
     terminal = json.loads((runner.state_root / "runs" / f"{child_id}.json").read_text())
     assert terminal["status"] == "error"
     assert failed_check in terminal["summary"]
+
+
+@pytest.mark.parametrize("case", ["dot-component", "internal-symlink"])
+def test_chained_digest_receives_canonical_parent_deliverable(chain_runner, case):
+    runner, registry, vault, report, log = chain_runner
+    parent_id, child_id = _acquire_and_chain(chain_runner)
+    record_path = runner.state_root / "runs" / f"{parent_id}.json"
+    record = json.loads(record_path.read_text())
+    if case == "dot-component":
+        recorded = report.replace("inbox/research/", "inbox/./research/")
+    else:
+        (vault / "inbox" / "research" / "linked.md").symlink_to(vault / report)
+        recorded = "inbox/research/linked.md"
+    record["deliverable_path"] = recorded
+    record["completion_evidence"]["deliverable_path"] = recorded
+    record_path.write_text(json.dumps(record))
+
+    assert runner.run_once() is True
+    assert store.get_job(runner.conn, child_id).status == "ok"
+    prompt = log.read_text()
+    assert f"This chained run is for the parent report {report}." in prompt
+    assert f"Read {report} in full" in prompt
+    assert recorded not in prompt

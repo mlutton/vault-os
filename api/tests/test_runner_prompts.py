@@ -428,3 +428,11 @@ def test_draft_persona_fanout_round_scan_counts_files_not_just_dirs(ctx, tmp_pat
     )
 
     assert built.deliverable_path == "writing/articles/my-piece/reviews/round-6/_summary.md"
+
+
+def test_metrics_pull_selects_newest_acquire_report(ctx):
+    prompt = get_builder("metrics-pull")({}, ctx).prompt
+    assert "newest matching report" in prompt
+    assert "run_at" in prompt
+    assert "mtime" in prompt
+    assert "legacy unsuffixed" in prompt

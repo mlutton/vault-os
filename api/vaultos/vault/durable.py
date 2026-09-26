@@ -1,7 +1,10 @@
 """Atomic, durable publication of authoritative JSON files.
 
 On first use of a fresh state root, an existing ancestor created by another
-process but not yet made durable is not re-synced.
+process or a concurrent thread in the same process but not yet made durable
+is not re-synced. A cached directory removed and re-created at runtime is
+also not re-synced if the cache hit sees a directory: it checks only
+`is_dir()`, not directory identity. These are accepted durability residuals.
 """
 
 import json

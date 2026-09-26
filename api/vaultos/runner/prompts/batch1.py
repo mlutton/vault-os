@@ -137,7 +137,10 @@ def metrics_pull(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"from vault contents — do NOT invent, estimate, or carry-forward a number for anything "
         f"you can't derive from what's actually in the vault right now (no fabricated data)."
         f"\n\nFind today's consolidated acquire report — glob inbox/research/{date}-acquire*.md, "
-        f"0 for every lane metric below if none exists yet today. Within it, for each of these "
+        f"including legacy unsuffixed names. If several exist, use the newest matching report "
+        f"by frontmatter run_at when it parses as a timestamp, else file mtime. Skip reports "
+        f"that cannot be read. Use 0 for every lane metric below if none exists yet today. "
+        f"Within it, for each of these "
         f"five `## <lane>` headings (lean-agile merged into leadership 2026-08-12 -- do not look "
         f"for a separate `## lean-agile` heading, it no longer exists), compute two numbers: "
         f'items_today = count of bullet lines (lines starting with "- ") under that heading, and '

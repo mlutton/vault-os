@@ -43,7 +43,10 @@ submission creates a new job.
 Directory publication syncs the requested directory's parent and the parents
 of missing ancestors it creates, caching resolved directories while they exist.
 On first use of a fresh state root, an existing ancestor created by another
-process but not yet made durable is not re-synced; this is an accepted residual.
+process or a concurrent thread in the same process but not yet made durable
+is not re-synced. A cached directory removed and re-created at runtime is
+also not re-synced if the cache hit sees a directory: it checks only
+`is_dir()`, not directory identity. These are accepted durability residuals.
 
 The existing edges remain `acquire -> daily-topic-digest` and
 `deep-research -> research-into-draft`, with empty child arguments. Each edge

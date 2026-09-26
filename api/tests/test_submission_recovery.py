@@ -336,11 +336,7 @@ def test_db_only_legacy_chain_owner_does_not_discard_acknowledged_intent(setup):
     assert engine.skills == ["daily-topic-digest"]
 
 
-@pytest.mark.parametrize("record_kind", ["queue", "run"])
-@pytest.mark.parametrize("projector", ["reconcile", "recovery"])
-def test_reconcile_skips_chain_source_collision_and_continues(
-    setup, caplog, record_kind, projector
-):
+def prepare_projection_collision(setup, record_kind):
     vault, _, conn, registry, engine, runner = setup
     source = "chain:acquire:parent"
     store.create_job(
@@ -385,6 +381,16 @@ def test_reconcile_skips_chain_source_collision_and_continues(
         )
     write_intent(vault, job_id="zz-unrelated", skill="sample", args={}, ts="t3", source="api")
 
+    return child_id, collision_path
+
+
+@pytest.mark.parametrize("record_kind", ["queue", "run"])
+@pytest.mark.parametrize("projector", ["reconcile", "recovery"])
+def test_reconcile_skips_chain_source_collision_and_continues(
+    setup, caplog, record_kind, projector
+):
+    vault, _, conn, registry, engine, runner = setup
+    child_id, collision_path = prepare_projection_collision(setup, record_kind)
     if projector == "reconcile":
         result = reconcile_from_files(vault, conn, registry)
         assert result.skipped == 1
@@ -461,18 +467,20 @@ def test_runner_projects_child_intent_after_index_failure_without_restart(setup,
     assert store.get_job(conn, child_id).status == "ok"
 
 
-def test_submission_rolls_back_partial_index_write(setup, monkeypatch):
+def test_submission_rolls_back_partial_index_write(setup):
     vault, _, conn, registry, _, _ = setup
 
-    def fail_after_event(conn, **kwargs):
-        conn.execute(
-            "INSERT INTO job_events (job_id, status, ts, detail, received_at) VALUES (?, 'queued', 't0', '{}', 't0')",
-            (kwargs["job_id"],),
-        )
-        raise sqlite3.OperationalError("synthetic partial index failure")
+    class FailingConnection:
+        def __getattr__(self, name):
+            return getattr(conn, name)
 
-    monkeypatch.setattr(store, "create_job", fail_after_event)
-    accepted, _ = jobs.dispatch_skill(conn, registry, vault, "sample", {}, "api")
+        def execute(self, sql, parameters=()):
+            result = conn.execute(sql, parameters)
+            if sql.startswith("INSERT OR IGNORE INTO job_events"):
+                raise sqlite3.OperationalError("synthetic partial index failure")
+            return result
+
+    accepted, _ = jobs.dispatch_skill(FailingConnection(), registry, vault, "sample", {}, "api")
     assert (vault / "system" / "queue" / f"{accepted}.json").exists()
     assert not conn.in_transaction
     assert (
@@ -715,7 +723,8 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     original_fsync = durable.os.fsync
     original_replace = durable.os.replace
     path = tmp_path / "system" / "queue" / "job.json"
-    # Existing directories still need their parent entry synced before publication.
+    # Treat the fixture root as durable; both uncached ancestors need syncing.
+    monkeypatch.setattr(durable, "_durable_directories", {tmp_path.resolve()})
     path.parent.mkdir(parents=True)
 
     def fsync(fd):
@@ -725,14 +734,14 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     def replace(source, target):
         assert not Path(target).exists()
         assert json.loads(Path(source).read_text())["id"] == "job"
-        assert calls == ["fsync", "fsync"]
+        assert calls == ["fsync", "fsync", "fsync"]
         calls.append("publish")
         return original_replace(source, target)
 
     monkeypatch.setattr(durable.os, "fsync", fsync)
     monkeypatch.setattr(durable.os, "replace", replace)
     write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t0", source="api")
-    assert calls == ["fsync", "fsync", "publish", "fsync"]
+    assert calls == ["fsync", "fsync", "fsync", "publish", "fsync"]
     assert json.loads(path.read_text())["id"] == "job"
     assert not list(path.parent.glob(".*.tmp"))
 
@@ -760,3 +769,200 @@ def test_exclusive_intent_does_not_replace_existing_payload(tmp_path):
         )
     assert path.read_bytes() == before
     assert not list(path.parent.glob(".*.tmp"))
+
+
+def test_submission_failure_does_not_rollback_concurrent_insert(setup, monkeypatch):
+    vault, _, conn, registry, _, _ = setup
+    inserted = threading.Event()
+    finish = threading.Event()
+    original_create = store.create_job
+    original_get = store.get_job
+
+    class PausingConnection:
+        def __getattr__(self, name):
+            return getattr(conn, name)
+
+        def execute(self, sql, parameters=()):
+            result = conn.execute(sql, parameters)
+            if sql.strip().startswith("INSERT INTO jobs"):
+                inserted.set()
+                assert finish.wait(3)
+            return result
+
+    def create(connection, **kwargs):
+        if kwargs["job_id"] == "failure":
+            assert inserted.wait(3)
+            raise sqlite3.OperationalError("database is locked")
+        return original_create(connection, **kwargs)
+
+    def get(connection, job_id):
+        if job_id == "failure":
+            finish.set()
+        return original_get(connection, job_id)
+
+    monkeypatch.setattr(store, "create_job", create)
+    monkeypatch.setattr(store, "get_job", get)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        successful = pool.submit(
+            jobs.dispatch_skill,
+            PausingConnection(),
+            registry,
+            vault,
+            "sample",
+            {},
+            "api",
+            job_id="success",
+        )
+        try:
+            assert (
+                jobs.dispatch_skill(conn, registry, vault, "sample", {}, "api", job_id="failure")[0]
+                == "failure"
+            )
+        finally:
+            finish.set()
+        assert successful.result(timeout=3)[0] == "success"
+    assert store.get_job(conn, "success").status == "queued"
+
+
+@pytest.mark.parametrize("operation", ["create", "event"])
+def test_store_failure_rolls_back_partial_write(setup, operation):
+    _, _, conn, _, _, _ = setup
+
+    class FailingConnection:
+        def __getattr__(self, name):
+            return getattr(conn, name)
+
+        def execute(self, sql, parameters=()):
+            result = conn.execute(sql, parameters)
+            if sql.strip().startswith("INSERT INTO jobs"):
+                raise sqlite3.OperationalError("synthetic failure after insert")
+            return result
+
+    with pytest.raises(sqlite3.OperationalError):
+        if operation == "create":
+            store.create_job(
+                FailingConnection(),
+                job_id="partial",
+                skill="sample",
+                args={},
+                source="api",
+                engine="fake",
+                ts_queued="t0",
+            )
+        else:
+            store.apply_event(
+                FailingConnection(),
+                job_id="partial",
+                skill="sample",
+                args={},
+                source="api",
+                status="queued",
+                ts="t0",
+                received_at="t0",
+            )
+    assert not conn.in_transaction
+    assert store.get_job(conn, "partial") is None
+    assert conn.execute("SELECT COUNT(*) FROM job_events").fetchone()[0] == 0
+
+
+def test_submission_recovery_index_race_has_no_error(setup, monkeypatch, caplog):
+    vault, settings, conn, registry, _, _ = setup
+    original_create = store.create_job
+
+    def create(connection, **kwargs):
+        fresh = connect(settings.db_path)
+        try:
+            from vaultos.runner.recovery import recover_terminal_records
+
+            recover_terminal_records(fresh, registry, vault)
+        finally:
+            fresh.close()
+        return original_create(connection, **kwargs)
+
+    monkeypatch.setattr(store, "create_job", create)
+    job_id = submit(setup, "sample")
+    assert store.get_job(conn, job_id).status == "queued"
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        {"skill": ["x"]},
+        {"ts": {"bad": "time"}},
+        {"id": ["bad"]},
+        {"id": ""},
+        {"skill": ""},
+        {"ts": ""},
+        {"args": []},
+        {"source": {}},
+    ],
+)
+def test_runner_skips_malformed_intent_and_runs_valid_job(setup, caplog, damage):
+    vault, _, conn, _, engine, runner = setup
+    payload = {"id": "bad", "skill": "sample", "ts": "t0", **damage}
+    (vault / "system" / "queue" / "bad.json").write_text(json.dumps(payload))
+    valid_id = submit(setup, "sample")
+    assert runner.run_once() is True
+    assert engine.skills == ["sample"]
+    assert store.get_job(conn, valid_id).status == "ok"
+    assert store.get_job(conn, "bad") is None
+    assert "skipping invalid intent file bad.json" in caplog.text
+
+
+def test_runner_continues_after_intent_projection_sqlite_error(setup, monkeypatch, caplog):
+    vault, _, conn, _, engine, runner = setup
+    write_intent(vault, job_id="bad", skill="sample", args={}, ts="t0", source="api")
+    valid_id = submit(setup, "sample")
+    original_apply = store.apply_event
+
+    def apply(connection, **kwargs):
+        if kwargs["job_id"] == "bad":
+            raise sqlite3.OperationalError("synthetic projection failure")
+        return original_apply(connection, **kwargs)
+
+    monkeypatch.setattr(store, "apply_event", apply)
+    assert runner.run_once() is True
+    assert engine.skills == ["sample"]
+    assert store.get_job(conn, valid_id).status == "ok"
+    assert "bad.json" in caplog.text
+    assert not conn.in_transaction
+
+
+@pytest.mark.parametrize("record_kind", ["queue", "run"])
+def test_runner_reports_projection_collision_once(setup, caplog, record_kind):
+    prepare_projection_collision(setup, record_kind)
+    runner = setup[-1]
+    runner.run_once()
+    runner.run_once()
+    runner.run_once()
+    warnings = [r for r in caplog.records if "projection: skipping file" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+@pytest.mark.parametrize("directory", ["queue", "runs"])
+def test_runner_reports_invalid_file_once(setup, caplog, directory):
+    vault, _, _, _, _, runner = setup
+    (vault / "system" / directory / "bad.json").write_text("{")
+    for _ in range(3):
+        assert runner.run_once() is False
+    warnings = [r for r in caplog.records if "skipping invalid" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_runner_continues_after_terminal_projection_sqlite_error(setup, monkeypatch, caplog):
+    vault, _, conn, _, engine, runner = setup
+    parent_id = crash_parent(setup, monkeypatch, "before_index_event")
+    valid_id = submit(setup, "sample")
+    original_apply = store.apply_event
+
+    def apply(connection, **kwargs):
+        if kwargs["job_id"] == parent_id:
+            raise sqlite3.OperationalError("synthetic terminal projection failure")
+        return original_apply(connection, **kwargs)
+
+    monkeypatch.setattr(store, "apply_event", apply)
+    assert runner.run_once() is True
+    assert engine.skills == ["acquire", "sample"]
+    assert store.get_job(conn, valid_id).status == "ok"
+    assert f"{parent_id}.json" in caplog.text

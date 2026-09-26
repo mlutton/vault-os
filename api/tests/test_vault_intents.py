@@ -4,12 +4,14 @@ from pathlib import Path
 
 import pytest
 
+import vaultos.vault.durable as durable
 from vaultos.vault.durable import ensure_durable_dir, sync_record, write_record
 from vaultos.vault.intents import write_intent
 
 
 @pytest.fixture
-def directory_events(monkeypatch):
+def directory_events(monkeypatch, tmp_path):
+    monkeypatch.setattr(durable, "_durable_directories", {tmp_path.resolve()})
     events = []
     directories = {}
     original_open = os.open
@@ -69,7 +71,8 @@ def test_first_publication_syncs_new_directory_parents(
 
     expected = []
     if not state_root_exists:
-        expected.extend([("mkdir", root), ("sync", tmp_path)])
+        expected.append(("mkdir", root))
+    expected.append(("sync", tmp_path))
     expected.extend([("mkdir", path.parent), ("sync", root), ("sync", path.parent)])
     assert directory_events == expected
     assert json.loads(path.read_text())["id"] == "job"
@@ -84,7 +87,7 @@ def test_publication_syncs_existing_directory_parent(tmp_path, directory_events,
         write_intent(tmp_path, job_id="job", skill="sample", args={}, ts="t", source="api")
     else:
         write_record(parent / "job.json", {"id": "job"})
-    assert directory_events == [("sync", parent.parent), ("sync", parent)]
+    assert directory_events == [("sync", tmp_path), ("sync", parent.parent), ("sync", parent)]
 
 
 def test_existing_directory_syncs_parent_before_return(tmp_path, directory_events):
@@ -129,3 +132,19 @@ def test_write_intent_creates_queue_dir_if_missing(tmp_path):
     assert not (tmp_path / "system" / "queue").exists()
     write_intent(tmp_path, job_id="x", skill="ai-wire", args={}, ts="t", source="voice")
     assert (tmp_path / "system" / "queue").is_dir()
+
+
+def test_durable_directory_second_call_does_no_fsync(tmp_path, directory_events):
+    directory = tmp_path / "system" / "queue"
+    ensure_durable_dir(directory)
+    directory_events.clear()
+    ensure_durable_dir(directory)
+    assert directory_events == []
+
+
+def test_uncached_existing_ancestor_parent_is_synced(tmp_path, directory_events):
+    root = tmp_path / "system"
+    root.mkdir()
+    directory_events.clear()
+    ensure_durable_dir(root / "queue")
+    assert ("sync", tmp_path) in directory_events

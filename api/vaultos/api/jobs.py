@@ -235,8 +235,10 @@ def dispatch_skill(
             ts_queued=ts,
         )
     except sqlite3.Error:
-        conn.rollback()
-        logger.exception("submission %s accepted in files; index update failed", job_id)
+        if store.get_job(conn, job_id) is not None:
+            logger.debug("submission %s already projected by recovery", job_id)
+        else:
+            logger.exception("submission %s accepted in files; index update failed", job_id)
     else:
         if job.id != job_id:
             # A legacy source can own a different id. Only authoritative

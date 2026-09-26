@@ -29,8 +29,7 @@ def _engine_for(registry: Registry, skill: str) -> str | None:
 def log_projection_collision(
     conn, path: Path, source: str | None, exc: sqlite3.IntegrityError
 ) -> None:
-    """Discard a failed projection and identify the row owning its source."""
-    conn.rollback()
+    """Identify the row owning the source after the store rolled back."""
     owner = conn.execute("SELECT id FROM jobs WHERE source = ?", (source,)).fetchone()
     logger.warning(
         "projection: skipping file %s; source %s owned by row %s: %s",

@@ -5,10 +5,15 @@ import os
 import uuid
 from pathlib import Path
 
+_durable_directories: set[Path] = set()
+
 
 def ensure_durable_dir(path: Path) -> None:
-    """Create missing ancestors and persist the entry even for an existing leaf."""
-    if not path.parent.is_dir():
+    """Persist uncached ancestor entries once, including existing directories."""
+    path = path.resolve()
+    if path in _durable_directories:
+        return
+    if path.parent != path:
         ensure_durable_dir(path.parent)
     path.mkdir(exist_ok=True)
     parent = os.open(path.parent, os.O_RDONLY)
@@ -16,6 +21,7 @@ def ensure_durable_dir(path: Path) -> None:
         os.fsync(parent)
     finally:
         os.close(parent)
+    _durable_directories.add(path)
 
 
 def sync_record(path: Path) -> None:

@@ -12,6 +12,7 @@ substituted against the job's own args plus two reserved placeholders,
 import os
 import subprocess
 
+from ...vault.durable import ensure_durable_dir
 from .base import EngineContext, EngineResult
 
 DEFAULT_TIMEOUT_S = 120
@@ -91,7 +92,7 @@ class ScriptEngine:
         ctx: EngineContext, job_id: str, argv: list[str], proc: subprocess.CompletedProcess
     ) -> None:
         log_dir = ctx.state_root / "runs"
-        log_dir.mkdir(parents=True, exist_ok=True)
+        ensure_durable_dir(log_dir)
         (log_dir / f"{job_id}.log").write_text(
             f"$ {' '.join(argv)}\nexit={proc.returncode}\n\n"
             f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}\n"

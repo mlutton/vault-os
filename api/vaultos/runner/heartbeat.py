@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from ..timeutil import utcnow_z
+from ..vault.durable import ensure_durable_dir
 
 RUNNER_VERSION = "0.1.0"
 
@@ -24,7 +25,7 @@ def write_heartbeat(
     version: str = RUNNER_VERSION,
     unresolved_attempts: list[str] | None = None,
 ) -> Path:
-    state_root.mkdir(parents=True, exist_ok=True)
+    ensure_durable_dir(state_root)
     path = state_root / "runner-status.json"
     body = {
         "ts": utcnow_z(),

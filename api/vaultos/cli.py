@@ -16,6 +16,7 @@ from .runner.records import remove_intent, write_record
 from .state import resolve_state_root
 from .timeutil import utcnow_z
 from .vault.calendar import parse_ical_events
+from .vault.durable import ensure_durable_dir
 
 CALENDAR_FETCH_TIMEOUT_S = 15
 
@@ -38,7 +39,7 @@ def settle_intents(vault_root: Path, conn, *, apply: bool = False) -> list[str]:
     root = resolve_state_root(vault_root)
     fd = None
     if apply:
-        root.mkdir(parents=True, exist_ok=True)
+        ensure_durable_dir(root)
         fd = os.open(root / "runner.lock", os.O_CREAT | os.O_RDWR, 0o600)
     try:
         if fd is not None:
@@ -127,7 +128,7 @@ def calendar_pull(vault_root: Path, ical_url: str, tz: str) -> int:
 
     events = parse_ical_events(raw, tz)
     path = vault_root / "system" / "metrics" / "calendar-today.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_durable_dir(path.parent)
     payload = {
         "pulled_at": utcnow_z(),
         "events": [

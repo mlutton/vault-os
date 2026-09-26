@@ -16,7 +16,6 @@ def write_intent(
     chain: dict | None = None,
 ) -> Path:
     queue_dir = resolve_state_root(vault_root) / "queue"
-    queue_dir.mkdir(parents=True, exist_ok=True)
     path = queue_dir / f"{job_id}.json"
     intent = {"id": job_id, "skill": skill, "args": args, "ts": ts, "source": source}
     if chain is not None:

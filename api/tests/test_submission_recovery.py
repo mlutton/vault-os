@@ -583,6 +583,8 @@ def test_intent_publication_is_atomic_and_fsynced(tmp_path, monkeypatch):
     original_fsync = durable.os.fsync
     original_replace = durable.os.replace
     path = tmp_path / "system" / "queue" / "job.json"
+    # First-use directory durability is covered separately; isolate publication here.
+    path.parent.mkdir(parents=True)
 
     def fsync(fd):
         calls.append("fsync")

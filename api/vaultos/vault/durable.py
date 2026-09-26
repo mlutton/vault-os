@@ -6,6 +6,19 @@ import uuid
 from pathlib import Path
 
 
+def ensure_durable_dir(path: Path) -> None:
+    """Create missing ancestors top down and persist each new directory entry."""
+    if path.is_dir():
+        return
+    ensure_durable_dir(path.parent)
+    path.mkdir(exist_ok=True)
+    parent = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+
+
 def sync_record(path: Path) -> None:
     """Make an observed record durable before acknowledging a duplicate.
 
@@ -23,7 +36,7 @@ def sync_record(path: Path) -> None:
 
 def write_record(path: Path, record: dict, *, exclusive: bool = False) -> None:
     """Publish a complete JSON record, including its directory entry."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_durable_dir(path.parent)
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("x") as stream:

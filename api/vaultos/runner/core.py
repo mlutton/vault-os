@@ -25,6 +25,7 @@ from ..jobs import store
 from ..registry import Registry
 from ..state import resolve_state_root
 from ..timeutil import utcnow_z
+from ..vault.durable import ensure_durable_dir
 from .engines import ENGINE_REGISTRY, EngineContext, EngineResult
 from .heartbeat import RUNNER_VERSION, write_heartbeat
 from .records import remove_intent, unresolved_attempts, write_record
@@ -161,7 +162,7 @@ class Runner:
                 raise RunnerLockHeldError("another call holds the runner lock")
             yield
             return
-        self.state_root.mkdir(parents=True, exist_ok=True)
+        ensure_durable_dir(self.state_root)
         fd = os.open(self.state_root / "runner.lock", os.O_CREAT | os.O_RDWR, 0o600)
         try:
             try:

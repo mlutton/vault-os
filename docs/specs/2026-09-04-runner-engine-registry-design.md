@@ -8,8 +8,8 @@ covers everything that ships in this repo.
 
 ## Problem Statement
 
-Skill jobs are recorded service-canonically (the database owns job
-state), but execution still belongs to a legacy single-runtime daemon
+Skill-job files own job state; the database is their rebuildable read index
+(see [skill-job authority](2026-09-25-skill-job-authority.md)). Execution still belongs to a legacy single-runtime daemon
 that shells one vendor's CLI, holds every skill's prompt inline in its
 own source, and re-reads nothing at runtime. There is no way to route a
 skill to a different execution engine (a second vendor's CLI, a plain
@@ -36,9 +36,8 @@ and emits eval events through a `ctx` hook that defaults to logging.
    capacity behind one contract.
 3. As the operator, I want a `script` engine, so that deterministic
    skills run with no LLM involved at all.
-4. As the operator, I want the runner to claim jobs from the database,
-   so that job state has exactly one owner and the HTTP API's view is
-   always authoritative.
+4. As the operator, I want the runner to select candidates from the jobs
+   index and verify their intent files, so that a stale row cannot start work.
 5. As the operator, I want a per-skill `check` command to gate success,
    so that "done" is decided by evidence, not by the engine's exit code
    alone.
@@ -55,14 +54,13 @@ and emits eval events through a `ctx` hook that defaults to logging.
     binary paths and explicit flags, so that headless execution works
     from non-interactive environments.
 11. As the operator, I want a job whose engine is unknown or unavailable
-    to fail fast with a clear event, so that misconfiguration is visible
-    in the job record, not silent.
+    to remain queued with a clear warning until configuration is repaired.
 12. As the operator, I want the runner to survive an engine crash and
     move on, so that one bad run never wedges the queue.
 13. As the operator, I want concurrent-claim safety, so that two runner
     processes never execute the same job twice.
-14. As the operator, I want a clean shutdown that finishes or releases
-    in-flight claims, so that restarts are routine, not risky.
+14. As the operator, I want a clean shutdown that finishes a running engine
+    and holds unfinished attempts for recovery, so restarts do not rerun them.
 15. As a contributor, I want engines to implement one small interface,
     so that adding a runtime is one adapter plus one registry row.
 16. As a contributor, I want the test suite to fake engines at the
@@ -72,10 +70,10 @@ and emits eval events through a `ctx` hook that defaults to logging.
 
 ## Implementation Decisions
 
-- **Service-canonical claim loop**: the runner polls/claims `queued`
-  jobs from the job store with an atomic claim (status transition
-  guards double-claim), executes, and records terminal status via the
-  existing event mechanism so chaining continues to work unchanged.
+- **File-backed claim loop**: one runner holds an exclusive state-root lock,
+  selects `queued` candidates from the index, re-reads each intent, records
+  the attempt before execution, then updates the index. The terminal file
+  precedes intent removal and event posting; chaining remains unchanged.
 - **Engine registry**: a mapping from `engine` key to adapter. v1
   adapters: `claude-cli` (headless CLI, one-shot prompt), `cursor-cli`
   (headless CLI, requires its trust flag; binary resolved by absolute
@@ -87,15 +85,16 @@ and emits eval events through a `ctx` hook that defaults to logging.
   as data files is a later, separate change — not bundled with the
   execution-model change.
 - **check+retry**: a skill may declare a `check` command; exit 0 passes.
-  On failure, exactly one retry runs with the check's output appended to
-  the engine input. No check declared = engine success is job success.
+  On failure, a new attempt record precedes one retry with the check's
+  output appended to the engine input, unless `repeatable: false`.
+  No check declared = engine success is job success.
 - **Eval emission**: the runner context exposes an `emit(event)` hook;
   default sink is structured logging. The event schema ships minimal
   (run id, skill, engine, timings, check outcome) so a future store can
   subscribe without engine changes.
-- **State paths** (queue remnants, logs, heartbeat) resolve through a
-  state-root setting with fallback to the vault's legacy location, so
-  the runner lands before any files move.
+- **State paths** (intents, runs, heartbeat) resolve through the shared
+  state-root helper. A runner override differing from the readers' current
+  root is refused until a separate migration moves the files.
 - **Intent-file shim**: the API keeps writing legacy intent files until
   cutover completes; the shim's removal is its own small change gated on
   the cutover, tracked with the private choreography.
@@ -112,7 +111,7 @@ and emits eval events through a `ctx` hook that defaults to logging.
   stub command on PATH) scripted to succeed, fail, hang, or emit
   specific output. No real vendor CLI, no API key, no network in tests.
 - Cover: claim atomicity (two runners, one execution), engine routing by
-  `engine` field, unknown-engine fast-fail, check pass/fail/retry
+  `engine` field, unknown-engine queued state, check pass/fail/retry
   matrix, event posting + chaining trigger, heartbeat freshness, clean
   shutdown with an in-flight job.
 - Prior art: the existing jobs/runs API tests drive the same seams from
@@ -120,8 +119,8 @@ and emits eval events through a `ctx` hook that defaults to logging.
 
 ## Out of Scope
 
-- The state migration and folder rename (private choreography), beyond
-  honoring the state-root setting.
+- The state migration and folder rename. A different state root is refused
+  until readers and files move together.
 - Retiring the legacy daemon (it remains the documented rollback until
   cutover validates).
 - The `ctx.llm` provider seam (separate module; already specced).

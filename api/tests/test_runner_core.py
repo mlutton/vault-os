@@ -124,27 +124,27 @@ def test_run_once_returns_false_when_queue_empty(conn, registry, settings):
     assert runner.run_once() is False
 
 
-def test_run_once_unknown_engine_fails_fast(conn, registry, settings, vault):
+def test_unknown_engine_left_queued(conn, registry, settings, vault, caplog):
     job = _enqueue(conn, vault, registry, "no-engine-skill")
 
     runner = Runner(conn, registry, settings)
-    runner.run_once()
+    assert runner.run_once() is False
+    assert runner.run_once() is False
 
     final = store.get_job(conn, job.id)
-    assert final.status == "error"
-    assert "nonexistent-engine" in final.summary
+    assert final.status == "queued"
+    assert caplog.text.count("unknown engine") == 1
 
 
-def test_run_once_missing_engine_config_fails_job_not_runner(conn, registry, settings, vault):
+def test_unknown_engine_does_not_block_known_job(conn, registry, settings, vault):
     # "no-engine-skill" declares engine="nonexistent-engine" which has no
-    # adapter in ENGINE_REGISTRY at all -- the job fails, the runner itself
-    # must be able to keep going and claim the next job.
+    # adapter in ENGINE_REGISTRY at all. A later known job still runs.
     _enqueue(conn, vault, registry, "no-engine-skill", ts="2026-09-04T00:00:00Z")
     second = _enqueue(conn, vault, registry, "hello-script", ts="2026-09-04T00:00:01Z")
 
     runner = Runner(conn, registry, settings)
     assert runner.run_once() is True
-    assert runner.run_once() is True
+    assert runner.run_once() is False
 
     assert store.get_job(conn, second.id).status == "ok"
 
@@ -192,7 +192,7 @@ def test_heartbeat_reflects_pending_count(conn, registry, settings, vault):
     assert heartbeat.active == 0
 
 
-def test_heartbeat_uses_state_root_override(monkeypatch, vault, tmp_path):
+def test_root_mismatch_refused(monkeypatch, vault, tmp_path):
     monkeypatch.setenv("VAULT_ROOT", str(vault))
     monkeypatch.setenv("VAULTOS_DB", str(tmp_path / "vaultos.db"))
     override = tmp_path / "state-override"
@@ -201,12 +201,9 @@ def test_heartbeat_uses_state_root_override(monkeypatch, vault, tmp_path):
     conn = connect(settings.db_path)
     registry = load_registry(vault)
 
-    runner = Runner(conn, registry, settings)
-    runner.write_heartbeat()
-
-    assert (override / "runner-status.json").exists()
-    # Legacy vault_root/system location is untouched by the override.
-    assert not (vault / "system" / "runner-status.json").exists()
+    with pytest.raises(ValueError, match="reader root"):
+        Runner(conn, registry, settings)
+    assert not (override / "runner-status.json").exists()
 
 
 def test_shutdown_releases_in_flight_claim_not_yet_executing(conn, registry, settings, vault):

@@ -22,6 +22,7 @@ def write_heartbeat(
     busy: bool,
     max_concurrent: int = 1,
     version: str = RUNNER_VERSION,
+    unresolved_attempts: list[str] | None = None,
 ) -> Path:
     state_root.mkdir(parents=True, exist_ok=True)
     path = state_root / "runner-status.json"
@@ -33,6 +34,7 @@ def write_heartbeat(
         "version": version,
         "busy": busy,
         "max_concurrent": max_concurrent,
+        "unresolved_attempts": unresolved_attempts or [],
     }
     # Atomic write -- a crash mid-write must never leave a truncated/corrupt
     # heartbeat file for read_heartbeat to trip over (same convention as

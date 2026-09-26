@@ -1,19 +1,23 @@
 """vaultos.runner's claim-execute loop (ADR-0022: infrastructure -- this
 package never imports from vaultos/modules/).
 
-A Runner claims the oldest queued job from the job store with an atomic
-claim, routes it to an engine adapter by the skill's `engine` field, and
-posts the terminal event through the same path (api.jobs.apply_event_and_chain)
-the HTTP API uses, so CHAIN_MAP auto-chaining fires unchanged -- all
-in-process, no HTTP calls. See docs/specs/2026-09-04-runner-engine-registry-design.md.
+A Runner holds a state-root lock, selects queued candidates from the jobs
+index, confirms each intent, and records an attempt before execution. It
+posts terminal events through the same path (api.jobs.apply_event_and_chain)
+as the HTTP API, preserving CHAIN_MAP auto-chaining in-process.
 """
 
+import fcntl
+import json
 import logging
 import os
 import signal
 import subprocess
 import threading
 import time
+import uuid
+from contextlib import contextmanager
+from dataclasses import replace
 
 from ..api.jobs import apply_event_and_chain
 from ..config import Settings
@@ -23,8 +27,18 @@ from ..state import resolve_state_root
 from ..timeutil import utcnow_z
 from .engines import ENGINE_REGISTRY, EngineContext, EngineResult
 from .heartbeat import RUNNER_VERSION, write_heartbeat
+from .records import remove_intent, unresolved_attempts, write_record
 
 logger = logging.getLogger(__name__)
+
+
+class RunnerLockHeldError(RuntimeError):
+    """A runner already owns this state root."""
+
+
+class RecordWriteError(RuntimeError):
+    """An execution observation could not be made durable."""
+
 
 # Cap what a check's own failure feedback contributes to a job's `summary`
 # column on a second, terminal failure -- mirrors script.py's
@@ -41,6 +55,7 @@ CHECK_SUMMARY_MAX_CHARS = 500
 # "CHECK_TIMEOUT_S", ...)` to exercise the timeout path in well under a
 # second, exactly like patching any other module attribute.
 CHECK_TIMEOUT_S = 120
+HEARTBEAT_INTERVAL_S = 15
 
 
 def default_emit(event: dict) -> None:
@@ -72,13 +87,22 @@ class Runner:
         self.emit = emit or default_emit
         self.pid = pid if pid is not None else os.getpid()
         self.state_root = resolve_state_root(settings)
+        if self.state_root.resolve() != resolve_state_root(settings.vault_root).resolve():
+            raise ValueError("runner state root differs from the job-file reader root")
+        self.unresolved_attempts = unresolved_attempts(self.state_root)
+        for job_id in self.unresolved_attempts:
+            logger.warning(
+                "runner: unresolved attempt for job %s; manual recovery required", job_id
+            )
+        self._lock_fd = None
+        self._lock_owner: int | None = None
+        self._reported_skips: set[str] = set()
+        self._attempt_id: str | None = None
+        self._attempt_ids: list[str] = []
 
-        # In-flight bookkeeping for clean shutdown (spec story 14): a job id
-        # is set the moment it's claimed and cleared once its terminal event
-        # is posted. `_executing` distinguishes "claimed, engine not yet
-        # dispatched" (safe to release back to queued on shutdown) from
-        # "engine actively running" (not safe to release -- the subprocess
-        # is still writing; shutdown() lets it finish instead).
+        # An attempt is durable before the DB claim. Once claimed, shutdown
+        # lets the engine finish; an unfinished attempt needs manual recovery.
+        # The release path below remains for an older claim without an attempt.
         self._current_job_id: str | None = None
         self._executing = False
         self._shutdown_event = threading.Event()
@@ -89,27 +113,171 @@ class Runner:
         """Claim and fully execute at most one queued job. Returns True if a
         job was claimed (regardless of its outcome), False if the queue was
         empty or shutdown was already requested."""
-        if self._shutdown_event.is_set():
-            return False
-
-        ts = utcnow_z()
-        job = store.claim_oldest_queued(self.conn, pid=self.pid, ts=ts)
-        if job is None:
-            return False
-
-        self._current_job_id = job.id
-        try:
+        with self._runner_lock():
             if self._shutdown_event.is_set():
-                # Claimed the row an instant before a shutdown request landed,
-                # and hasn't started real work on it yet -- release it rather
-                # than start a fresh run this process is about to exit.
-                store.release_job(self.conn, job_id=job.id, ts=utcnow_z())
+                return False
+            observed = unresolved_attempts(self.state_root)
+            for job_id in set(observed) - set(self.unresolved_attempts):
+                logger.warning(
+                    "runner: unresolved attempt for job %s; manual recovery required", job_id
+                )
+            self.unresolved_attempts = observed
+            job = self._claim_candidate()
+            if job is None:
+                return False
+            if self._shutdown_event.is_set():
+                self.unresolved_attempts.append(job.id)
+                logger.warning(
+                    "runner: shutdown after recording attempt for job %s; manual recovery required",
+                    job.id,
+                )
+                self._executing = False
+                self._attempt_id = None
+                self._attempt_ids = []
                 return True
-            self._execute(job)
+            self._current_job_id = job.id
+            stop_heartbeat = threading.Event()
+            beat = threading.Thread(
+                target=self._heartbeat_loop, args=(stop_heartbeat,), daemon=False
+            )
+            beat.start()
+            try:
+                self._execute(job)
+            finally:
+                stop_heartbeat.set()
+                beat.join()
+                self._current_job_id = None
+                self._executing = False
+                self._attempt_id = None
+                self._attempt_ids = []
+            return True
+
+    @contextmanager
+    def _runner_lock(self):
+        if self._lock_fd is not None:
+            if self._lock_owner != threading.get_ident():
+                raise RunnerLockHeldError("another call holds the runner lock")
+            yield
+            return
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.state_root / "runner.lock", os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RunnerLockHeldError("another runner holds the state-root lock") from exc
+            self._lock_fd = fd
+            self._lock_owner = threading.get_ident()
+            yield
         finally:
-            self._current_job_id = None
-            self._executing = False
-        return True
+            self._lock_fd = None
+            self._lock_owner = None
+            os.close(fd)
+
+    def _claim_candidate(self):
+        for candidate in store.queued_candidates(self.conn):
+            if candidate.id in self.unresolved_attempts:
+                continue
+            if (self.state_root / "runs" / f"{candidate.id}.json").exists():
+                if candidate.id not in self._reported_skips:
+                    logger.warning(
+                        "runner: job %s already has a terminal file; left queued", candidate.id
+                    )
+                    self._reported_skips.add(candidate.id)
+                continue
+            skill = self.registry.get(candidate.skill)
+            engine_name = skill.engine if skill else None
+            if engine_name not in self.engines:
+                if candidate.id not in self._reported_skips:
+                    logger.warning(
+                        "runner: job %s has unknown engine %r; left queued",
+                        candidate.id,
+                        engine_name,
+                    )
+                    self._reported_skips.add(candidate.id)
+                continue
+            intent_path = self.state_root / "queue" / f"{candidate.id}.json"
+            try:
+                intent = json.loads(intent_path.read_text())
+                if intent.get("id") != candidate.id or intent["skill"] != candidate.skill:
+                    raise ValueError("intent identity differs from queued job")
+                if not isinstance(intent.get("args", {}), dict):
+                    raise ValueError("intent args must be an object")
+                if not isinstance(intent.get("source", "api"), str):
+                    raise ValueError("intent source must be a string")
+                if not isinstance(intent.get("ts"), str) or not intent["ts"]:
+                    raise ValueError("intent queue time must be a string")
+                job = replace(
+                    candidate,
+                    args=intent.get("args", {}),
+                    source=intent.get("source", "api"),
+                    ts_queued=intent["ts"],
+                    engine=engine_name,
+                )
+            except (OSError, ValueError, KeyError) as exc:
+                if candidate.id not in self._reported_skips:
+                    logger.warning(
+                        "runner: job %s has no valid intent; left queued: %s", candidate.id, exc
+                    )
+                    self._reported_skips.add(candidate.id)
+                continue
+            if self._shutdown_event.is_set():
+                return None
+            self._attempt_ids = []
+            started = self._write_attempt(job, attempt_number=1)
+            claimed = store.claim_oldest_queued(
+                self.conn,
+                pid=self.pid,
+                ts=started,
+                job_id=job.id,
+                args=job.args,
+                source=job.source,
+                engine=job.engine,
+                queued_ts=job.ts_queued,
+            )
+            if claimed is None:
+                # An external DB writer raced this runner. The durable attempt
+                # remains unresolved; it must not be silently executed later.
+                self.unresolved_attempts.append(job.id)
+                return None
+            self._executing = True
+            return replace(claimed, args=job.args, source=job.source, engine=job.engine)
+        return None
+
+    def _write_attempt(self, job, *, attempt_number: int) -> str:
+        attempt_id = uuid.uuid4().hex
+        started = utcnow_z()
+        record = {
+            "id": job.id,
+            "attempt_id": attempt_id,
+            "attempt_number": attempt_number,
+            "skill": job.skill,
+            "args": job.args,
+            "source": job.source,
+            "ts_queued": job.ts_queued,
+            "ts_started": started,
+            "runner_pid": self.pid,
+            "engine": job.engine,
+        }
+        try:
+            write_record(
+                self.state_root / "runs" / f"{job.id}.attempt-{attempt_number}.json", record
+            )
+        except OSError as exc:
+            raise RecordWriteError("attempt record could not be written") from exc
+        self._attempt_id = attempt_id
+        self._attempt_ids.append(attempt_id)
+        return started
+
+    def _heartbeat_loop(self, stop: threading.Event) -> None:
+        # The engine and check can block for minutes. The thread joins before
+        # the runner's connection closes; store access uses its shared lock.
+        while not stop.is_set():
+            try:
+                self.write_heartbeat()
+            except Exception:  # noqa: BLE001 - keep beating after a transient failure
+                logger.exception("runner: heartbeat write failed")
+            stop.wait(HEARTBEAT_INTERVAL_S)
 
     def _execute(self, job) -> None:
         skill = self.registry.get(job.skill)
@@ -133,6 +301,8 @@ class Runner:
         start = time.monotonic()
         try:
             result, check_outcome = self._run_with_check(job, skill, engine, ctx)
+        except RecordWriteError:
+            raise
         except Exception as exc:  # noqa: BLE001 - any engine crash must not take the runner down
             duration_s = time.monotonic() - start
             self.emit(
@@ -168,6 +338,7 @@ class Runner:
             exit_code=result.exit_code,
             summary=result.summary,
             deliverable_path=result.deliverable_path,
+            check_outcome=check_outcome,
         )
 
     def _run_with_check(self, job, skill, engine, ctx: EngineContext):
@@ -196,6 +367,15 @@ class Runner:
         if passed:
             return result, {"passed": True, "attempt": 1}
 
+        if not skill.repeatable:
+            return EngineResult(
+                success=False,
+                exit_code=result.exit_code,
+                summary=f"check failed; automatic retry disabled: {feedback[:CHECK_SUMMARY_MAX_CHARS]}",
+                deliverable_path=result.deliverable_path,
+            ), {"passed": False, "attempt": 1}
+
+        self._write_attempt(job, attempt_number=2)
         retry_result = engine.run(job=job, skill=skill, ctx=ctx, retry_context=feedback)
         if not retry_result.success:
             # The retry's engine call itself failed -- no second check ran,
@@ -240,14 +420,43 @@ class Runner:
         feedback = f"--- check stdout ---\n{proc.stdout}--- check stderr ---\n{proc.stderr}"
         return proc.returncode == 0, feedback
 
-    def _post_terminal(self, job, *, status, exit_code, summary, deliverable_path=None) -> None:
+    def _post_terminal(
+        self, job, *, status, exit_code, summary, deliverable_path=None, check_outcome=None
+    ) -> None:
+        ts = utcnow_z()
+        write_record(
+            self.state_root / "runs" / f"{job.id}.json",
+            {
+                "id": job.id,
+                "attempt_id": self._attempt_id,
+                "attempt_ids": self._attempt_ids,
+                "skill": job.skill,
+                "args": job.args,
+                "source": job.source,
+                "ts_queued": job.ts_queued,
+                "ts_started": job.ts_started,
+                "ts_completed": ts,
+                "status": status,
+                "exit_code": exit_code,
+                "summary": summary,
+                "deliverable_path": deliverable_path,
+                "completion_evidence": {
+                    "engine": job.engine,
+                    "exit_code": exit_code,
+                    "summary": summary,
+                    "deliverable_path": deliverable_path,
+                    "check": check_outcome,
+                },
+            },
+        )
+        remove_intent(self.state_root / "queue" / f"{job.id}.json")
         apply_event_and_chain(
             self.conn,
             self.registry,
             self.settings.vault_root,
             job_id=job.id,
             status=status,
-            ts=utcnow_z(),
+            ts=ts,
             exit_code=exit_code,
             summary=summary,
             deliverable_path=deliverable_path,
@@ -266,19 +475,16 @@ class Runner:
             busy=bool(self._current_job_id),
             max_concurrent=1,
             version=RUNNER_VERSION,
+            unresolved_attempts=self.unresolved_attempts,
         )
 
     # -- clean shutdown --------------------------------------------------
 
     def request_shutdown(self, signum=None, frame=None) -> None:
         """Signal handler (and directly callable). Stops the poll loop from
-        claiming any further job. If a job is currently claimed but its
-        engine hasn't started running yet, releases it back to `queued`
-        immediately rather than starting fresh work this process is about to
-        exit -- if the engine IS already running, this only sets the flag;
-        the in-flight run is left to finish (killing a live subprocess
-        mid-write is not attempted in v1), and run_once()/run_forever() exit
-        cleanly once it completes."""
+        claiming further jobs. A durable attempt is held through completion;
+        a claim made without an attempt can still be released. A live engine
+        finishes before the runner exits."""
         self._shutdown_event.set()
         if self._current_job_id is not None and not self._executing:
             store.release_job(self.conn, job_id=self._current_job_id, ts=utcnow_z())
@@ -291,10 +497,11 @@ class Runner:
     # -- main loop ---------------------------------------------------------
 
     def run_forever(self) -> None:
-        self._install_signal_handlers()
-        while not self._shutdown_event.is_set():
-            claimed = self.run_once()
+        with self._runner_lock():
+            self._install_signal_handlers()
+            while not self._shutdown_event.is_set():
+                claimed = self.run_once()
+                self.write_heartbeat()
+                if not claimed:
+                    self._shutdown_event.wait(self.poll_interval_s)
             self.write_heartbeat()
-            if not claimed:
-                self._shutdown_event.wait(self.poll_interval_s)
-        self.write_heartbeat()

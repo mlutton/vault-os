@@ -12,12 +12,14 @@ import json
 import logging
 import os
 import signal
+import stat
 import subprocess
 import threading
 import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import replace
+from pathlib import Path
 
 from ..api.jobs import apply_event_and_chain, chain_transitions
 from ..config import Settings
@@ -40,6 +42,10 @@ class RunnerLockHeldError(RuntimeError):
 
 class RecordWriteError(RuntimeError):
     """An execution observation could not be made durable."""
+
+
+class ParentDeliverableError(RuntimeError):
+    """A chained digest cannot safely import its parent's recorded output."""
 
 
 # Cap what a check's own failure feedback contributes to a job's `summary`
@@ -296,15 +302,16 @@ class Runner:
             )
             return
 
-        ctx = EngineContext(
-            vault_root=self.settings.vault_root,
-            state_root=self.state_root,
-            settings=self.settings,
-            emit=self.emit,
-        )
         self._executing = True
         start = time.monotonic()
         try:
+            ctx = EngineContext(
+                vault_root=self.settings.vault_root,
+                state_root=self.state_root,
+                settings=self.settings,
+                emit=self.emit,
+                parent_deliverable=self._parent_deliverable(job),
+            )
             result, check_outcome = self._run_with_check(job, skill, engine, ctx)
         except RecordWriteError:
             raise
@@ -320,10 +327,13 @@ class Runner:
                     "check": None,
                 }
             )
-            logger.exception("runner: engine %r crashed on job %s", job.engine, job.id)
-            self._post_terminal(
-                job, status="error", exit_code=None, summary=f"engine crashed: {exc}"
-            )
+            if isinstance(exc, ParentDeliverableError):
+                summary = f"parent deliverable rejected: {exc}"
+                logger.warning("runner: job %s %s", job.id, summary)
+            else:
+                summary = f"engine crashed: {exc}"
+                logger.exception("runner: engine %r crashed on job %s", job.engine, job.id)
+            self._post_terminal(job, status="error", exit_code=None, summary=summary)
             return
 
         duration_s = time.monotonic() - start
@@ -345,6 +355,55 @@ class Runner:
             deliverable_path=result.deliverable_path,
             check_outcome=check_outcome,
         )
+
+    def _parent_deliverable(self, job) -> str | None:
+        """Import only a chained digest's recorded acquire report, before
+        invoking an engine. Other skills and manual digests keep their own
+        input conventions; chain args remain empty (ADR-0016)."""
+        if job.skill != "daily-topic-digest" or self._chain_origin is None:
+            return None
+        if not isinstance(self._chain_origin, dict):
+            raise ParentDeliverableError("chain origin must be an object")
+        parent_id = self._chain_origin.get("parent_job_id")
+        if (
+            not isinstance(parent_id, str)
+            or not parent_id
+            or Path(parent_id).name != parent_id
+            or parent_id in (".", "..")
+        ):
+            raise ParentDeliverableError("chain parent_job_id must be a single file identifier")
+        try:
+            record = json.loads((self.state_root / "runs" / f"{parent_id}.json").read_text())
+        except FileNotFoundError as exc:
+            raise ParentDeliverableError("parent record is missing") from exc
+        except (OSError, ValueError) as exc:
+            raise ParentDeliverableError("parent record is unreadable") from exc
+        if not isinstance(record, dict):
+            raise ParentDeliverableError("parent record must be an object")
+        deliverable = record.get("deliverable_path")
+        if not isinstance(deliverable, str) or not deliverable.strip():
+            raise ParentDeliverableError("deliverable_path must be a nonempty string")
+        path = Path(deliverable)
+        if path.is_absolute():
+            raise ParentDeliverableError("deliverable_path must be relative")
+        if ".." in path.parts:
+            raise ParentDeliverableError("deliverable_path must not contain '..'")
+        try:
+            vault_root = self.settings.vault_root.resolve()
+            resolved = (vault_root / path).resolve()
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise ParentDeliverableError("deliverable_path could not be resolved") from exc
+        if not resolved.is_relative_to(vault_root / "inbox" / "research"):
+            raise ParentDeliverableError("deliverable_path resolves outside inbox/research")
+        try:
+            mode = resolved.stat().st_mode
+        except FileNotFoundError as exc:
+            raise ParentDeliverableError("parent deliverable file is missing") from exc
+        except (OSError, ValueError) as exc:
+            raise ParentDeliverableError("parent deliverable file cannot be inspected") from exc
+        if not stat.S_ISREG(mode):
+            raise ParentDeliverableError("parent deliverable must be a regular file")
+        return deliverable
 
     def _run_with_check(self, job, skill, engine, ctx: EngineContext):
         """Run `engine` once, then -- if it succeeded and `skill` declares a

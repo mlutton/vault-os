@@ -99,14 +99,14 @@ def test_acquire_end_to_end(client, tmp_vault, monkeypatch, tmp_path):
     from vaultos.main import app
 
     date = today_date(app.state.settings)
-    deliverable_rel = f"inbox/research/{date}-acquire.md"
     log_path = tmp_path / "argv.log"
     monkeypatch.setenv("CLAUDE_STUB_LOG", str(log_path))
-    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
 
     res = client.post("/jobs", json={"skill": "acquire", "args": {}})
     assert res.status_code == 201, res.text
     job_id = res.json()["id"]
+    deliverable_rel = f"inbox/research/{date}-acquire-{id8(job_id)}.md"
+    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
 
     runner = Runner(app.state.conn, app.state.registry, app.state.settings)
     assert runner.run_once() is True
@@ -123,14 +123,14 @@ def test_daily_topic_digest_end_to_end(client, tmp_vault, monkeypatch, tmp_path)
     from vaultos.main import app
 
     date = today_date(app.state.settings)
-    deliverable_rel = f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest.md"
     log_path = tmp_path / "argv.log"
     monkeypatch.setenv("CLAUDE_STUB_LOG", str(log_path))
-    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
 
     res = client.post("/jobs", json={"skill": "daily-topic-digest", "args": {}})
     assert res.status_code == 201, res.text
     job_id = res.json()["id"]
+    deliverable_rel = f"inbox/reports/daily-topic-digest/{date}-daily-topic-digest-{id8(job_id)}.md"
+    monkeypatch.setenv("CLAUDE_STUB_DELIVERABLE", str(tmp_vault / deliverable_rel))
 
     runner = Runner(app.state.conn, app.state.registry, app.state.settings)
     assert runner.run_once() is True

@@ -139,7 +139,12 @@ class CursorCliEngine:
         if builder is not None:
             built = builder(
                 job.args,
-                BuilderContext(vault_root=ctx.vault_root, settings=ctx.settings, job_id=job.id),
+                BuilderContext(
+                    vault_root=ctx.vault_root,
+                    settings=ctx.settings,
+                    job_id=job.id,
+                    parent_deliverable=ctx.parent_deliverable,
+                ),
             )
             if built is None:
                 raise CursorCliEngineError(

@@ -117,11 +117,11 @@ def _write(path, content):
 
 def test_read_morning_report_reads_ai_lane_from_acquire_file(tmp_path):
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    _write(tmp_path / "inbox" / "research" / f"{today}-acquire.md", REAL_ACQUIRE_REPORT)
+    _write(tmp_path / "inbox" / "research" / f"{today}-acquire-01234567.md", REAL_ACQUIRE_REPORT)
 
     report = read_morning_report(tmp_path, TZ)
     assert report is not None
-    assert report.rel == f"inbox/research/{today}-acquire.md"
+    assert report.rel == f"inbox/research/{today}-acquire-01234567.md"
     assert len(report.headlines) == 2
     assert "auto mode" in report.headlines[0].text
 
@@ -134,7 +134,7 @@ def test_read_morning_report_none_not_raise_on_non_utf8_content(tmp_path):
     # Acquire reports aggregate web-scraped headlines -- a non-UTF-8 byte
     # anywhere in the file must degrade to None, not 500 the whole endpoint.
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    path = tmp_path / "inbox" / "research" / f"{today}-acquire.md"
+    path = tmp_path / "inbox" / "research" / f"{today}-acquire-01234567.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"## ai\n*1 candidates, 1 kept*\n- \xff\xfe not valid utf-8\n")
     assert read_morning_report(tmp_path, TZ) is None
@@ -153,7 +153,7 @@ def test_read_morning_report_ignores_non_acquire_files_in_same_directory(tmp_pat
 
 def test_read_lane_briefs_all_five_lanes_present_from_one_file(tmp_path):
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    _write(tmp_path / "inbox" / "research" / f"{today}-acquire.md", REAL_ACQUIRE_REPORT)
+    _write(tmp_path / "inbox" / "research" / f"{today}-acquire-01234567.md", REAL_ACQUIRE_REPORT)
 
     briefs = read_lane_briefs(tmp_path, TZ)
     assert len(briefs) == 5
@@ -165,12 +165,12 @@ def test_read_lane_briefs_all_five_lanes_present_from_one_file(tmp_path):
         "chicago_brief",
     ]
     assert all(b.skill == "acquire" for b in briefs)
-    assert all(b.rel == f"inbox/research/{today}-acquire.md" for b in briefs)
+    assert all(b.rel == f"inbox/research/{today}-acquire-01234567.md" for b in briefs)
 
 
 def test_read_lane_briefs_lane_with_content_has_headline(tmp_path):
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    _write(tmp_path / "inbox" / "research" / f"{today}-acquire.md", REAL_ACQUIRE_REPORT)
+    _write(tmp_path / "inbox" / "research" / f"{today}-acquire-01234567.md", REAL_ACQUIRE_REPORT)
 
     briefs = read_lane_briefs(tmp_path, TZ)
     leadership = next(b for b in briefs if b.source == "leadership_brief")
@@ -181,7 +181,7 @@ def test_read_lane_briefs_lane_with_content_has_headline(tmp_path):
 
 def test_read_lane_briefs_lane_with_nothing_kept_has_null_headline(tmp_path):
     today = datetime.now(ZoneInfo(TZ)).date().isoformat()
-    _write(tmp_path / "inbox" / "research" / f"{today}-acquire.md", REAL_ACQUIRE_REPORT)
+    _write(tmp_path / "inbox" / "research" / f"{today}-acquire-01234567.md", REAL_ACQUIRE_REPORT)
 
     briefs = read_lane_briefs(tmp_path, TZ)
     payments = next(b for b in briefs if b.source == "payments_brief")

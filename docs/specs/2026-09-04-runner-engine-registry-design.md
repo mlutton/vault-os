@@ -227,3 +227,36 @@ How the legacy daemon's inline per-skill prompts move into this repo.
   prompts that are expected to evolve. Plus one end-to-end smoke per
   ported skill through the HTTP API with a stub engine, and the scrub
   gate over the ported strings.
+
+
+## Deliverable naming and chained research input (2026-09-26)
+
+`acquire` writes `inbox/research/{date}-acquire-{id8(job_id)}.md`;
+`daily-topic-digest` writes
+`inbox/reports/daily-topic-digest/{date}-daily-topic-digest-{id8(job_id)}.md`.
+The date remains the operator's local calendar day (`today_date`,
+`Settings.hud_tz`), so reports stay grouped with the day the operator sees.
+The existing `id8` helper uses the first eight characters of the job ID:
+same-day reruns have distinct outputs, while rebuilding the same job on that
+day retains its path. Both prompts instruct the report's YAML frontmatter
+to include `run_at` (UTC ISO-8601, captured from the clock at prompt build
+time) and the full `job_id`. The local filename date supports browsing;
+UTC and the full ID preserve the precise run provenance independently of
+timezone and the abbreviated filename identifier.
+
+A chained digest receives its parent's recorded `deliverable_path` through
+optional `EngineContext.parent_deliverable` and `BuilderContext.parent_deliverable`,
+never through job args. ADR-0016's chained children retain empty args and
+both chain rules retain their IDs and versions. Before invoking an engine,
+the runner reads `runs/<chain.parent_job_id>.json` under the state root and
+requires a nonempty relative path with no `..` component. It resolves that
+path against the vault root, checks that the resolved file is inside
+`inbox/research/` even through symlinks, and requires an existing regular
+file. A missing or unreadable parent record, invalid path, or missing or
+non-regular file produces a terminal error naming the failed check; it
+never falls back to scanning all evidence. Both CLI adapters forward the
+validated path, and the digest names and reads that report in full in step 1.
+Manual digests keep the existing scan-all behavior. The recorded parent
+path matters because a child can start after local midnight; recomputing a
+filename from the child's day would select the wrong input. Other chained
+skills retain their existing input conventions.

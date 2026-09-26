@@ -47,6 +47,7 @@ class BuilderContext:
     vault_root: Path
     settings: Settings
     job_id: str
+    parent_deliverable: str | None = None
 
 
 # skill id's job args in, a built prompt+deliverable out -- or None when the

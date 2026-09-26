@@ -32,20 +32,18 @@ def test_get_job_missing_returns_none(conn):
 
 
 @pytest.mark.parametrize("operation", ["create", "event"])
-def test_non_sqlite_failure_leaves_no_transaction(conn, operation):
+def test_non_sqlite_failure_leaves_no_transaction(conn, operation, monkeypatch):
     if operation == "create":
+        execute = conn.execute
 
-        class FailingConnection:
-            def execute(self, *args, **kwargs):
-                conn.execute(*args, **kwargs)
-                raise ValueError("synthetic failure after insert")
+        def failing_execute(*args, **kwargs):
+            execute(*args, **kwargs)
+            raise ValueError("synthetic failure after insert")
 
-            def __getattr__(self, name):
-                return getattr(conn, name)
-
-        with pytest.raises(ValueError, match="synthetic failure"):
+        with monkeypatch.context() as patch, pytest.raises(ValueError, match="synthetic failure"):
+            patch.setattr(conn, "execute", failing_execute)
             store.create_job(
-                FailingConnection(),
+                conn,
                 job_id="bad",
                 skill="sample",
                 args={},

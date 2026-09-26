@@ -31,8 +31,9 @@ and durably (fsynced file, atomic publication, fsynced directory), then creates
 the queued index row. Acknowledgment follows durable publication. If SQLite
 fails after the intent is published, `POST /jobs` still returns **201** with
 the accepted job ID and `status: queued`; the failure is logged and the failed
-index transaction is rolled back under the store lock. If recovery already
-projected the accepted ID, submission logs at debug level instead of error.
+index transaction is rolled back under the connection lock (see the
+synchronization rule in `api/vaultos/db/conn.py`). If recovery already projected
+the accepted ID, submission logs at debug level instead of error.
 Runner recovery projects the intent into the index before the next claim,
 without an API restart; startup reconcile can also restore its row.
 The intent stays in place. Until then a
@@ -96,7 +97,8 @@ recorded child identity, then:
 
 Reconcile and recovery skip a file whose projection collides with another
 row's chain source, roll back its failed projection, and log the file and owning
-row. Rollback happens under the store lock. Other files in the pass continue;
+row. Rollback happens under the connection lock described in
+`api/vaultos/db/conn.py`. Other files in the pass continue;
 the authoritative file remains in place. Recovery reports collision and
 invalid-file warnings once per file until successful projection clears the
 warning suppression; subsequent passes still retry projection. A later failure

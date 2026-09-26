@@ -1,25 +1,14 @@
 import json
 import sqlite3
-import threading
 from dataclasses import dataclass
 from datetime import datetime
 
+from vaultos.db.conn import connection_lock
+
 STATUS_RANK = {"queued": 0, "running": 1, "ok": 2, "error": 2, "orphaned": 2}
 
-# All routes touching app.state.conn run as sync `def` handlers, so FastAPI/Starlette
-# executes them concurrently across a threadpool, all sharing one sqlite3.Connection
-# (opened with check_same_thread=False). The hazard is concurrent *use* of one
-# sqlite3.Connection, not writes specifically -- a reader's SELECT can interleave with
-# a writer's INSERT/UPDATE/commit on the same connection object and raise
-# `sqlite3.InterfaceError` ("bad parameter or other API misuse") or return a
-# half-written/garbled row. Serialize every public entry point that touches the
-# connection (get_job, create_job, apply_event) at the Python level with a single lock
-# so only one of them ever executes at a time against the connection.
-#
-# threading.Lock is NOT reentrant. create_job and apply_event call the lock-free
-# `_get_job` helper below (not the public, lock-acquiring `get_job`) while they already
-# hold `_lock`, to avoid deadlocking against themselves.
-_lock = threading.Lock()
+# Connection synchronization follows vaultos.db.conn. Lock-held code uses
+# lock-free helpers such as _get_job to avoid acquiring the same lock twice.
 
 
 @dataclass
@@ -66,14 +55,14 @@ def _row_to_job(row: sqlite3.Row) -> Job:
 
 
 def _get_job(conn: sqlite3.Connection, job_id: str) -> Job | None:
-    """Lock-free read. Only call this while already holding `_lock` (i.e. from inside
-    create_job/apply_event). External callers must use the public `get_job` instead."""
+    """Lock-free read. Call only while holding connection_lock(conn), for example
+    inside create_job/apply_event. External callers must use public get_job."""
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     return _row_to_job(row) if row else None
 
 
 def get_job(conn: sqlite3.Connection, job_id: str) -> Job | None:
-    with _lock:
+    with connection_lock(conn):
         return _get_job(conn, job_id)
 
 
@@ -85,7 +74,7 @@ def list_jobs(
 ) -> list[Job]:
     if order_by is not None and order_by not in _VALID_ORDER_COLUMNS:
         raise ValueError(f"invalid order_by: {order_by}")
-    with _lock:
+    with connection_lock(conn):
         placeholders = ",".join("?" for _ in statuses)
         query = f"SELECT * FROM jobs WHERE status IN ({placeholders})"
         if order_by is not None:
@@ -97,7 +86,7 @@ def list_jobs(
 def list_runs(
     conn: sqlite3.Connection, *, skill: str | None = None, since: str | None = None, limit: int = 50
 ) -> list[Job]:
-    with _lock:
+    with connection_lock(conn):
         query = "SELECT * FROM jobs WHERE status IN ('ok', 'error')"
         params: list = []
         if skill is not None:
@@ -116,7 +105,7 @@ def count_runs_by_day(conn: sqlite3.Connection, *, since_date: str) -> dict[str,
     """{date: count} for completed runs (ok/error) whose ts_completed's date is
     >= since_date (a 'YYYY-MM-DD' string). Dates with zero runs are simply absent --
     callers zero-fill gaps themselves."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT substr(ts_completed, 1, 10) AS day, COUNT(*) AS n "
             "FROM jobs WHERE status IN ('ok', 'error') AND ts_completed >= ? "
@@ -148,7 +137,7 @@ def compute_skill_etas(conn: sqlite3.Connection, *, limit: int = 200) -> dict[st
     """Median completed duration per skill, from the most recent `limit` ok runs.
     DB-sourced from the rebuildable jobs index, not a per-request parse of
     run files."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT skill, ts_started, ts_completed FROM jobs "
             "WHERE status = 'ok' AND ts_started IS NOT NULL AND ts_completed IS NOT NULL "
@@ -178,7 +167,7 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
     one actually created" by checking `returned_job.id == job_id`. Ordinary
     sources (api/voice/vault-hud/obsidian) are never constrained by that
     index -- they intentionally share source values across many jobs."""
-    with _lock:
+    with connection_lock(conn):
         try:
             if source.startswith("chain:"):
                 cur = conn.execute(
@@ -221,7 +210,7 @@ def create_job(conn, *, job_id, skill, args, source, engine, ts_queued) -> Job:
 
 def queued_candidates(conn: sqlite3.Connection) -> list[Job]:
     """Read queue order without changing durable job state."""
-    with _lock:
+    with connection_lock(conn):
         rows = conn.execute(
             "SELECT * FROM jobs WHERE status = 'queued' ORDER BY ts_queued ASC, id ASC"
         ).fetchall()
@@ -250,7 +239,7 @@ def claim_oldest_queued(
     caller lost the race for the row it picked (v1: single job at a time, so
     a caller that loses a race simply tries again on its next poll rather
     than immediately hunting for a second candidate)."""
-    with _lock:
+    with connection_lock(conn):
         row = conn.execute(
             "SELECT id FROM jobs WHERE status = 'queued' AND (? IS NULL OR id = ?) "
             "ORDER BY ts_queued ASC, id ASC LIMIT 1",
@@ -293,7 +282,7 @@ def release_job(conn: sqlite3.Connection, *, job_id: str, ts: str) -> "Job | Non
     before it starts real work on the claim (vaultos.runner.core.Runner's
     clean-shutdown path). A no-op (job returned unchanged) if the job has
     already moved past `running` -- never reverts a terminal status."""
-    with _lock:
+    with connection_lock(conn):
         cur = conn.execute(
             "UPDATE jobs SET status = 'queued', runner_pid = NULL, ts_started = NULL, "
             "last_event_ts = ? WHERE id = ? AND status = 'running'",
@@ -326,7 +315,7 @@ def apply_event(
     md_path=None,
     pid=None,
 ) -> Job | None:
-    with _lock:
+    with connection_lock(conn):
         try:
             detail = {
                 k: v

@@ -84,6 +84,6 @@ All three build-gating decisions from the PR #37 body were accepted as proposed:
 2. **Local `jsonschema` validation on every call, regardless of provider.**
 3. **No native Ollama `/api/chat` client** — `/v1` covers it.
 
-The module is clear to build. See also the engine-seam design (claude-workspace#14):
+The module is clear to build. See also the engine-seam design:
 `exec` is a distinct seam; the `ask`-style cheap-model offload is a calling
 convention on this module, not a third seam.

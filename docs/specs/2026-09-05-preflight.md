@@ -117,8 +117,7 @@ around every point where a model chooses.
 
 ## Addendum 2026-09-06 — what a gate looks at, and what it may touch
 
-Decided in the orchestration-layer gate grilling (claude-workspace#56,
-#55). The original spec settled what the gates *enforce* and was silent
+Decided in the orchestration-layer gate grilling. The original spec settled what the gates *enforce* and was silent
 on two properties that turned out to matter more: which files a gate
 judges, and what state it depends on. Both have since cost a real
 incident.

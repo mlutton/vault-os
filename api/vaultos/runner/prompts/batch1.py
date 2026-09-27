@@ -139,8 +139,11 @@ def metrics_pull(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"\n\nFind today's consolidated acquire report — glob inbox/research/{date}-acquire*.md, "
         f"including legacy unsuffixed names. If several exist, use the newest matching report "
         f"by frontmatter run_at when it parses as a timestamp, else file mtime. Skip reports "
-        f"that cannot be read. Use 0 for every lane metric below if none exists yet today. "
-        f"Within it, for each of these "
+        f'that cannot be read. If no matching report exists today, use 0 with status = "ok" '
+        f"and error = blank for every lane metric below. If matching reports exist but none "
+        f'can be read, write all ten lane rows with value = blank, status = "error", and a '
+        f"short error text explaining the read failure; do not record zero observations. "
+        f"When a readable report exists, within it, for each of these "
         f"five `## <lane>` headings (lean-agile merged into leadership 2026-08-12 -- do not look "
         f"for a separate `## lean-agile` heading, it no longer exists), compute two numbers: "
         f'items_today = count of bullet lines (lines starting with "- ") under that heading, and '
@@ -158,7 +161,8 @@ def metrics_pull(args: dict, ctx: BuilderContext) -> BuiltPrompt | None:
         f"\n\nAppend one CSV row per metric to system/metrics/metrics.csv (eleven rows total: 5 "
         f"lanes × 2 metrics, plus vault.new_files_24h), matching its exact existing header "
         f"`timestamp,source,metric,value,status,error` — timestamp = current UTC time in ISO "
-        f'8601 (e.g. 2026-08-08T20:00:00Z), status = "ok", error = blank. Do not rewrite '
+        f'8601 (e.g. 2026-08-08T20:00:00Z). For successful rows, status = "ok", error = blank; '
+        f"use the lane read-failure status and error above when applicable. Do not rewrite "
         f"existing rows.\n\nWrite the report — YAML frontmatter `date: {date}`, `skill: "
         f"metrics-pull`, `tags: [metrics]`, `retention: ephemeral`; body is a small table of "
         f"what was pulled: | Source | Metric | Value | Status |.\n\nEnd your reply with: SAVED "

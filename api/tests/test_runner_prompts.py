@@ -436,3 +436,11 @@ def test_metrics_pull_selects_newest_acquire_report(ctx):
     assert "run_at" in prompt
     assert "mtime" in prompt
     assert "legacy unsuffixed" in prompt
+
+
+def test_metrics_pull_distinguishes_unreadable_reports_from_no_reports(ctx):
+    prompt = get_builder("metrics-pull")({}, ctx).prompt
+    assert 'If no matching report exists today, use 0 with status = "ok"' in prompt
+    assert "If matching reports exist but none can be read, write all ten lane rows with" in prompt
+    assert 'value = blank, status = "error", and a short error text' in prompt
+    assert 'For successful rows, status = "ok", error = blank' in prompt

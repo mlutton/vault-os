@@ -13,7 +13,7 @@ class MetricSample:
     timestamp: str
     source: str
     metric: str
-    value: float
+    value: float | None
     status: str
     error: str
 
@@ -48,9 +48,16 @@ def read_metrics_csv(vault_root: Path) -> list[MetricSample]:
             try:
                 if parse_ts(row["timestamp"]) is None:
                     continue
-                value = float(row["value"])
-                if not math.isfinite(value):
-                    continue
+                if (
+                    row["status"] == "error"
+                    and row["value"] is not None
+                    and not row["value"].strip()
+                ):
+                    value = None
+                else:
+                    value = float(row["value"])
+                    if not math.isfinite(value):
+                        continue
                 samples.append(
                     MetricSample(
                         timestamp=row["timestamp"],
@@ -114,21 +121,27 @@ def _pair_samples_sorted(
 
 def compute_delta(samples: list[MetricSample], source: str, metric: str) -> float | None:
     pairs = _pair_samples_sorted(samples, source, metric)
-    if len(pairs) < 2:
+    if not pairs or pairs[-1][1].value is None:
         return None
-    return pairs[-1][1].value - pairs[-2][1].value
+    latest_value = pairs[-1][1].value
+    for _, earlier in reversed(pairs[:-1]):
+        if earlier.value is not None:
+            return latest_value - earlier.value
+    return None
 
 
 def compute_delta_week(samples: list[MetricSample], source: str, metric: str) -> float | None:
     pairs = _pair_samples_sorted(samples, source, metric)
     if not pairs:
         return None
-    latest_ts, latest_pair_sample = pairs[-1]
+    _, latest_pair_sample = pairs[-1]
+    if latest_pair_sample.value is None:
+        return None
     cutoff = datetime.now(timezone.utc) - DELTA_WEEK
     # Exclude the latest sample itself -- a metric that stopped reporting
     # over a week ago must never be compared against itself (which would
     # produce a misleading 0.0 "no change" instead of "no data").
-    candidates = [pair for pair in pairs[:-1] if pair[0] <= cutoff]
+    candidates = [pair for pair in pairs[:-1] if pair[0] <= cutoff and pair[1].value is not None]
     if not candidates:
         return None
     _, closest = max(candidates, key=lambda item: item[0])
